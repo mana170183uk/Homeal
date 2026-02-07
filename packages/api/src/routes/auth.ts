@@ -4,6 +4,13 @@ import prisma from "@homeal/db";
 
 const router = Router();
 
+const JWT_EXPIRY = "15m";
+const JWT_REFRESH_EXPIRY = "7d";
+
+function signToken(payload: object, secret: string, expiresIn: string): string {
+  return jwt.sign(payload, secret, { expiresIn: expiresIn as jwt.SignOptions["expiresIn"] });
+}
+
 // POST /api/v1/auth/register
 router.post("/register", async (req: Request, res: Response) => {
   try {
@@ -13,17 +20,9 @@ router.post("/register", async (req: Request, res: Response) => {
       data: { name, email, phone, firebaseUid, role: role || "CUSTOMER" },
     });
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || "dev-secret",
-      { expiresIn: process.env.JWT_EXPIRY || "15m" }
-    );
-
-    const refreshToken = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_REFRESH_SECRET || "dev-refresh-secret",
-      { expiresIn: process.env.JWT_REFRESH_EXPIRY || "7d" }
-    );
+    const tokenPayload = { userId: user.id, role: user.role };
+    const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
+    const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
     res.status(201).json({
       success: true,
@@ -50,17 +49,9 @@ router.post("/login", async (req: Request, res: Response) => {
       return;
     }
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || "dev-secret",
-      { expiresIn: process.env.JWT_EXPIRY || "15m" }
-    );
-
-    const refreshToken = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_REFRESH_SECRET || "dev-refresh-secret",
-      { expiresIn: process.env.JWT_REFRESH_EXPIRY || "7d" }
-    );
+    const tokenPayload = { userId: user.id, role: user.role };
+    const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
+    const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
     res.json({ success: true, data: { user, token, refreshToken } });
   } catch (error: unknown) {
@@ -78,10 +69,10 @@ router.post("/refresh", async (req: Request, res: Response) => {
       process.env.JWT_REFRESH_SECRET || "dev-refresh-secret"
     ) as { userId: string; role: string };
 
-    const token = jwt.sign(
+    const token = signToken(
       { userId: payload.userId, role: payload.role },
       process.env.JWT_SECRET || "dev-secret",
-      { expiresIn: process.env.JWT_EXPIRY || "15m" }
+      JWT_EXPIRY
     );
 
     res.json({ success: true, data: { token } });

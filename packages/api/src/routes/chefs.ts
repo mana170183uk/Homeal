@@ -7,7 +7,8 @@ const router = Router();
 // GET /api/v1/chefs - list nearby chefs
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const { lat, lng, radius = 5 } = req.query;
+    // const lat = req.query.lat as string | undefined;
+    // const lng = req.query.lng as string | undefined;
     const chefs = await prisma.chef.findMany({
       where: { isVerified: true, isOnline: true },
       include: {

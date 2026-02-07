@@ -121,12 +121,14 @@ export const darkTheme = {
 };
 
 export type ThemeMode = "light" | "dark";
-export type Theme = typeof lightTheme;
+export type LightTheme = typeof lightTheme;
+export type DarkTheme = typeof darkTheme;
+export type Theme = LightTheme | DarkTheme;
 
-export const themes: Record<ThemeMode, Theme> = {
+export const themes = {
   light: lightTheme,
   dark: darkTheme,
-};
+} as const;
 
 // Tailwind-compatible color tokens for CSS variables
 export const tailwindColors = {

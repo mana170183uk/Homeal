@@ -2,13 +2,28 @@
   "name": "@homeal/shared",
   "version": "1.0.0",
   "private": true,
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./theme": "./src/theme.ts",
-    "./types": "./src/types.ts",
-    "./constants": "./src/constants.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./theme": {
+      "types": "./src/theme.ts",
+      "default": "./dist/theme.js"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./dist/types.js"
+    },
+    "./constants": {
+      "types": "./src/constants.ts",
+      "default": "./dist/constants.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

@@ -25,19 +25,17 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/db/prisma/schema.prisma
 
-      - name: Build API
+      - name: Build all packages
         run: npm run build:api
 
       - name: Prepare deployment package
         run: |
-          mkdir -p deploy
+          mkdir -p deploy/node_modules
           cp -r packages/api/dist deploy/
-          cp packages/api/package.json deploy/
-          cp -r packages/db deploy/packages-db
-          cp -r packages/shared deploy/packages-shared
-          cp -r node_modules deploy/
+          # Copy node_modules following symlinks so workspace packages are resolved
+          cp -rL node_modules/. deploy/node_modules/
+          # Create entry point
           cat > deploy/server.js << 'ENTRY'
-          // Azure App Service entry point
           require('./dist/server.js');
           ENTRY
           cat > deploy/package.json << 'PKG'

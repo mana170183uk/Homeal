@@ -7,8 +7,9 @@ const router = Router();
 // GET /api/v1/menus/:chefId
 router.get("/:chefId", async (req: Request, res: Response) => {
   try {
+    const chefId = req.params.chefId as string;
     const menus = await prisma.menu.findMany({
-      where: { chefId: req.params.chefId, isActive: true },
+      where: { chefId, isActive: true },
       include: {
         items: {
           where: { isAvailable: true },
@@ -60,7 +61,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const item = await prisma.menuItem.create({
-        data: { ...req.body, menuId: req.params.menuId },
+        data: { ...req.body, menuId: req.params.menuId as string },
       });
       res.status(201).json({ success: true, data: item });
     } catch (error: unknown) {

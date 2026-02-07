@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react";
 
-const SIDEBAR_ITEMS = [
+interface SidebarItem { icon: string; label: string; active?: boolean }
+interface SidebarGroup { section: string; items: SidebarItem[] }
+
+const SIDEBAR_ITEMS: SidebarGroup[] = [
   { section: "OVERVIEW", items: [{ icon: "📊", label: "Dashboard", active: true }] },
   { section: "ORDERS", items: [{ icon: "📋", label: "Active Orders" }, { icon: "📦", label: "Order History" }, { icon: "🔔", label: "Notifications" }] },
   { section: "FOOD & MENU", items: [{ icon: "🍽️", label: "Menu Management" }, { icon: "📝", label: "Add Dish" }] },

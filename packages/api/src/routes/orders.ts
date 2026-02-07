@@ -100,8 +100,9 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const { status } = req.body;
+      const orderId = req.params.id as string;
       const order = await prisma.order.update({
-        where: { id: req.params.id },
+        where: { id: orderId },
         data: { status },
       });
 

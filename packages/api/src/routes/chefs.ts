@@ -31,8 +31,9 @@ router.get("/", async (req: Request, res: Response) => {
 // GET /api/v1/chefs/:id
 router.get("/:id", async (req: Request, res: Response) => {
   try {
+    const chefId = req.params.id as string;
     const chef = await prisma.chef.findUnique({
-      where: { id: req.params.id },
+      where: { id: chefId },
       include: {
         user: { select: { name: true, avatar: true } },
         menus: { where: { isActive: true }, include: { items: true } },

@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+config/deployment.env
+config/*.local
+
+# Build outputs
+dist/
+.next/
+.expo/
+out/
+*.tsbuildinfo
+
+# Prisma
+packages/db/prisma/migrations/migration_lock.toml
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# System
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Docker
+docker-compose.override.yml
+
+# Large backups
+migration/backup/*.wpress
+migration/backup/*.tar.gz
+*.sql.gz
+
+# WordPress generated files
+app/wp-content/uploads/
+app/wp-config-sample.php
+app/.htaccess
+
+# Mobile
+apps/mobile/ios/
+apps/mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Turborepo / cache
+.turbo/

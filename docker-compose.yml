@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  # MySQL Database (local dev mirror of Azure MySQL Flexible Server)
+  mysql:
+    image: mysql:8.0
+    container_name: homeal-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: homeal_root_pass
+      MYSQL_DATABASE: homeal_db
+      MYSQL_USER: homeal_user
+      MYSQL_PASSWORD: homeal_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (local dev mirror of Azure Cache for Redis)
+  redis:
+    image: redis:7-alpine
+    container_name: homeal-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Backend
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    container_name: homeal-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      DATABASE_URL: "mysql://homeal_user:homeal_pass@mysql:3306/homeal_db"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "dev-jwt-secret-change-in-production"
+      JWT_REFRESH_SECRET: "dev-refresh-secret-change-in-production"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

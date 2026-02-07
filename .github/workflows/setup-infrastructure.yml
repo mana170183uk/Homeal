@@ -1,0 +1,117 @@
+name: Setup Azure Infrastructure
+
+on:
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: rg-visualstudio-lab-mana
+  APP_PLAN: restrovision-plan
+  REGION: eastus
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Web App - API
+        run: |
+          az webapp create \
+            --name homeal-api \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --plan ${{ env.APP_PLAN }} \
+            --runtime "NODE:20-lts" || echo "Web app homeal-api may already exist"
+
+      - name: Create Web App - Admin
+        run: |
+          az webapp create \
+            --name homeal-admin \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --plan ${{ env.APP_PLAN }} \
+            --runtime "NODE:20-lts" || echo "Web app homeal-admin may already exist"
+
+      - name: Create Web App - Super Admin
+        run: |
+          az webapp create \
+            --name homeal-superadmin \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --plan ${{ env.APP_PLAN }} \
+            --runtime "NODE:20-lts" || echo "Web app homeal-superadmin may already exist"
+
+      - name: Enable WebSockets on API
+        run: |
+          az webapp config set \
+            --name homeal-api \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --web-sockets-enabled true
+
+      - name: Set Always On for API
+        run: |
+          az webapp config set \
+            --name homeal-api \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --always-on true || echo "Always On may require Standard tier or higher"
+
+      - name: Set Startup Command for API
+        run: |
+          az webapp config set \
+            --name homeal-api \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --startup-file "node dist/server.js"
+
+      - name: Create MySQL Database
+        run: |
+          az mysql flexible-server db create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --server-name restrovision-mysql \
+            --database-name homeal_db || echo "Database homeal_db may already exist"
+
+      - name: Allow Azure Services through MySQL firewall
+        run: |
+          az mysql flexible-server firewall-rule create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name restrovision-mysql \
+            --rule-name AllowAzureServices \
+            --start-ip-address 0.0.0.0 \
+            --end-ip-address 0.0.0.0 || echo "Firewall rule may already exist"
+
+      - name: Create Storage Account
+        run: |
+          az storage account create \
+            --name homealstorage \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --location ${{ env.REGION }} \
+            --sku Standard_LRS \
+            --kind StorageV2 || echo "Storage account may already exist"
+
+      - name: Create Blob Container
+        run: |
+          az storage container create \
+            --name homeal-images \
+            --account-name homealstorage \
+            --public-access blob || echo "Container may already exist"
+
+      - name: Set API Environment Variables
+        run: |
+          az webapp config appsettings set \
+            --name homeal-api \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --settings \
+              NODE_ENV=production \
+              PORT=8080 \
+              DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              WEBSITE_NODE_DEFAULT_VERSION="~20" \
+              SCM_DO_BUILD_DURING_DEPLOYMENT="false"
+
+      - name: Print Web App URLs
+        run: |
+          echo "=== Homeal Azure Resources Created ==="
+          echo "API:         https://homeal-api.azurewebsites.net"
+          echo "Admin:       https://homeal-admin.azurewebsites.net"
+          echo "Super Admin: https://homeal-superadmin.azurewebsites.net"
+          echo "Database:    homeal_db on restrovision-mysql"
+          echo "Storage:     homealstorage / homeal-images"

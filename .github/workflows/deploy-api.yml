@@ -1,0 +1,53 @@
+name: Deploy Homeal API to Azure
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/api/**", "packages/db/**", "packages/shared/**"]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema=packages/db/prisma/schema.prisma
+
+      - name: Build API
+        run: npm run build:api
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: homeal-api
+          package: packages/api
+
+      - name: Set App Settings
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: homeal-api
+          app-settings-json: |
+            [
+              { "name": "NODE_ENV", "value": "production" },
+              { "name": "PORT", "value": "8080" },
+              { "name": "DATABASE_URL", "value": "${{ secrets.DATABASE_URL }}" },
+              { "name": "SCM_DO_BUILD_DURING_DEPLOYMENT", "value": "false" },
+              { "name": "WEBSITE_NODE_DEFAULT_VERSION", "value": "~20" }
+            ]

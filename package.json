@@ -1,0 +1,27 @@
+{
+  "name": "homeal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Homeal - Healthy Food, From Home. Full-stack home-cooked food delivery platform.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w packages/api",
+    "dev:admin": "npm run dev -w apps/admin-web",
+    "dev:super-admin": "npm run dev -w apps/super-admin",
+    "build:api": "npm run build -w packages/api",
+    "build:admin": "npm run build -w apps/admin-web",
+    "build:super-admin": "npm run build -w apps/super-admin",
+    "db:generate": "npm run generate -w packages/db",
+    "db:push": "npm run push -w packages/db",
+    "db:migrate": "npm run migrate -w packages/db",
+    "db:studio": "npm run studio -w packages/db",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

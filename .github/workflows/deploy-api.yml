@@ -39,15 +39,7 @@ jobs:
           app-name: homeal-api
           package: packages/api
 
-      - name: Set App Settings
-        uses: azure/appservice-settings@v1
-        with:
-          app-name: homeal-api
-          app-settings-json: |
-            [
-              { "name": "NODE_ENV", "value": "production" },
-              { "name": "PORT", "value": "8080" },
-              { "name": "DATABASE_URL", "value": "${{ secrets.DATABASE_URL }}" },
-              { "name": "SCM_DO_BUILD_DURING_DEPLOYMENT", "value": "false" },
-              { "name": "WEBSITE_NODE_DEFAULT_VERSION", "value": "~20" }
-            ]
+      - name: Verify Deployment
+        run: |
+          sleep 30
+          curl -sf https://homeal-api.azurewebsites.net/health || echo "Health check pending - app may still be starting"

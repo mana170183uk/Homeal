@@ -25,6 +25,12 @@ jobs:
       - name: Build Admin Panel
         run: npm run build:admin
 
+      - name: Prepare standalone deployment
+        run: |
+          cp -r apps/admin-web/.next/standalone deploy
+          cp -r apps/admin-web/.next/static deploy/apps/admin-web/.next/static
+          cp -r apps/admin-web/public deploy/apps/admin-web/public 2>/dev/null || true
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -34,4 +40,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: homeal-admin
-          package: apps/admin-web
+          package: deploy
+
+      - name: Configure startup
+        run: |
+          az webapp config set --name homeal-admin --resource-group rg-visualstudio-lab-mana --startup-file "node apps/admin-web/server.js"

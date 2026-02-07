@@ -28,6 +28,27 @@ jobs:
       - name: Build API
         run: npm run build:api
 
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy
+          cp -r packages/api/dist deploy/
+          cp packages/api/package.json deploy/
+          cp -r packages/db deploy/packages-db
+          cp -r packages/shared deploy/packages-shared
+          cp -r node_modules deploy/
+          cat > deploy/server.js << 'ENTRY'
+          // Azure App Service entry point
+          require('./dist/server.js');
+          ENTRY
+          cat > deploy/package.json << 'PKG'
+          {
+            "name": "homeal-api-deploy",
+            "version": "1.0.0",
+            "main": "server.js",
+            "scripts": { "start": "node server.js" }
+          }
+          PKG
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -37,9 +58,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: homeal-api
-          package: packages/api
+          package: deploy
 
-      - name: Verify Deployment
+      - name: Configure startup
         run: |
-          sleep 30
-          curl -sf https://homeal-api.azurewebsites.net/health || echo "Health check pending - app may still be starting"
+          az webapp config set --name homeal-api --resource-group rg-visualstudio-lab-mana --startup-file "node server.js"

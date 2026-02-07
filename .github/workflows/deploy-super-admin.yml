@@ -25,6 +25,12 @@ jobs:
       - name: Build Super Admin Panel
         run: npm run build:super-admin
 
+      - name: Prepare standalone deployment
+        run: |
+          cp -r apps/super-admin/.next/standalone deploy
+          cp -r apps/super-admin/.next/static deploy/apps/super-admin/.next/static
+          cp -r apps/super-admin/public deploy/apps/super-admin/public 2>/dev/null || true
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -34,4 +40,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: homeal-superadmin
-          package: apps/super-admin
+          package: deploy
+
+      - name: Configure startup
+        run: |
+          az webapp config set --name homeal-superadmin --resource-group rg-visualstudio-lab-mana --startup-file "node apps/super-admin/server.js"

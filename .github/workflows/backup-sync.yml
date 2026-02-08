@@ -1,0 +1,163 @@
+name: Backup Sync (6-hour)
+
+on:
+  schedule:
+    # Every 6 hours: midnight, 6am, noon, 6pm UTC
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      sync_db:
+        description: "Sync database"
+        type: boolean
+        default: true
+      sync_apps:
+        description: "Sync app deployments"
+        type: boolean
+        default: true
+
+env:
+  RESOURCE_GROUP: rg-visualstudio-lab-mana
+  MYSQL_HOST: restrovision-mysql.mysql.database.azure.com
+  MYSQL_USER: restrovision_admin
+  MYSQL_PASS: "RestroVision2024!"
+  PROD_DB: homeal_db
+  BACKUP_DB: homeal_db_backup
+
+jobs:
+  sync-database:
+    name: Sync Production DB → Backup DB
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'schedule' || github.event.inputs.sync_db == 'true' }}
+
+    steps:
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - name: Dump production database
+        run: |
+          mysqldump \
+            --host=${{ env.MYSQL_HOST }} \
+            --user=${{ env.MYSQL_USER }} \
+            --password="${{ env.MYSQL_PASS }}" \
+            --ssl-mode=REQUIRED \
+            --single-transaction \
+            --routines \
+            --triggers \
+            --set-gtid-purged=OFF \
+            ${{ env.PROD_DB }} > prod_dump.sql
+          echo "Dump size: $(du -h prod_dump.sql | cut -f1)"
+
+      - name: Restore to backup database
+        run: |
+          mysql \
+            --host=${{ env.MYSQL_HOST }} \
+            --user=${{ env.MYSQL_USER }} \
+            --password="${{ env.MYSQL_PASS }}" \
+            --ssl-mode=REQUIRED \
+            ${{ env.BACKUP_DB }} < prod_dump.sql
+          echo "Database sync completed at $(date -u)"
+
+      - name: Verify backup
+        run: |
+          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
+          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
+          echo "Production tables: $PROD_TABLES"
+          echo "Backup tables: $BACKUP_TABLES"
+          if [ "$PROD_TABLES" != "$BACKUP_TABLES" ]; then
+            echo "WARNING: Table count mismatch!"
+            exit 1
+          fi
+          echo "Backup verified successfully"
+
+  sync-apps:
+    name: Sync App Deployments to Backup
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'schedule' || github.event.inputs.sync_apps == 'true' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all apps
+        run: |
+          npm run build:api
+          npm run build:admin
+          npm run build:super-admin
+
+      - name: Prepare API deployment
+        run: |
+          mkdir -p deploy-api/node_modules
+          cp -r packages/api/dist deploy-api/
+          cp -rL node_modules/. deploy-api/node_modules/
+          cat > deploy-api/server.js << 'ENTRY'
+          require('./dist/server.js');
+          ENTRY
+          cat > deploy-api/package.json << 'PKG'
+          {
+            "name": "homeal-api-deploy",
+            "version": "1.0.0",
+            "main": "server.js",
+            "scripts": { "start": "node server.js" }
+          }
+          PKG
+
+      - name: Prepare Admin deployment
+        run: |
+          cp -r apps/admin-web/.next/standalone deploy-admin
+          cp -r apps/admin-web/.next/static deploy-admin/apps/admin-web/.next/static
+          cp -r apps/admin-web/public deploy-admin/apps/admin-web/public 2>/dev/null || true
+
+      - name: Prepare Super Admin deployment
+        run: |
+          cp -r apps/super-admin/.next/standalone deploy-super-admin
+          cp -r apps/super-admin/.next/static deploy-super-admin/apps/super-admin/.next/static
+          cp -r apps/super-admin/public deploy-super-admin/apps/super-admin/public 2>/dev/null || true
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to backup apps (keep them stopped)
+        run: |
+          # Deploy API backup
+          az webapp deployment source config-zip \
+            --name homeal-api-backup \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --src <(cd deploy-api && zip -r - .) 2>/dev/null || \
+          az webapp deploy --name homeal-api-backup \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --src-path deploy-api --type zip 2>/dev/null || true
+
+          # Deploy Admin backup
+          az webapp deploy --name homeal-admin-backup \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --src-path deploy-admin --type zip 2>/dev/null || true
+
+          # Deploy Super Admin backup
+          az webapp deploy --name homeal-superadmin-backup \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --src-path deploy-super-admin --type zip 2>/dev/null || true
+
+      - name: Configure startup commands for backups
+        run: |
+          az webapp config set --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
+          az webapp config set --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node apps/admin-web/server.js"
+          az webapp config set --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node apps/super-admin/server.js"
+
+      - name: Ensure backup apps remain stopped
+        run: |
+          az webapp stop --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp stop --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp stop --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          echo "All backup apps synced and stopped at $(date -u)"

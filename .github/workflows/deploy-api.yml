@@ -25,6 +25,13 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/db/prisma/schema.prisma
 
+      - name: Push DB schema & seed test users
+        run: |
+          npx prisma db push --schema=packages/db/prisma/schema.prisma --accept-data-loss
+          npx prisma db seed --schema=packages/db/prisma/schema.prisma || echo "Seed skipped (users may already exist)"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       - name: Build all packages
         run: npm run build:api
 

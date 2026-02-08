@@ -1,0 +1,67 @@
+name: Failover - Switch to Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Failover action"
+        required: true
+        type: choice
+        options:
+          - activate-backup
+          - restore-production
+          - status-check
+
+env:
+  RESOURCE_GROUP: rg-visualstudio-lab-mana
+
+jobs:
+  failover:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Status Check
+        if: ${{ github.event.inputs.action == 'status-check' }}
+        run: |
+          echo "=== Production Apps ==="
+          az webapp show --name homeal-admin --resource-group ${{ env.RESOURCE_GROUP }} --query '{name:name, state:state, url:defaultHostName}' -o table
+          az webapp show --name homeal-api --resource-group ${{ env.RESOURCE_GROUP }} --query '{name:name, state:state, url:defaultHostName}' -o table
+          az webapp show --name homeal-superadmin --resource-group ${{ env.RESOURCE_GROUP }} --query '{name:name, state:state, url:defaultHostName}' -o table
+          echo ""
+          echo "=== Backup Apps ==="
+          az webapp show --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }} --query '{name:name, state:state, url:defaultHostName}' -o table
+          az webapp show --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }} --query '{name:name, state:state, url:defaultHostName}' -o table
+          az webapp show --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }} --query '{name:name, state:state, url:defaultHostName}' -o table
+
+      - name: Activate Backup Apps
+        if: ${{ github.event.inputs.action == 'activate-backup' }}
+        run: |
+          echo "Starting backup apps..."
+          az webapp start --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp start --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp start --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          echo ""
+          echo "Backup apps are now LIVE:"
+          echo "  Admin:       https://homeal-admin-backup.azurewebsites.net"
+          echo "  API:         https://homeal-api-backup.azurewebsites.net"
+          echo "  Super Admin: https://homeal-superadmin-backup.azurewebsites.net"
+
+      - name: Restore Production
+        if: ${{ github.event.inputs.action == 'restore-production' }}
+        run: |
+          echo "Restarting production apps..."
+          az webapp restart --name homeal-api --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp restart --name homeal-admin --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp restart --name homeal-superadmin --resource-group ${{ env.RESOURCE_GROUP }}
+          echo ""
+          echo "Stopping backup apps..."
+          az webapp stop --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp stop --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp stop --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          echo ""
+          echo "Production restored, backups stopped."

@@ -60,6 +60,37 @@ router.post("/login", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/auth/test-login (for testing without Firebase)
+router.post("/test-login", async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ success: false, error: "Email is required" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { chef: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found. Run seed to create test users." });
+      return;
+    }
+
+    const tokenPayload = { userId: user.id, role: user.role };
+    const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
+    const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
+
+    res.json({ success: true, data: { user, token, refreshToken } });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Test login failed";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
 // POST /api/v1/auth/refresh
 router.post("/refresh", async (req: Request, res: Response) => {
   try {

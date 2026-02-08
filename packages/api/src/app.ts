@@ -9,6 +9,8 @@ import chefRoutes from "./routes/chefs";
 import menuRoutes from "./routes/menus";
 import orderRoutes from "./routes/orders";
 import uploadRoutes from "./routes/upload";
+import adminRoutes from "./routes/admin";
+import approveActionRoutes from "./routes/approveAction";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -51,6 +53,8 @@ app.use(`${API_PREFIX}/chefs`, chefRoutes);
 app.use(`${API_PREFIX}/menus`, menuRoutes);
 app.use(`${API_PREFIX}/orders`, orderRoutes);
 app.use(`${API_PREFIX}/upload`, uploadRoutes);
+app.use(`${API_PREFIX}/admin`, adminRoutes);
+app.use(`${API_PREFIX}/approve-action`, approveActionRoutes);
 
 // Error handler
 app.use(errorHandler);

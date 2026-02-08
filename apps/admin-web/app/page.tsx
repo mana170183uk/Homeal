@@ -230,6 +230,8 @@ const CAKE_CATEGORIES = [
   { name: "Custom Cakes", icon: "🎨", count: 0, color: "#3B82F6" },
 ];
 
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3100";
+
 export default function DashboardPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
@@ -254,6 +256,33 @@ export default function DashboardPage() {
   const planCategoryLimit = currentPlan === "Starter" ? 1 : currentPlan === "Growth" ? 4 : 9;
   const enabledCount = Object.values(enabledCategories).filter(Boolean).length;
 
+  // Approval state
+  const [approvalStatus, setApprovalStatus] = useState<"loading" | "approved" | "pending" | "rejected">("loading");
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+
+  // Check approval status on load
+  useEffect(() => {
+    async function checkApproval() {
+      try {
+        const res = await fetch(`${ADMIN_API_URL}/api/v1/auth/test-login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: "chef@homeal.co.uk" }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setApprovalStatus(data.data.approvalStatus || "approved");
+          setTrialEndsAt(data.data.trialEndsAt || null);
+        } else {
+          setApprovalStatus("approved"); // fallback
+        }
+      } catch {
+        setApprovalStatus("approved"); // fallback on error
+      }
+    }
+    checkApproval();
+  }, []);
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
@@ -275,6 +304,79 @@ export default function DashboardPage() {
   };
 
   const customPages = ["dashboard", "settings", "menu", "products", "my-services", "add-product", "add-dish", "add-cake", "active-orders", "order-history", "notifications", "subscriptions", "earnings", "reviews", "analytics"];
+
+  // Trial banner helpers
+  const trialDate = trialEndsAt ? new Date(trialEndsAt) : null;
+  const trialDaysLeft = trialDate ? Math.max(0, Math.ceil((trialDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : null;
+
+  // Blocking overlays for pending/rejected
+  if (approvalStatus === "loading") {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg)", fontFamily: "var(--font-poppins)" }}>
+        <div className="text-center">
+          <RefreshCw size={40} className="mx-auto mb-4 animate-spin" style={{ color: "#8B5CF6" }} />
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (approvalStatus === "pending") {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "linear-gradient(135deg, #FFF7ED, #FFFBEB, #FFF0F3)", fontFamily: "var(--font-poppins)" }}>
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center" style={{ background: "rgba(245,158,11,0.12)" }}>
+            <Clock size={40} style={{ color: "#F59E0B" }} />
+          </div>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: "#2D2D3F" }}>
+            <span style={{ color: "#2D8B3D" }}>Ho</span><span style={{ color: "#FF8534" }}>me</span><span style={{ color: "#2D8B3D" }}>al</span>
+          </h1>
+          <h2 className="text-lg font-semibold mb-3" style={{ color: "#F59E0B" }}>Pending Approval</h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: "#4A4A65" }}>
+            Your kitchen registration is being reviewed by our team. You&apos;ll receive a welcome email once approved with your free 3-month Unlimited plan.
+          </p>
+          <div className="rounded-2xl p-5 mb-6" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: "#F59E0B" }}>What happens next?</p>
+            <ul className="text-xs text-left space-y-2" style={{ color: "#4A4A65" }}>
+              <li className="flex items-start gap-2"><Check size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#10B981" }} /> Our admin reviews your registration</li>
+              <li className="flex items-start gap-2"><Clock size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#F59E0B" }} /> You receive an approval email</li>
+              <li className="flex items-start gap-2"><Crown size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#8B5CF6" }} /> 3-month free Unlimited plan starts</li>
+              <li className="flex items-start gap-2"><ChefHat size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#FF8534" }} /> Start listing your dishes!</li>
+            </ul>
+          </div>
+          <p className="text-xs" style={{ color: "#9595B0" }}>
+            Questions? Email us at <a href="mailto:homealforuk@gmail.com" style={{ color: "#8B5CF6", fontWeight: 600 }}>homealforuk@gmail.com</a>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (approvalStatus === "rejected") {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "linear-gradient(135deg, #FEF2F2, #FFF0F3)", fontFamily: "var(--font-poppins)" }}>
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center" style={{ background: "rgba(239,68,68,0.12)" }}>
+            <AlertCircle size={40} style={{ color: "#EF4444" }} />
+          </div>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: "#2D2D3F" }}>
+            <span style={{ color: "#2D8B3D" }}>Ho</span><span style={{ color: "#FF8534" }}>me</span><span style={{ color: "#2D8B3D" }}>al</span>
+          </h1>
+          <h2 className="text-lg font-semibold mb-3" style={{ color: "#EF4444" }}>Registration Not Approved</h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: "#4A4A65" }}>
+            Unfortunately, your registration could not be approved at this time. If you believe this was a mistake, please reach out to us.
+          </p>
+          <a
+            href="mailto:homealforuk@gmail.com"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-semibold transition hover:opacity-90"
+            style={{ background: "#8B5CF6" }}
+          >
+            <Mail size={16} /> Contact Support
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen">
@@ -370,6 +472,29 @@ export default function DashboardPage() {
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>AK</div>
           </div>
         </header>
+
+        {/* Trial Banner */}
+        {trialDate && trialDaysLeft !== null && (
+          <div className="px-6 py-2.5 flex items-center justify-between" style={{
+            background: trialDaysLeft > 30 ? "linear-gradient(135deg, rgba(139,92,246,0.08), rgba(255,133,52,0.08))" : trialDaysLeft > 7 ? "rgba(245,158,11,0.08)" : "rgba(239,68,68,0.08)",
+            borderBottom: `1px solid ${trialDaysLeft > 30 ? "rgba(139,92,246,0.15)" : trialDaysLeft > 7 ? "rgba(245,158,11,0.2)" : "rgba(239,68,68,0.2)"}`,
+          }}>
+            <div className="flex items-center gap-2">
+              <Crown size={16} style={{ color: "#8B5CF6" }} />
+              <span className="text-xs font-semibold" style={{ color: "#8B5CF6" }}>Unlimited Plan — Free Trial</span>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {trialDaysLeft > 0
+                  ? `Ends ${trialDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} (${trialDaysLeft} days left)`
+                  : "Trial expired"}
+              </span>
+            </div>
+            {trialDaysLeft <= 7 && (
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>
+                {trialDaysLeft === 0 ? "Expired" : `${trialDaysLeft} days remaining`}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="p-6">
           {/* Dashboard */}

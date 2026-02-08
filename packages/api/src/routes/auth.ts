@@ -1,11 +1,19 @@
 import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
+import { notifySuperAdminNewChef } from "../services/email";
 
 const router = Router();
 
 const JWT_EXPIRY = "15m";
 const JWT_REFRESH_EXPIRY = "7d";
+
+function getApprovalStatus(chef: { isVerified: boolean; rejectedAt: Date | null; trialEndsAt: Date | null } | null) {
+  if (!chef) return undefined;
+  if (chef.rejectedAt) return { approvalStatus: "rejected" as const, trialEndsAt: null };
+  if (chef.isVerified) return { approvalStatus: "approved" as const, trialEndsAt: chef.trialEndsAt };
+  return { approvalStatus: "pending" as const, trialEndsAt: null };
+}
 
 function signToken(payload: object, secret: string, expiresIn: string): string {
   return jwt.sign(payload, secret, { expiresIn: expiresIn as jwt.SignOptions["expiresIn"] });
@@ -14,19 +22,45 @@ function signToken(payload: object, secret: string, expiresIn: string): string {
 // POST /api/v1/auth/register
 router.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, firebaseUid, role } = req.body;
+    const { name, email, phone, firebaseUid, role, kitchenName } = req.body;
 
     const user = await prisma.user.create({
       data: { name, email, phone, firebaseUid, role: role || "CUSTOMER" },
     });
 
+    // If registering as CHEF, create Chef record (pending approval)
+    let chef = null;
+    if (user.role === "CHEF") {
+      chef = await prisma.chef.create({
+        data: {
+          userId: user.id,
+          kitchenName: kitchenName || `${name}'s Kitchen`,
+          isVerified: false,
+        },
+      });
+
+      // Notify super admin (fire-and-forget)
+      if (email) {
+        notifySuperAdminNewChef({
+          chefId: chef.id,
+          chefName: name,
+          kitchenName: chef.kitchenName,
+          chefEmail: email,
+        }).catch((err) => console.error("[Register] Failed to notify super admin:", err));
+      }
+    }
+
     const tokenPayload = { userId: user.id, role: user.role };
     const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
     const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
+    const responseUser = chef
+      ? { ...user, chef, approvalStatus: "pending" as const }
+      : user;
+
     res.status(201).json({
       success: true,
-      data: { user, token, refreshToken },
+      data: { user: responseUser, token, refreshToken },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Registration failed";
@@ -53,7 +87,9 @@ router.post("/login", async (req: Request, res: Response) => {
     const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
     const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
-    res.json({ success: true, data: { user, token, refreshToken } });
+    const approval = getApprovalStatus(user.chef);
+
+    res.json({ success: true, data: { user, token, refreshToken, ...approval } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Login failed";
     res.status(500).json({ success: false, error: message });
@@ -84,7 +120,9 @@ router.post("/test-login", async (req: Request, res: Response) => {
     const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
     const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
-    res.json({ success: true, data: { user, token, refreshToken } });
+    const approval = getApprovalStatus(user.chef);
+
+    res.json({ success: true, data: { user, token, refreshToken, ...approval } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Test login failed";
     res.status(500).json({ success: false, error: message });

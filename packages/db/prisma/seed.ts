@@ -36,9 +36,18 @@ async function main() {
     },
   });
 
+  const approvedAt = new Date();
+  const trialEndsAt = new Date(approvedAt);
+  trialEndsAt.setMonth(trialEndsAt.getMonth() + 3);
+
   const chef = await prisma.chef.upsert({
     where: { userId: chefUser.id },
-    update: {},
+    update: {
+      isVerified: true,
+      approvedAt,
+      trialEndsAt,
+      plan: "UNLIMITED",
+    },
     create: {
       userId: chefUser.id,
       kitchenName: "Priya's Home Kitchen",
@@ -47,6 +56,9 @@ async function main() {
       deliveryRadius: 10.0,
       isVerified: true,
       isOnline: true,
+      approvedAt,
+      trialEndsAt,
+      plan: "UNLIMITED",
       operatingHours: JSON.stringify({
         mon: { open: "08:00", close: "21:00" },
         tue: { open: "08:00", close: "21:00" },
@@ -61,7 +73,34 @@ async function main() {
       longitude: -0.1278,
     },
   });
-  console.log(`Chef Admin: ${chefUser.email} (Kitchen: ${chef.kitchenName})`);
+  console.log(`Chef Admin: ${chefUser.email} (Kitchen: ${chef.kitchenName}, Approved, Trial ends: ${trialEndsAt.toISOString().slice(0, 10)})`);
+
+  // 4. Pending Chef (awaiting approval)
+  const pendingChefUser = await prisma.user.upsert({
+    where: { email: "pending-chef@homeal.co.uk" },
+    update: {},
+    create: {
+      name: "Ravi Kumar",
+      email: "pending-chef@homeal.co.uk",
+      phone: "+447700100004",
+      role: "CHEF",
+      firebaseUid: "test-pending-chef-uid-001",
+      isActive: true,
+    },
+  });
+
+  await prisma.chef.upsert({
+    where: { userId: pendingChefUser.id },
+    update: {},
+    create: {
+      userId: pendingChefUser.id,
+      kitchenName: "Ravi's Curry House",
+      description: "North Indian curries and tandoori specialties",
+      cuisineTypes: JSON.stringify(["North Indian", "Tandoori"]),
+      isVerified: false,
+    },
+  });
+  console.log(`Pending Chef: ${pendingChefUser.email} (Awaiting approval)`);
 
   // 3. End User / Customer
   const customer = await prisma.user.upsert({
@@ -192,10 +231,17 @@ async function main() {
   console.log("  Email: superadmin@homeal.co.uk");
   console.log("  Firebase UID: test-superadmin-uid-001");
   console.log("");
-  console.log("  CHEF ADMIN (Chef Admin Panel)");
+  console.log("  CHEF ADMIN - APPROVED (Chef Admin Panel)");
   console.log("  Email: chef@homeal.co.uk");
   console.log("  Firebase UID: test-chef-uid-001");
   console.log("  Kitchen: Priya's Home Kitchen");
+  console.log("  Status: Approved, Unlimited Plan (3-month trial)");
+  console.log("");
+  console.log("  CHEF ADMIN - PENDING (Awaiting Approval)");
+  console.log("  Email: pending-chef@homeal.co.uk");
+  console.log("  Firebase UID: test-pending-chef-uid-001");
+  console.log("  Kitchen: Ravi's Curry House");
+  console.log("  Status: Pending approval");
   console.log("");
   console.log("  CUSTOMER (Mobile App / End User)");
   console.log("  Email: customer@homeal.co.uk");

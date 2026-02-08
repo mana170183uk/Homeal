@@ -212,6 +212,32 @@ const BADGE_SYSTEM = [
   { name: "Local Hero", icon: MapPin, color: "#8B5CF6", description: "Top chef in their locality with 200+ orders/month" },
 ];
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3100";
+
+interface ChefData {
+  id: string;
+  kitchenName: string;
+  isVerified: boolean;
+  isOnline: boolean;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  trialEndsAt: string | null;
+  plan: string;
+  avgRating: number;
+  totalReviews: number;
+  deliveryRadius: number;
+  user: { id: string; name: string; email: string | null; phone: string | null; createdAt: string };
+  _count: { orders: number; menus: number; reviews: number };
+}
+
+interface ChefStats {
+  total: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+}
+
 export default function SuperAdminPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
@@ -222,6 +248,114 @@ export default function SuperAdminPage() {
     "catering": true,
     "meal-subscriptions": true,
   });
+
+  // Chef management state
+  const [chefs, setChefs] = useState<ChefData[]>([]);
+  const [chefStats, setChefStats] = useState<ChefStats>({ total: 0, approved: 0, pending: 0, rejected: 0 });
+  const [chefFilter, setChefFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [chefLoading, setChefLoading] = useState(false);
+  const [chefActionLoading, setChefActionLoading] = useState<string | null>(null);
+  const [rejectModalChef, setRejectModalChef] = useState<ChefData | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // Auto-login as super admin for API calls
+  useEffect(() => {
+    async function login() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/auth/test-login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: "superadmin@homeal.co.uk" }),
+        });
+        const data = await res.json();
+        if (data.success) setAuthToken(data.data.token);
+      } catch (err) {
+        console.error("Auto-login failed:", err);
+      }
+    }
+    login();
+  }, []);
+
+  // Fetch chefs when on chefs page
+  useEffect(() => {
+    if (activePage !== "chefs" || !authToken) return;
+    fetchChefs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage, authToken, chefFilter]);
+
+  async function fetchChefs() {
+    setChefLoading(true);
+    try {
+      const statusParam = chefFilter === "all" ? "" : `?status=${chefFilter}`;
+      const res = await fetch(`${API_URL}/api/v1/admin/chefs${statusParam}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChefs(data.data.chefs);
+        setChefStats(data.data.stats);
+      }
+    } catch (err) {
+      console.error("Failed to fetch chefs:", err);
+    } finally {
+      setChefLoading(false);
+    }
+  }
+
+  async function handleApproveChef(chefId: string) {
+    setChefActionLoading(chefId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/chefs/${chefId}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.success) fetchChefs();
+    } catch (err) {
+      console.error("Approve failed:", err);
+    } finally {
+      setChefActionLoading(null);
+    }
+  }
+
+  async function handleRejectChef(chefId: string, reason: string) {
+    setChefActionLoading(chefId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/chefs/${chefId}/reject`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRejectModalChef(null);
+        setRejectReason("");
+        fetchChefs();
+      }
+    } catch (err) {
+      console.error("Reject failed:", err);
+    } finally {
+      setChefActionLoading(null);
+    }
+  }
+
+  async function handleExtendTrial(chefId: string) {
+    setChefActionLoading(chefId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/chefs/${chefId}/extend-trial`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ months: 3 }),
+      });
+      const data = await res.json();
+      if (data.success) fetchChefs();
+    } catch (err) {
+      console.error("Extend trial failed:", err);
+    } finally {
+      setChefActionLoading(null);
+    }
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -880,23 +1014,24 @@ export default function SuperAdminPage() {
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Chef Management</h2>
                     <div className="flex items-center gap-4 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Approved</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />0 Pending</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{chefStats.approved} Approved</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />{chefStats.pending} Pending</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-500" />{chefStats.rejected} Rejected</span>
                     </div>
                   </div>
                 </div>
-                <button className="px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
-                  <PlusCircle size={16} /> Add Chef
+                <button onClick={() => fetchChefs()} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                  <RefreshCw size={18} className={`text-[var(--text-muted)] ${chefLoading ? "animate-spin" : ""}`} />
                 </button>
               </div>
 
               {/* Chef Stats */}
               <div className="grid grid-cols-4 gap-4 mb-6">
                 {[
-                  { label: "Total Chefs", value: "0", icon: ChefHat, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
-                  { label: "Active", value: "0", icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-                  { label: "Pending Approval", value: "0", icon: AlertCircle, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
-                  { label: "Delivery Enabled", value: "0", icon: Truck, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                  { label: "Total Chefs", value: String(chefStats.total), icon: ChefHat, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+                  { label: "Approved", value: String(chefStats.approved), icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                  { label: "Pending Approval", value: String(chefStats.pending), icon: AlertCircle, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+                  { label: "Rejected", value: String(chefStats.rejected), icon: Shield, color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
                 ].map((s, i) => {
                   const SI = s.icon;
                   return (
@@ -913,32 +1048,199 @@ export default function SuperAdminPage() {
                 })}
               </div>
 
+              {/* Filter Tabs */}
+              <div className="flex gap-2 mb-4">
+                {(["all", "pending", "approved", "rejected"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setChefFilter(f)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+                    style={{
+                      background: chefFilter === f ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--input)",
+                      color: chefFilter === f ? "#fff" : "var(--text-muted)",
+                    }}
+                  >
+                    {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                    {f === "pending" && chefStats.pending > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white">{chefStats.pending}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
               {/* Chefs Table */}
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Chef / Kitchen</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Location</th>
+                      <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Email</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Plan</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Delivery / Pickup</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Radius</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Trial Ends</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Orders</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Rating</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td colSpan={8} className="px-5 py-16 text-center text-[var(--text-muted)]">
-                        <ChefHat size={40} className="mx-auto mb-3 opacity-20" />
-                        <p className="text-sm font-medium">No chefs registered yet</p>
-                        <p className="text-[11px] mt-1">Chefs who register will appear here with their delivery/pickup settings</p>
-                      </td>
-                    </tr>
+                    {chefLoading ? (
+                      <tr>
+                        <td colSpan={8} className="px-5 py-16 text-center text-[var(--text-muted)]">
+                          <RefreshCw size={32} className="mx-auto mb-3 opacity-30 animate-spin" />
+                          <p className="text-sm font-medium">Loading chefs...</p>
+                        </td>
+                      </tr>
+                    ) : chefs.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-5 py-16 text-center text-[var(--text-muted)]">
+                          <ChefHat size={40} className="mx-auto mb-3 opacity-20" />
+                          <p className="text-sm font-medium">{chefFilter === "all" ? "No chefs registered yet" : `No ${chefFilter} chefs`}</p>
+                          <p className="text-[11px] mt-1">Chefs who register will appear here for approval</p>
+                        </td>
+                      </tr>
+                    ) : chefs.map((c) => {
+                      const isPending = !c.isVerified && !c.rejectedAt;
+                      const isApproved = c.isVerified;
+                      const isRejected = !!c.rejectedAt;
+                      const trialEnd = c.trialEndsAt ? new Date(c.trialEndsAt) : null;
+                      const trialExpired = trialEnd ? trialEnd < new Date() : false;
+
+                      return (
+                        <tr key={c.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                          <td className="px-5 py-3">
+                            <div className="font-semibold text-[var(--text)]">{c.kitchenName}</div>
+                            <div className="text-[11px] text-[var(--text-muted)]">{c.user.name}</div>
+                          </td>
+                          <td className="px-4 py-3 text-[var(--text-muted)]">{c.user.email || "—"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{
+                              background: c.plan === "UNLIMITED" ? "rgba(139,92,246,0.12)" : "rgba(16,185,129,0.12)",
+                              color: c.plan === "UNLIMITED" ? "#8B5CF6" : "#10B981",
+                            }}>
+                              {c.plan || "—"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center text-[var(--text-muted)]">
+                            {trialEnd ? (
+                              <span className={trialExpired ? "text-red-500 font-semibold" : ""}>
+                                {trialEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                {trialExpired && <span className="block text-[10px]">Expired</span>}
+                              </span>
+                            ) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">{c._count.orders}</td>
+                          <td className="px-4 py-3 text-center">
+                            {c.avgRating > 0 ? (
+                              <span className="flex items-center justify-center gap-1">
+                                <Star size={12} className="text-amber-500 fill-amber-500" />
+                                <span className="font-semibold text-[var(--text)]">{c.avgRating.toFixed(1)}</span>
+                                <span className="text-[var(--text-muted)]">({c.totalReviews})</span>
+                              </span>
+                            ) : <span className="text-[var(--text-muted)]">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {isPending && (
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>
+                                Pending
+                              </span>
+                            )}
+                            {isApproved && (
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>
+                                Approved
+                              </span>
+                            )}
+                            {isRejected && !isApproved && (
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>
+                                Rejected
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveChef(c.id)}
+                                    disabled={chefActionLoading === c.id}
+                                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                                    style={{ background: "#10B981" }}
+                                  >
+                                    {chefActionLoading === c.id ? "..." : "Approve"}
+                                  </button>
+                                  <button
+                                    onClick={() => { setRejectModalChef(c); setRejectReason(""); }}
+                                    disabled={chefActionLoading === c.id}
+                                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                                    style={{ background: "#EF4444" }}
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              {isApproved && trialEnd && (
+                                <button
+                                  onClick={() => handleExtendTrial(c.id)}
+                                  disabled={chefActionLoading === c.id}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition hover:opacity-90 disabled:opacity-50"
+                                  style={{ background: "rgba(139,92,246,0.12)", color: "#8B5CF6" }}
+                                >
+                                  {chefActionLoading === c.id ? "..." : "+3 Months"}
+                                </button>
+                              )}
+                              {isRejected && !isApproved && (
+                                <button
+                                  onClick={() => handleApproveChef(c.id)}
+                                  disabled={chefActionLoading === c.id}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                                  style={{ background: "#10B981" }}
+                                >
+                                  {chefActionLoading === c.id ? "..." : "Approve"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+
+              {/* Reject Modal */}
+              {rejectModalChef && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+                  <div className="rounded-2xl p-6 w-[440px] border border-[var(--border)]" style={{ background: "var(--header-bg)" }}>
+                    <h3 className="text-base font-semibold text-[var(--text)] mb-1">Reject Chef</h3>
+                    <p className="text-xs text-[var(--text-muted)] mb-4">Rejecting <strong>{rejectModalChef.kitchenName}</strong> ({rejectModalChef.user.email})</p>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Reason for rejection (optional)..."
+                      className="w-full px-4 py-3 rounded-xl border border-[var(--border)] text-sm resize-none"
+                      style={{ background: "var(--input)", color: "var(--text)" }}
+                      rows={3}
+                    />
+                    <div className="flex gap-3 mt-4 justify-end">
+                      <button
+                        onClick={() => { setRejectModalChef(null); setRejectReason(""); }}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold border border-[var(--border)]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleRejectChef(rejectModalChef.id, rejectReason)}
+                        disabled={chefActionLoading === rejectModalChef.id}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+                        style={{ background: "#EF4444" }}
+                      >
+                        {chefActionLoading === rejectModalChef.id ? "Rejecting..." : "Confirm Reject"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Delivery/Pickup Info */}
               <div className="rounded-2xl border px-5 py-4 mt-6 flex items-center gap-3" style={{ background: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.2)" }}>
@@ -946,8 +1248,8 @@ export default function SuperAdminPage() {
                   <Navigation size={20} style={{ color: "#3B82F6" }} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--text)]">Delivery & Pickup visibility</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Chefs configure delivery (with radius up to 25 miles) and/or pickup in their Settings. Customers within the chef&apos;s radius see them as &quot;nearby&quot; providers. The Delivery / Pickup column shows which fulfilment methods each chef has enabled.</p>
+                  <p className="text-sm font-semibold text-[var(--text)]">Approval Workflow</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">New chefs who register are automatically set to &quot;Pending&quot; status. You&apos;ll receive an email notification at homealforuk@gmail.com with one-click approve/reject buttons. Approved chefs get a 3-month free Unlimited plan. You can extend trials by 3 months at a time.</p>
                 </div>
               </div>
             </>

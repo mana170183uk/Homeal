@@ -108,6 +108,11 @@ model Chef {
   totalReviews    Int      @default(0)
   isVerified      Boolean  @default(false)
   isOnline        Boolean  @default(false)
+  approvedAt      DateTime?  @db.DateTime(3)
+  rejectedAt      DateTime?  @db.DateTime(3)
+  rejectionReason String?    @db.Text
+  trialEndsAt     DateTime?  @db.DateTime(3)
+  plan            String     @default("UNLIMITED") @db.VarChar(50)
   operatingHours  String?  @db.Text
   bankDetails     String?  @db.Text
   commissionRate  Float    @default(15.0)

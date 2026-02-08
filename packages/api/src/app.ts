@@ -18,8 +18,8 @@ app.use(helmet());
 app.use(
   cors({
     origin: process.env.CORS_ORIGINS?.split(",") || [
-      "http://localhost:3000",
-      "http://localhost:3001",
+      "http://localhost:3200",
+      "http://localhost:3201",
     ],
     credentials: true,
   })

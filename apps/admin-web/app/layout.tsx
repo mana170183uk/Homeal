@@ -17,6 +17,10 @@ const fredoka = Fredoka({
 export const metadata: Metadata = {
   title: "Homeal - Chef Dashboard",
   description: "Manage your kitchen, menus, and orders on Homeal",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg",
+  },
 };
 
 export default function RootLayout({

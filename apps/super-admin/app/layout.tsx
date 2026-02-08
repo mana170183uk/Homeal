@@ -17,6 +17,10 @@ const fredoka = Fredoka({
 export const metadata: Metadata = {
   title: "Homeal - Super Admin",
   description: "Homeal platform management and administration",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg",
+  },
 };
 
 export default function RootLayout({

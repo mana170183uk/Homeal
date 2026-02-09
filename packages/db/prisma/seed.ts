@@ -261,7 +261,7 @@ async function main() {
         create: {
           id: itemId,
           menuId: tcMenu.id,
-          categoryId: southIndianCat?.id,
+          categoryId: undefined,
           ...item,
         },
       });

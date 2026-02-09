@@ -19,6 +19,7 @@ env:
   RESOURCE_GROUP: rg-visualstudio-lab-mana
   MYSQL_HOST: restrovision-mysql.mysql.database.azure.com
   MYSQL_USER: restrovision_admin
+  MYSQL_PASS: Homeal2026SecureDb
   PROD_DB: homeal_db
   BACKUP_DB: homeal_db_backup
 
@@ -62,7 +63,7 @@ jobs:
           mysqldump \
             --host=${{ env.MYSQL_HOST }} \
             --user=${{ env.MYSQL_USER }} \
-            --password="${{ secrets.MYSQL_PASSWORD }}" \
+            --password="${{ env.MYSQL_PASS }}" \
             --ssl-mode=REQUIRED \
             --single-transaction \
             --routines \
@@ -76,15 +77,15 @@ jobs:
           mysql \
             --host=${{ env.MYSQL_HOST }} \
             --user=${{ env.MYSQL_USER }} \
-            --password="${{ secrets.MYSQL_PASSWORD }}" \
+            --password="${{ env.MYSQL_PASS }}" \
             --ssl-mode=REQUIRED \
             ${{ env.BACKUP_DB }} < prod_dump.sql
           echo "Database sync completed at $(date -u)"
 
       - name: Verify backup
         run: |
-          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ secrets.MYSQL_PASSWORD }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
-          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ secrets.MYSQL_PASSWORD }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
+          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
+          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
           echo "Production tables: $PROD_TABLES"
           echo "Backup tables: $BACKUP_TABLES"
           if [ "$PROD_TABLES" != "$BACKUP_TABLES" ]; then

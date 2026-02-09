@@ -1,9 +1,9 @@
-name: Deploy Homeal Admin Panel to Azure
+name: Deploy Homeal Super Admin to Azure
 
 on:
   push:
     branches: [main]
-    paths: ["apps/admin-web/**", "packages/shared/**"]
+    paths: ["apps/super-admin/**", "packages/shared/**"]
   workflow_dispatch:
 
 jobs:
@@ -22,8 +22,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Admin Panel
-        run: npm run build:admin
+      - name: Build Super Admin
+        run: npm run build:superadmin
         env:
           NEXT_PUBLIC_API_URL: https://api.homeal.uk
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
@@ -36,12 +36,12 @@ jobs:
       - name: Prepare standalone deployment
         run: |
           mkdir -p deploy
-          cp -r apps/admin-web/.next/standalone/node_modules deploy/
-          cp apps/admin-web/.next/standalone/package.json deploy/
-          cp apps/admin-web/.next/standalone/apps/admin-web/server.js deploy/
-          cp -r apps/admin-web/.next/standalone/apps/admin-web/.next deploy/.next
-          cp -r apps/admin-web/.next/static deploy/.next/static
-          cp -r apps/admin-web/public deploy/public 2>/dev/null || true
+          cp -r apps/super-admin/.next/standalone/node_modules deploy/
+          cp apps/super-admin/.next/standalone/package.json deploy/
+          cp apps/super-admin/.next/standalone/apps/super-admin/server.js deploy/
+          cp -r apps/super-admin/.next/standalone/apps/super-admin/.next deploy/.next
+          cp -r apps/super-admin/.next/static deploy/.next/static
+          cp -r apps/super-admin/public deploy/public 2>/dev/null || true
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -51,9 +51,9 @@ jobs:
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: homeal-admin
+          app-name: homeal-superadmin
           package: deploy
 
       - name: Configure startup
         run: |
-          az webapp config set --name homeal-admin --resource-group rg-visualstudio-lab-mana --startup-file "node server.js"
+          az webapp config set --name homeal-superadmin --resource-group rg-visualstudio-lab-mana --startup-file "node server.js"

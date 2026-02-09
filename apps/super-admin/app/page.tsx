@@ -259,29 +259,44 @@ export default function SuperAdminPage() {
   const [rejectModalChef, setRejectModalChef] = useState<ChefData | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const [adminName, setAdminName] = useState("");
 
-  // Auto-login as super admin for API calls
+  // Check auth on load - redirect to login if no token
   useEffect(() => {
-    async function login() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) {
+      window.location.href = "/login";
+      return;
+    }
+    // Verify the token is valid and user is SUPER_ADMIN
+    async function verifyAuth() {
       try {
-        const res = await fetch(`${API_URL}/api/v1/auth/test-login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "superadmin@homeal.co.uk" }),
+        const res = await fetch(`${API_URL}/api/v1/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        if (data.success) setAuthToken(data.data.token);
-      } catch (err) {
-        console.error("Auto-login failed:", err);
+        if (data.success && data.data && (data.data.role === "SUPER_ADMIN" || data.data.role === "ADMIN")) {
+          setAuthToken(token);
+          setAdminName(data.data.name || "Admin");
+        } else {
+          localStorage.removeItem("homeal_token");
+          localStorage.removeItem("homeal_refresh_token");
+          window.location.href = "/login";
+        }
+      } catch {
+        // Token might still work for API calls, try using it
+        setAuthToken(token);
       }
     }
-    login();
+    verifyAuth();
   }, []);
 
-  // Fetch chefs when on chefs page
+  // Fetch chefs when on chefs page OR dashboard (for stats)
   useEffect(() => {
-    if (activePage !== "chefs" || !authToken) return;
-    fetchChefs();
+    if (!authToken) return;
+    if (activePage === "chefs" || activePage === "dashboard") {
+      fetchChefs();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, authToken, chefFilter]);
 
@@ -485,7 +500,7 @@ export default function SuperAdminPage() {
                     <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">Homeal Platform</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1.5"><Shield size={12} /> Super Admin Control</span>
-                      <span className="flex items-center gap-1.5"><Users size={12} /> 1 Registered User</span>
+                      <span className="flex items-center gap-1.5"><Users size={12} /> {chefStats.total} Chef{chefStats.total !== 1 ? "s" : ""} Registered</span>
                       <span className="flex items-center gap-1.5 hidden sm:flex"><MapPin size={12} /> UK Region</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
@@ -502,7 +517,7 @@ export default function SuperAdminPage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm text-[var(--text-muted)]">Welcome, Managobinda</p>
+                  <p className="text-sm text-[var(--text-muted)]">Welcome, {adminName || "Admin"}</p>
                   <span
                     className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 rounded-full text-[11px] font-semibold border"
                     style={{ color: "var(--primary)", borderColor: "rgba(255,90,31,0.3)", background: "rgba(255,90,31,0.08)" }}
@@ -558,7 +573,7 @@ export default function SuperAdminPage() {
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Dashboard</h2>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Welcome back, Managobinda Sethi</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Welcome back, {adminName || "Admin"}</p>
                   </div>
                 </div>
                 <button
@@ -571,7 +586,12 @@ export default function SuperAdminPage() {
 
               {/* Stats Row 1 */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
-                {STATS_ROW1.map((s, i) => {
+                {[
+                  { ...STATS_ROW1[0] },
+                  { ...STATS_ROW1[1] },
+                  { ...STATS_ROW1[2] },
+                  { ...STATS_ROW1[3], value: String(chefStats.total), sub: `${chefStats.approved} approved, ${chefStats.pending} pending` },
+                ].map((s, i) => {
                   const StatIcon = s.icon;
                   return (
                     <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all hover:scale-[1.02]" style={{ background: "var(--header-bg)" }}>
@@ -590,7 +610,12 @@ export default function SuperAdminPage() {
 
               {/* Stats Row 2 */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
-                {STATS_ROW2.map((s, i) => {
+                {[
+                  { ...STATS_ROW2[0] },
+                  { ...STATS_ROW2[1] },
+                  { ...STATS_ROW2[2] },
+                  { ...STATS_ROW2[3], value: String(chefStats.pending), sub: `${chefStats.pending} chef${chefStats.pending !== 1 ? "s" : ""} awaiting approval` },
+                ].map((s, i) => {
                   const StatIcon = s.icon;
                   return (
                     <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all hover:scale-[1.02]" style={{ background: "var(--header-bg)" }}>
@@ -610,12 +635,47 @@ export default function SuperAdminPage() {
               {/* Recent Activity Panels */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
-                  <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Recent Chefs</h2>
-                  <div className="text-center py-8 text-[var(--text-muted)]">
-                    <ChefHat size={48} className="mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">No chefs registered yet</p>
-                    <p className="text-xs mt-1">Approved and pending chefs will appear here</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-[var(--text)]">Recent Chefs</h2>
+                    <div className="flex gap-2 text-[10px]">
+                      <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.1)", color: "#10B981" }}>{chefStats.approved} approved</span>
+                      <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(245,158,11,0.1)", color: "#F59E0B" }}>{chefStats.pending} pending</span>
+                    </div>
                   </div>
+                  {chefs.length > 0 ? (
+                    <div className="space-y-3">
+                      {chefs.slice(0, 5).map((chef) => (
+                        <div key={chef.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                              <ChefHat size={14} color="white" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-[var(--text)] truncate">{chef.kitchenName}</p>
+                              <p className="text-[10px] text-[var(--text-muted)] truncate">{chef.user?.name || "Unknown"}</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0" style={{
+                            background: chef.isVerified ? "rgba(16,185,129,0.1)" : chef.rejectedAt ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
+                            color: chef.isVerified ? "#10B981" : chef.rejectedAt ? "#EF4444" : "#F59E0B",
+                          }}>
+                            {chef.isVerified ? "Approved" : chef.rejectedAt ? "Rejected" : "Pending"}
+                          </span>
+                        </div>
+                      ))}
+                      {chefs.length > 5 && (
+                        <button onClick={() => setActivePage("chefs")} className="text-xs font-medium w-full text-center py-2 rounded-lg hover:opacity-80 transition" style={{ color: "var(--primary)" }}>
+                          View all {chefStats.total} chefs
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-[var(--text-muted)]">
+                      <ChefHat size={48} className="mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">No chefs registered yet</p>
+                      <p className="text-xs mt-1">Approved and pending chefs will appear here</p>
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
                   <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Recent Orders</h2>

@@ -23,7 +23,7 @@ const POPULAR_CUISINES = [
   { name: "Caribbean", emoji: "\uD83C\uDF34", gradient: "from-yellow-400 to-orange-500" },
   { name: "Middle Eastern", emoji: "\uD83E\uDDC6", gradient: "from-amber-400 to-orange-500" },
   { name: "South Indian", emoji: "\uD83C\uDF5B", gradient: "from-yellow-500 to-red-400" },
-  { name: "Pakistani", emoji: "\uD83C\uDDF5\uD83C\uDDF0", gradient: "from-emerald-400 to-green-600" },
+  { name: "Japanese", emoji: "\uD83C\uDDEF\uD83C\uDDF5", gradient: "from-rose-400 to-red-500" },
 ];
 
 export default function HomePage() {
@@ -230,23 +230,39 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="px-4 sm:px-6 py-8 sm:py-10 border-t border-[var(--border)]">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-              <img src="/favicon-final-2.png" alt="" className="w-6 h-6 rounded-lg" />
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
+            <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
+                <img src="/favicon-final-2.png" alt="" className="w-6 h-6 rounded-lg" />
+              </div>
+              <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-9 w-auto shrink-0" />
+            </a>
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-sm">
+              <a href="/signup?role=customer" className="px-4 py-2 rounded-lg bg-primary/10 text-primary font-medium hover:bg-primary/20 transition">
+                Sign up as Customer
+              </a>
+              <a href="/signup?role=chef" className="px-4 py-2 rounded-lg bg-accent/10 text-accent font-medium hover:bg-accent/20 transition">
+                Sign up as Chef
+              </a>
+              <a href="/login" className="text-[var(--text-soft)] font-medium hover:text-primary transition">
+                Log in
+              </a>
+              <a href="https://admin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-accent transition">
+                Chef Portal
+              </a>
+              <a href="https://superadmin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-[var(--badge-to)] transition">
+                Super Admin
+              </a>
             </div>
-            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-9 w-auto shrink-0" />
-          </a>
-          <p className="text-sm text-[var(--text-muted)]">
-            &copy; {new Date().getFullYear()} Homeal. Healthy Food, From Home.
-          </p>
-          <div className="flex items-center gap-6 text-sm text-[var(--text-soft)]">
-            <a href="/signup" className="hover:text-primary transition">
-              Sign up
-            </a>
-            <a href="/login" className="hover:text-primary transition">
-              Log in
-            </a>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 border-t border-[var(--border)]">
+            <p className="text-sm text-[var(--text-muted)]">
+              &copy; {new Date().getFullYear()} Homeal. Healthy Food, From Home.
+            </p>
+            <p className="text-xs text-[var(--text-muted)]">
+              Product owned &amp; designed by TotalCloudAI Limited
+            </p>
           </div>
         </div>
       </footer>

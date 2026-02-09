@@ -27,8 +27,21 @@ router.post("/register", async (req: Request, res: Response) => {
     // Convert empty phone to null to avoid unique constraint collisions
     const cleanPhone = phone && phone.trim() ? phone.trim() : null;
 
+    // Validate SUPER_ADMIN registration: only allowed if no super admin exists yet
+    let finalRole = role || "CUSTOMER";
+    if (finalRole === "SUPER_ADMIN" || finalRole === "ADMIN") {
+      const existingSuperAdmin = await prisma.user.findFirst({
+        where: { role: "SUPER_ADMIN" },
+      });
+      if (existingSuperAdmin) {
+        res.status(403).json({ success: false, error: "A Super Admin already exists. Contact the platform administrator." });
+        return;
+      }
+      finalRole = "SUPER_ADMIN";
+    }
+
     const user = await prisma.user.create({
-      data: { name, email, phone: cleanPhone, firebaseUid, role: role || "CUSTOMER" },
+      data: { name, email, phone: cleanPhone, firebaseUid, role: finalRole },
     });
 
     // If registering as CHEF, create Chef record (pending approval)

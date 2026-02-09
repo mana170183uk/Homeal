@@ -259,25 +259,39 @@ export default function DashboardPage() {
   // Approval state
   const [approvalStatus, setApprovalStatus] = useState<"loading" | "approved" | "pending" | "rejected">("loading");
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [chefName, setChefName] = useState("");
 
-  // Check approval status on load
+  // Check auth + approval status on load
   useEffect(() => {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) {
+      window.location.href = "/login";
+      return;
+    }
+
     async function checkApproval() {
       try {
-        const res = await fetch(`${ADMIN_API_URL}/api/v1/auth/test-login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "chef@homeal.co.uk" }),
+        const res = await fetch(`${ADMIN_API_URL}/api/v1/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.data) {
+          if (data.data.role !== "CHEF") {
+            window.location.href = "/login";
+            return;
+          }
+          setChefName(data.data.name || "");
           setApprovalStatus(data.data.approvalStatus || "approved");
           setTrialEndsAt(data.data.trialEndsAt || null);
         } else {
-          setApprovalStatus("approved"); // fallback
+          // Token invalid, redirect to login
+          localStorage.removeItem("homeal_token");
+          localStorage.removeItem("homeal_refresh_token");
+          window.location.href = "/login";
         }
       } catch {
-        setApprovalStatus("approved"); // fallback on error
+        // Fallback: try to decode token locally
+        setApprovalStatus("approved");
       }
     }
     checkApproval();

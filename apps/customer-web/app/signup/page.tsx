@@ -168,7 +168,13 @@ function SignupContent() {
         localStorage.setItem("homeal_token", res.data.token);
         localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
       }
-      router.push("/search");
+
+      // Route based on role
+      if (role === "CHEF" || res.data?.user.role === "CHEF") {
+        setChefSubmitted(true);
+      } else {
+        router.push("/search");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Google sign-in failed";
       if (!message.includes("popup-closed-by-user")) {

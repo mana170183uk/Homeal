@@ -11,7 +11,20 @@ router.get("/me", authenticate, async (req: Request, res: Response) => {
       where: { id: req.user!.userId },
       include: { chef: true, addresses: true },
     });
-    res.json({ success: true, data: user });
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    // Add approval status for chef users
+    let approvalStatus: string | undefined;
+    let trialEndsAt: Date | null = null;
+    if (user.chef) {
+      if (user.chef.rejectedAt) approvalStatus = "rejected";
+      else if (user.chef.isVerified) approvalStatus = "approved";
+      else approvalStatus = "pending";
+      trialEndsAt = user.chef.trialEndsAt;
+    }
+    res.json({ success: true, data: { ...user, approvalStatus, trialEndsAt } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch user";
     res.status(500).json({ success: false, error: message });

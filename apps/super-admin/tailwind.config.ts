@@ -7,18 +7,16 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "#FF5A1F",
-          light: "#FF8534",
-          lighter: "#FFAB5E",
+          DEFAULT: "rgb(var(--primary-rgb) / <alpha-value>)",
+          light: "var(--primary-light)",
         },
         accent: {
-          DEFAULT: "#00B341",
-          light: "#00D94E",
-          lighter: "#47ED7A",
+          DEFAULT: "rgb(var(--accent-rgb) / <alpha-value>)",
+          light: "var(--accent-light)",
         },
         alert: {
-          DEFAULT: "#FF2D55",
-          light: "#FF6B81",
+          DEFAULT: "rgb(var(--alert-rgb) / <alpha-value>)",
+          light: "var(--alert-light)",
         },
       },
       fontFamily: {

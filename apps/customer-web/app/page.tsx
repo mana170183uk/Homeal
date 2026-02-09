@@ -156,7 +156,7 @@ export default function HomePage() {
                 title: "Enjoy",
                 description:
                   "Get fresh, homemade food delivered straight to your door. Bon appetit!",
-                color: "bg-orange-100 text-orange-500",
+                color: "bg-primary/10 text-primary",
                 step: "3",
               },
             ].map((item) => (

@@ -208,38 +208,40 @@ jobs:
           cd deploy-super-admin && zip -qr ../superadmin-backup.zip . && cd ..
           echo "Super Admin zip: $(du -h superadmin-backup.zip | cut -f1)"
 
-      - name: Deploy API backup
+      - name: Deploy backup apps via Kudu API (async)
         run: |
-          echo "Deploying API backup (no build, no restart)..."
-          START=$(date +%s)
-          az webapp deploy --name homeal-api-backup \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path api-backup.zip --type zip \
-            --restart false --clean true --timeout 300
-          END=$(date +%s)
-          echo "API backup deployed in $((END-START))s"
+          TOKEN=$(az account get-access-token --query accessToken -o tsv)
 
-      - name: Deploy Admin backup
-        run: |
-          echo "Deploying Admin backup (no build, no restart)..."
-          START=$(date +%s)
-          az webapp deploy --name homeal-admin-backup \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path admin-backup.zip --type zip \
-            --restart false --clean true --timeout 300
-          END=$(date +%s)
-          echo "Admin backup deployed in $((END-START))s"
+          deploy_app() {
+            local APP=$1
+            local ZIP=$2
+            echo "=== Deploying $ZIP to $APP ==="
+            echo "  Zip size: $(du -h "$ZIP" | cut -f1)"
+            START=$(date +%s)
 
-      - name: Deploy Super Admin backup
-        run: |
-          echo "Deploying Super Admin backup (no build, no restart)..."
-          START=$(date +%s)
-          az webapp deploy --name homeal-superadmin-backup \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path superadmin-backup.zip --type zip \
-            --restart false --clean true --timeout 300
-          END=$(date +%s)
-          echo "Super Admin backup deployed in $((END-START))s"
+            HTTP_CODE=$(curl -s -o /tmp/deploy-response.txt -w "%{http_code}" \
+              -X POST "https://${APP}.scm.azurewebsites.net/api/zipdeploy?isAsync=true" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/zip" \
+              --data-binary @"$ZIP" \
+              --max-time 600)
+
+            END=$(date +%s)
+
+            if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "200" ]; then
+              echo "  $APP: deployed (HTTP $HTTP_CODE) in $((END-START))s"
+            else
+              echo "  ERROR: $APP failed (HTTP $HTTP_CODE) in $((END-START))s"
+              cat /tmp/deploy-response.txt 2>/dev/null
+              echo ""
+              return 1
+            fi
+          }
+
+          deploy_app "homeal-api-backup" "api-backup.zip"
+          deploy_app "homeal-admin-backup" "admin-backup.zip"
+          deploy_app "homeal-superadmin-backup" "superadmin-backup.zip"
+
           echo ""
           echo "All backup apps synced at $(date -u)"
 

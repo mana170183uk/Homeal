@@ -19,7 +19,6 @@ env:
   RESOURCE_GROUP: rg-visualstudio-lab-mana
   MYSQL_HOST: restrovision-mysql.mysql.database.azure.com
   MYSQL_USER: restrovision_admin
-  MYSQL_PASS: "RestroVision2024!"
   PROD_DB: homeal_db
   BACKUP_DB: homeal_db_backup
 
@@ -35,12 +34,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mysql-client
 
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Add GitHub runner IP to MySQL firewall
+        run: |
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "Runner IP: $RUNNER_IP"
+          az mysql flexible-server firewall-rule create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name restrovision-mysql \
+            --rule-name github-actions-runner \
+            --start-ip-address $RUNNER_IP \
+            --end-ip-address $RUNNER_IP 2>/dev/null || \
+          az mysql flexible-server firewall-rule update \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name restrovision-mysql \
+            --rule-name github-actions-runner \
+            --start-ip-address $RUNNER_IP \
+            --end-ip-address $RUNNER_IP 2>/dev/null || true
+          sleep 5
+
       - name: Dump production database
         run: |
           mysqldump \
             --host=${{ env.MYSQL_HOST }} \
             --user=${{ env.MYSQL_USER }} \
-            --password="${{ env.MYSQL_PASS }}" \
+            --password="${{ secrets.MYSQL_PASSWORD }}" \
             --ssl-mode=REQUIRED \
             --single-transaction \
             --routines \
@@ -54,15 +76,15 @@ jobs:
           mysql \
             --host=${{ env.MYSQL_HOST }} \
             --user=${{ env.MYSQL_USER }} \
-            --password="${{ env.MYSQL_PASS }}" \
+            --password="${{ secrets.MYSQL_PASSWORD }}" \
             --ssl-mode=REQUIRED \
             ${{ env.BACKUP_DB }} < prod_dump.sql
           echo "Database sync completed at $(date -u)"
 
       - name: Verify backup
         run: |
-          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
-          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
+          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ secrets.MYSQL_PASSWORD }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
+          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ secrets.MYSQL_PASSWORD }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
           echo "Production tables: $PROD_TABLES"
           echo "Backup tables: $BACKUP_TABLES"
           if [ "$PROD_TABLES" != "$BACKUP_TABLES" ]; then
@@ -70,6 +92,15 @@ jobs:
             exit 1
           fi
           echo "Backup verified successfully"
+
+      - name: Remove GitHub runner IP from MySQL firewall
+        if: always()
+        run: |
+          az mysql flexible-server firewall-rule delete \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name restrovision-mysql \
+            --rule-name github-actions-runner \
+            --yes 2>/dev/null || true
 
   sync-apps:
     name: Sync App Deployments to Backup
@@ -93,6 +124,14 @@ jobs:
           npm run build:api
           npm run build:admin
           npm run build:super-admin
+        env:
+          NEXT_PUBLIC_API_URL: https://api.homeal.uk
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
 
       - name: Prepare API deployment
         run: |
@@ -113,15 +152,23 @@ jobs:
 
       - name: Prepare Admin deployment
         run: |
-          cp -r apps/admin-web/.next/standalone deploy-admin
-          cp -r apps/admin-web/.next/static deploy-admin/apps/admin-web/.next/static
-          cp -r apps/admin-web/public deploy-admin/apps/admin-web/public 2>/dev/null || true
+          mkdir -p deploy-admin
+          cp -r apps/admin-web/.next/standalone/node_modules deploy-admin/
+          cp apps/admin-web/.next/standalone/package.json deploy-admin/
+          cp apps/admin-web/.next/standalone/apps/admin-web/server.js deploy-admin/
+          cp -r apps/admin-web/.next/standalone/apps/admin-web/.next deploy-admin/.next
+          cp -r apps/admin-web/.next/static deploy-admin/.next/static
+          cp -r apps/admin-web/public deploy-admin/public 2>/dev/null || true
 
       - name: Prepare Super Admin deployment
         run: |
-          cp -r apps/super-admin/.next/standalone deploy-super-admin
-          cp -r apps/super-admin/.next/static deploy-super-admin/apps/super-admin/.next/static
-          cp -r apps/super-admin/public deploy-super-admin/apps/super-admin/public 2>/dev/null || true
+          mkdir -p deploy-super-admin
+          cp -r apps/super-admin/.next/standalone/node_modules deploy-super-admin/
+          cp apps/super-admin/.next/standalone/package.json deploy-super-admin/
+          cp apps/super-admin/.next/standalone/apps/super-admin/server.js deploy-super-admin/
+          cp -r apps/super-admin/.next/standalone/apps/super-admin/.next deploy-super-admin/.next
+          cp -r apps/super-admin/.next/static deploy-super-admin/.next/static
+          cp -r apps/super-admin/public deploy-super-admin/public 2>/dev/null || true
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -131,29 +178,28 @@ jobs:
       - name: Deploy to backup apps (keep them stopped)
         run: |
           # Deploy API backup
-          az webapp deployment source config-zip \
-            --name homeal-api-backup \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src <(cd deploy-api && zip -r - .) 2>/dev/null || \
+          cd deploy-api && zip -qr ../api-backup.zip . && cd ..
           az webapp deploy --name homeal-api-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path deploy-api --type zip 2>/dev/null || true
+            --src-path api-backup.zip --type zip 2>/dev/null || true
 
           # Deploy Admin backup
+          cd deploy-admin && zip -qr ../admin-backup.zip . && cd ..
           az webapp deploy --name homeal-admin-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path deploy-admin --type zip 2>/dev/null || true
+            --src-path admin-backup.zip --type zip 2>/dev/null || true
 
           # Deploy Super Admin backup
+          cd deploy-super-admin && zip -qr ../superadmin-backup.zip . && cd ..
           az webapp deploy --name homeal-superadmin-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path deploy-super-admin --type zip 2>/dev/null || true
+            --src-path superadmin-backup.zip --type zip 2>/dev/null || true
 
       - name: Configure startup commands for backups
         run: |
           az webapp config set --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
-          az webapp config set --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node apps/admin-web/server.js"
-          az webapp config set --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node apps/super-admin/server.js"
+          az webapp config set --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
+          az webapp config set --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
 
       - name: Ensure backup apps remain stopped
         run: |

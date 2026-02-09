@@ -82,16 +82,17 @@ router.get("/", async (req: Request, res: Response) => {
 
     // If lat/lng provided, filter by distance and sort
     if (!isNaN(lat) && !isNaN(lng)) {
+      type ChefRow = (typeof chefs)[number];
       const chefsWithDistance = chefs
-        .filter((chef) => chef.latitude != null && chef.longitude != null)
-        .map((chef) => ({
+        .filter((chef: ChefRow) => chef.latitude != null && chef.longitude != null)
+        .map((chef: ChefRow) => ({
           ...chef,
           distance: Math.round(
             haversineDistanceMiles(lat, lng, chef.latitude!, chef.longitude!) * 10
           ) / 10,
         }))
-        .filter((chef) => chef.distance <= radius)
-        .sort((a, b) => a.distance - b.distance);
+        .filter((chef: ChefRow & { distance: number }) => chef.distance <= radius)
+        .sort((a: ChefRow & { distance: number }, b: ChefRow & { distance: number }) => a.distance - b.distance);
 
       res.json({ success: true, data: chefsWithDistance });
       return;

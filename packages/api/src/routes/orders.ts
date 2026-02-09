@@ -18,7 +18,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
 
     let subtotal = 0;
     const orderItems = items.map((item: { menuItemId: string; quantity: number; notes?: string }) => {
-      const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+      const menuItem = menuItems.find((m: (typeof menuItems)[number]) => m.id === item.menuItemId);
       const price = menuItem?.price || 0;
       subtotal += price * item.quantity;
       return { menuItemId: item.menuItemId, quantity: item.quantity, price, notes: item.notes };

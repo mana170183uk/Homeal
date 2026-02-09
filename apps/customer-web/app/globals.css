@@ -18,17 +18,17 @@
 }
 
 .dark {
-  --bg: #0D0C1E;
-  --card: #171633;
-  --input: #1E1D3D;
-  --text: #F0ECFF;
-  --text-soft: #9B95BE;
-  --text-muted: #5D5880;
-  --border: rgba(177,108,255,0.1);
+  --bg: #111C32;
+  --card: #192845;
+  --input: #213352;
+  --text: #E8EEFF;
+  --text-soft: #9BABC8;
+  --text-muted: #6478A0;
+  --border: rgba(100,160,255,0.12);
   --primary: #B16CFF;
   --accent: #00F5D4;
   --alert: #FF6B9D;
-  --logo-bg: #1E1730;
+  --logo-bg: #1D2F4E;
 }
 
 html, body {

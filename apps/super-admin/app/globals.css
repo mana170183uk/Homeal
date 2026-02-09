@@ -32,27 +32,27 @@
 }
 
 .dark {
-  --bg: #0D0C1E;
-  --card: #171633;
-  --input: #1E1D3D;
-  --text: #F0ECFF;
-  --text-soft: #9B95BE;
-  --text-muted: #5D5880;
-  --border: rgba(177,108,255,0.1);
+  --bg: #111C32;
+  --card: #192845;
+  --input: #213352;
+  --text: #E8EEFF;
+  --text-soft: #9BABC8;
+  --text-muted: #6478A0;
+  --border: rgba(100,160,255,0.12);
   --primary: #B16CFF;
   --accent: #00F5D4;
   --alert: #FF6B9D;
-  /* Sidebar - dark (solid backgrounds for mobile) */
-  --sidebar-bg: #13102B;
-  --sidebar-text: #D0CAED;
-  --sidebar-muted: #5D5880;
-  --sidebar-section: #5D5880;
-  --sidebar-hover: rgba(177, 108, 255, 0.12);
-  --sidebar-active-bg: rgba(177, 108, 255, 0.18);
+  /* Sidebar - dark */
+  --sidebar-bg: #152340;
+  --sidebar-text: #CEDAEF;
+  --sidebar-muted: #6478A0;
+  --sidebar-section: #6478A0;
+  --sidebar-hover: rgba(100, 160, 255, 0.12);
+  --sidebar-active-bg: rgba(100, 160, 255, 0.18);
   --sidebar-active-text: #D4A0FF;
-  --sidebar-border: rgba(177, 108, 255, 0.08);
-  --header-bg: #13102B;
-  --logo-bg: #1E1730;
+  --sidebar-border: rgba(100, 160, 255, 0.08);
+  --header-bg: #152340;
+  --logo-bg: #1D2F4E;
   --logo-green: #6BCB77;
   --logo-orange: #FFB380;
   --badge-from: #F472B6;

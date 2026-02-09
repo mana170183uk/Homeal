@@ -104,6 +104,9 @@ async function main() {
 
   // ==================== ADDITIONAL TEST CHEFS ====================
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const testChefs = [
     {
       userEmail: "chef-watford@homeal.co.uk",
@@ -329,9 +332,6 @@ async function main() {
   console.log(`\nCreated ${categories.length} food categories`);
 
   // ==================== SAMPLE MENU ====================
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   const menu = await prisma.menu.upsert({
     where: { id: "test-menu-001" },

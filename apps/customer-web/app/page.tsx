@@ -12,7 +12,7 @@ import {
   Star,
 } from "lucide-react";
 import { api } from "./lib/api";
-import ThemeToggle from "./components/ThemeToggle";
+import Header from "./components/Header";
 
 export default function HomePage() {
   const router = useRouter();
@@ -49,30 +49,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">
-      {/* Header */}
-      <header className="px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between max-w-7xl mx-auto">
-        <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-          <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-            <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
-          </div>
-          <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-12 w-auto shrink-0" />
-        </a>
-        <nav className="flex items-center gap-2 sm:gap-4">
-          <ThemeToggle />
-          <a
-            href="/login"
-            className="text-sm font-medium text-[var(--text-soft)] hover:text-primary transition"
-          >
-            Log in
-          </a>
-          <a
-            href="/signup"
-            className="text-sm font-semibold bg-primary text-white px-4 sm:px-5 py-2.5 rounded-xl hover:bg-primary-light transition"
-          >
-            Sign up
-          </a>
-        </nav>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="px-4 sm:px-6 pt-10 sm:pt-16 pb-14 sm:pb-20 max-w-7xl mx-auto text-center">

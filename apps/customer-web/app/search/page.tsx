@@ -7,12 +7,11 @@ import {
   Star,
   Clock,
   Search,
-  ArrowLeft,
   ChefHat,
   Navigation,
 } from "lucide-react";
 import { api } from "../lib/api";
-import ThemeToggle from "../components/ThemeToggle";
+import Header from "../components/Header";
 
 interface Chef {
   id: string;
@@ -101,37 +100,7 @@ function SearchContent() {
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">
-      {/* Header */}
-      <header className="bg-[var(--card)] border-b border-[var(--border)] sticky top-0 z-10">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 max-w-7xl mx-auto flex items-center gap-3 sm:gap-4">
-          <a
-            href="/"
-            className="text-[var(--text-soft)] hover:text-primary transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </a>
-          <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-            <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
-            </div>
-            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-10 w-auto shrink-0" />
-          </a>
-          <div className="flex-1" />
-          <ThemeToggle />
-          <a
-            href="/login"
-            className="text-sm font-medium text-[var(--text-soft)] hover:text-primary transition hidden sm:block"
-          >
-            Log in
-          </a>
-          <a
-            href="/signup"
-            className="text-xs sm:text-sm font-semibold bg-primary text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-primary-light transition"
-          >
-            Sign up
-          </a>
-        </div>
-      </header>
+      <Header showBack />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Location & Search */}

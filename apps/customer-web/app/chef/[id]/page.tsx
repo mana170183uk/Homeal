@@ -2,7 +2,6 @@
 
 import { useState, useEffect, use } from "react";
 import {
-  ArrowLeft,
   Star,
   MapPin,
   Clock,
@@ -11,7 +10,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { api } from "../../lib/api";
-import ThemeToggle from "../../components/ThemeToggle";
+import Header from "../../components/Header";
 
 interface MenuItem {
   id: string;
@@ -118,25 +117,7 @@ export default function ChefProfilePage({
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">
-      {/* Header */}
-      <header className="bg-[var(--card)] border-b border-[var(--border)] sticky top-0 z-10">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 max-w-5xl mx-auto flex items-center gap-3">
-          <button
-            onClick={() => window.history.back()}
-            className="text-[var(--text-soft)] hover:text-primary transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-            <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
-            </div>
-            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-10 w-auto shrink-0" />
-          </a>
-          <div className="flex-1" />
-          <ThemeToggle />
-        </div>
-      </header>
+      <Header showBack maxWidth="max-w-5xl" />
 
       {/* Banner */}
       <div className="h-56 md:h-72 bg-gradient-to-br from-primary/20 to-accent/20 relative">

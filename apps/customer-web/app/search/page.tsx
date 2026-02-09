@@ -66,7 +66,7 @@ function SearchContent() {
     setError("");
     try {
       const res = await api<Chef[]>(
-        `/chefs?lat=${latitude}&lng=${longitude}&radius=10`
+        `/chefs?lat=${latitude}&lng=${longitude}&radius=15`
       );
       if (res.success && res.data) {
         setChefs(res.data);
@@ -185,7 +185,7 @@ function SearchContent() {
               No chefs found nearby
             </h2>
             <p className="text-[var(--text-soft)] mb-6 max-w-sm mx-auto">
-              We couldn&apos;t find any chefs within 10 miles of your location.
+              We couldn&apos;t find any chefs within 15 miles of your location.
               Try a different postcode or check back later.
             </p>
             <a
@@ -198,7 +198,7 @@ function SearchContent() {
         ) : (
           <>
             <p className="text-sm text-[var(--text-muted)] mb-6">
-              {chefs.length} chef{chefs.length !== 1 ? "s" : ""} found within 10
+              {chefs.length} chef{chefs.length !== 1 ? "s" : ""} found within 15
               miles
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">

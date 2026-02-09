@@ -161,7 +161,7 @@ export default function HomePage() {
                 icon: MapPin,
                 title: "Search",
                 description:
-                  "Enter your postcode to find home chefs cooking within 10 miles of you.",
+                  "Enter your postcode to find home chefs cooking within 15 miles of you.",
                 gradient: "from-orange-400 to-pink-500",
                 step: "1",
               },
@@ -239,15 +239,6 @@ export default function HomePage() {
               <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-9 w-auto shrink-0" />
             </a>
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-sm">
-              <a href="/signup?role=customer" className="px-4 py-2 rounded-lg bg-primary/10 text-primary font-medium hover:bg-primary/20 transition">
-                Sign up as Customer
-              </a>
-              <a href="/signup?role=chef" className="px-4 py-2 rounded-lg bg-accent/10 text-accent font-medium hover:bg-accent/20 transition">
-                Sign up as Chef
-              </a>
-              <a href="/login" className="text-[var(--text-soft)] font-medium hover:text-primary transition">
-                Log in
-              </a>
               <a href="https://admin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-accent transition">
                 Chef Portal
               </a>

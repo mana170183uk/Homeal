@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, LogOut, ShoppingBag } from "lucide-react";
+import { ArrowLeft, LogOut, ShoppingBag, ChevronDown } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { useAuth } from "../lib/useAuth";
@@ -15,13 +15,18 @@ interface HeaderProps {
 export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps) {
   const { user, loading } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signupMenuOpen, setSignupMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+  const signupMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
+      }
+      if (signupMenuRef.current && !signupMenuRef.current.contains(e.target as Node)) {
+        setSignupMenuOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -139,12 +144,51 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             >
               Log in
             </a>
+            {/* Desktop: show both signup buttons */}
             <a
-              href="/signup"
-              className="text-xs sm:text-sm font-semibold badge-gradient text-white px-3 sm:px-4 py-2 rounded-lg hover:opacity-90 transition"
+              href="/signup?role=customer"
+              className="hidden sm:inline-flex text-xs font-semibold px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition"
             >
-              Sign up
+              Sign up as Customer
             </a>
+            <a
+              href="/signup?role=chef"
+              className="hidden sm:inline-flex text-xs font-semibold px-3 py-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition"
+            >
+              Sign up as Chef
+            </a>
+            {/* Mobile: dropdown */}
+            <div className="relative sm:hidden" ref={signupMenuRef}>
+              <button
+                onClick={() => setSignupMenuOpen(!signupMenuOpen)}
+                className="text-xs font-semibold badge-gradient text-white px-3 py-2 rounded-lg hover:opacity-90 transition flex items-center gap-1"
+              >
+                Sign up
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {signupMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-20">
+                  <a
+                    href="/login"
+                    className="flex items-center gap-2 px-4 py-3 text-sm text-[var(--text)] hover:bg-[var(--input)] transition border-b border-[var(--border)]"
+                  >
+                    Log in
+                  </a>
+                  <a
+                    href="/signup?role=customer"
+                    className="flex items-center gap-2 px-4 py-3 text-sm text-primary font-medium hover:bg-primary/5 transition"
+                  >
+                    Sign up as Customer
+                  </a>
+                  <a
+                    href="/signup?role=chef"
+                    className="flex items-center gap-2 px-4 py-3 text-sm text-accent font-medium hover:bg-accent/5 transition"
+                  >
+                    Sign up as Chef
+                  </a>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

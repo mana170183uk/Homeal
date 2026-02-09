@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   CheckCircle,
   Clock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
@@ -31,6 +33,7 @@ function SignupContent() {
     password: "",
     kitchenName: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [chefSubmitted, setChefSubmitted] = useState(false);
@@ -387,12 +390,19 @@ function SignupContent() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(e) => updateField("password", e.target.value)}
                   placeholder="Password (min 6 characters)"
-                  className="w-full pl-11 pr-4 py-3 bg-[var(--input)] border border-[var(--border)] rounded-xl outline-none focus:border-primary transition text-[var(--text)]"
+                  className="w-full pl-11 pr-11 py-3 bg-[var(--input)] border border-[var(--border)] rounded-xl outline-none focus:border-primary transition text-[var(--text)]"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-soft)] transition"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
 
               {/* Kitchen Name (Chef only) */}

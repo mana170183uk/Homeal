@@ -1,0 +1,47 @@
+name: Deploy Homeal Customer Web to Azure
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/customer-web/**", "packages/shared/**"]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Customer Web
+        run: npm run build:customer
+
+      - name: Prepare standalone deployment
+        run: |
+          cp -r apps/customer-web/.next/standalone deploy
+          cp -r apps/customer-web/.next/static deploy/apps/customer-web/.next/static
+          cp -r apps/customer-web/public deploy/apps/customer-web/public 2>/dev/null || true
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: homeal-customer
+          package: deploy
+
+      - name: Configure startup
+        run: |
+          az webapp config set --name homeal-customer --resource-group rg-visualstudio-lab-mana --startup-file "node apps/customer-web/server.js"

@@ -9,8 +9,8 @@ import {
   Check, Crown, Zap, Edit3, Store, Truck, Repeat, UtensilsCrossed,
   Grip, Award, Sparkles, MapPin, Heart, Leaf, ShieldCheck, Box, Cake,
   Navigation, Eye, Star, Search, Download, Filter, Clock, Calendar,
+  Menu, X,
 } from "lucide-react";
-import HomealWordmark from "./components/HomealWordmark";
 
 type IconComponent = typeof LayoutDashboard;
 interface SidebarItem { icon: IconComponent; label: string; id: string }
@@ -241,6 +241,7 @@ interface ChefStats {
 export default function SuperAdminPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingPlans, setEditingPlans] = useState(false);
   const [serviceEnabled, setServiceEnabled] = useState<Record<string, boolean>>({
     "daily-meals": true,
@@ -364,22 +365,25 @@ export default function SuperAdminPage() {
   const customPages = ["dashboard", "settings", "service-types", "product-categories", "chefs", "customers", "orders", "promos", "categories", "analytics", "revenue", "reports"];
 
   return (
-    <div className="flex h-screen">
+    <div className="flex w-full overflow-x-hidden app-height">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 flex flex-col" style={{ background: "var(--sidebar-bg)" }}>
-        {/* Logo */}
-        <div className="px-4 py-5 flex items-center gap-3">
-          <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: "var(--logo-bg)" }}>
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-              <path d="M3 22L15 10L25 19" style={{ stroke: "var(--logo-green)" }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M22 5V19" style={{ stroke: "var(--logo-orange)" }} strokeWidth="2" strokeLinecap="round"/>
-              <path d="M20 5V11" style={{ stroke: "var(--logo-orange)" }} strokeWidth="1.5" strokeLinecap="round"/>
-              <path d="M24 5V11" style={{ stroke: "var(--logo-orange)" }} strokeWidth="1.5" strokeLinecap="round"/>
-              <ellipse cx="30" cy="9.5" rx="2.5" ry="4" style={{ fill: "var(--logo-orange)" }}/>
-              <path d="M30 13.5V19" style={{ stroke: "var(--logo-orange)" }} strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <HomealWordmark size="md" />
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`} style={{ background: "var(--sidebar-bg)" }}>
+        {/* Sidebar branding */}
+        <div className="py-3 px-3 flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
+              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
+            </div>
+            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="h-9 w-auto shrink-0" />
+          </a>
+          <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
+            <X size={20} style={{ color: "var(--sidebar-text)" }} />
+          </button>
         </div>
 
         {/* Nav */}
@@ -398,7 +402,7 @@ export default function SuperAdminPage() {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActivePage(item.id)}
+                    onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
                     className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-[14px] font-medium transition-all mb-0.5"
                     style={{
                       background: isActive ? "var(--sidebar-active-bg)" : "transparent",
@@ -443,43 +447,46 @@ export default function SuperAdminPage() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
         {/* Top bar */}
-        <header className="px-6 py-3 border-b border-[var(--border)] flex justify-between items-center" style={{ background: "var(--header-bg)" }}>
-          <h1 className="text-lg font-semibold text-[var(--text)]">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
-          <div className="flex gap-3 items-center">
-            <button onClick={() => setActivePage("settings")} className="p-2 rounded-lg hover:bg-[var(--input)] transition">
-              <Bell size={20} className="text-[var(--text-muted)]" />
+        <header className="px-4 md:px-6 h-14 border-b border-[var(--border)] flex items-center" style={{ background: "var(--header-bg)" }}>
+          <button className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition mr-3" onClick={() => setSidebarOpen(true)}>
+            <Menu size={20} className="text-[var(--text)]" />
+          </button>
+          <h1 className="text-lg font-semibold text-[var(--text)] flex-1 min-w-0 truncate">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-3">
+            <button onClick={() => setActivePage("settings")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
+              <Bell size={18} className="text-[var(--text-muted)]" />
             </button>
-            <button className="p-2 rounded-lg hover:bg-[var(--input)] transition">
-              <Settings size={20} className="text-[var(--text-muted)]" />
+            <button className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
+              <Settings size={18} className="text-[var(--text-muted)]" />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>SA</div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>SA</div>
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {/* Dashboard */}
           {activePage === "dashboard" && (
             <>
               {/* Platform Info Banner */}
               <div
-                className="rounded-2xl border border-[var(--border)] px-6 py-5 mb-5 flex items-start justify-between"
+                className="rounded-2xl border border-[var(--border)] px-4 sm:px-6 py-4 sm:py-5 mb-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3"
                 style={{ background: "var(--header-bg)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
                   <div
-                    className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
                   >
                     <Globe size={28} color="white" strokeWidth={2} />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-[var(--text)]">Homeal Platform</h2>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-[var(--text-muted)]">
+                    <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">Homeal Platform</h2>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1.5"><Shield size={12} /> Super Admin Control</span>
                       <span className="flex items-center gap-1.5"><Users size={12} /> 1 Registered User</span>
-                      <span className="flex items-center gap-1.5"><MapPin size={12} /> UK Region</span>
+                      <span className="flex items-center gap-1.5 hidden sm:flex"><MapPin size={12} /> UK Region</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium border" style={{ color: "#10B981", borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.1)" }}>
@@ -506,7 +513,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Platform Services Overview */}
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
                 {PLATFORM_SERVICES.map((svc) => {
                   const SvcIcon = svc.icon;
                   const isOn = serviceEnabled[svc.id];
@@ -563,7 +570,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Stats Row 1 */}
-              <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 {STATS_ROW1.map((s, i) => {
                   const StatIcon = s.icon;
                   return (
@@ -582,7 +589,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Stats Row 2 */}
-              <div className="grid grid-cols-4 gap-4 mb-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
                 {STATS_ROW2.map((s, i) => {
                   const StatIcon = s.icon;
                   return (
@@ -601,7 +608,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Recent Activity Panels */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
                   <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Recent Chefs</h2>
                   <div className="text-center py-8 text-[var(--text-muted)]">
@@ -627,11 +634,11 @@ export default function SuperAdminPage() {
             <>
               {/* Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Grip size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -656,7 +663,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Service Type Cards */}
-              <div className="grid grid-cols-2 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
                 {PLATFORM_SERVICES.map((svc) => {
                   const SvcIcon = svc.icon;
                   const isOn = serviceEnabled[svc.id];
@@ -693,7 +700,7 @@ export default function SuperAdminPage() {
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3 mb-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                         <div className="text-center p-2 rounded-lg" style={{ background: svc.bg }}>
                           <p className="text-lg font-bold" style={{ color: svc.color }}>{svc.chefs}</p>
                           <p className="text-[10px] text-[var(--text-muted)]">Active Chefs</p>
@@ -769,16 +776,16 @@ export default function SuperAdminPage() {
             <>
               {/* Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Store size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Homemade Product Categories</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />9 Active</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Hidden</span>
                     </div>
@@ -794,7 +801,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Categories Grid */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {PRODUCT_CATEGORIES_ADMIN.map((cat, i) => (
                   <div
                     key={i}
@@ -837,7 +844,7 @@ export default function SuperAdminPage() {
             <>
               {/* Settings Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
                 <div className="flex items-center gap-4">
@@ -868,7 +875,7 @@ export default function SuperAdminPage() {
 
               {/* Free Trial Notice */}
               <div
-                className="rounded-2xl border px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl border px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ background: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.2)" }}
               >
                 <div className="flex items-center gap-3">
@@ -891,7 +898,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Plan Stats Summary */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {PLANS.map((plan, i) => {
                   const PlanIcon = plan.icon;
                   const isActive = "active" in plan && plan.active;
@@ -924,7 +931,7 @@ export default function SuperAdminPage() {
 
               {/* Subscription Plans Detail */}
               <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Chef Subscription Plans</h3>
-              <div className="grid grid-cols-3 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 mb-6">
                 {PLANS.map((plan, i) => {
                   const PlanIcon = plan.icon;
                   return (
@@ -1006,14 +1013,14 @@ export default function SuperAdminPage() {
           {/* Chef Management Page */}
           {activePage === "chefs" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <ChefHat size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Chef Management</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{chefStats.approved} Approved</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />{chefStats.pending} Pending</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-500" />{chefStats.rejected} Rejected</span>
@@ -1026,7 +1033,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Chef Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Total Chefs", value: String(chefStats.total), icon: ChefHat, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Approved", value: String(chefStats.approved), icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
@@ -1258,14 +1265,14 @@ export default function SuperAdminPage() {
           {/* Customer Management Page */}
           {activePage === "customers" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Users size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Customer Management</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />0 Inactive</span>
                     </div>
@@ -1277,7 +1284,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Customer Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Total Customers", value: "0", icon: Users, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Active (30d)", value: "0", icon: TrendingUp, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
@@ -1341,14 +1348,14 @@ export default function SuperAdminPage() {
           {/* All Orders Page */}
           {activePage === "orders" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <ClipboardList size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">All Orders</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Completed</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Cancelled</span>
                     </div>
@@ -1378,7 +1385,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Order Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Total Orders", value: "0", icon: ClipboardList, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Delivery Orders", value: "0", icon: Truck, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
@@ -1431,14 +1438,14 @@ export default function SuperAdminPage() {
           {/* Promo Codes Page */}
           {activePage === "promos" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Tag size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Promo Codes</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Expired</span>
                     </div>
@@ -1450,7 +1457,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Promo Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {[
                   { label: "Active Promos", value: "0", icon: Tag, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Total Redemptions", value: "0", icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
@@ -1501,14 +1508,14 @@ export default function SuperAdminPage() {
           {/* Food Categories Page */}
           {activePage === "categories" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <FolderOpen size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Food Categories</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Listed</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />0 Hidden</span>
                     </div>
@@ -1520,7 +1527,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Default Categories Grid */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { name: "South Indian", icon: "🍛", dishes: 0, color: "#FF5A1F" },
                   { name: "North Indian", icon: "🥘", dishes: 0, color: "#EF4444" },
@@ -1561,9 +1568,9 @@ export default function SuperAdminPage() {
           {/* Analytics Page */}
           {activePage === "analytics" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <BarChart3 size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -1582,7 +1589,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Analytics Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Total Users", value: "1", icon: Users, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Active Chefs", value: "0", icon: ChefHat, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
@@ -1605,7 +1612,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Chart Placeholders */}
-              <div className="grid grid-cols-2 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
                 <div className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
                   <h3 className="text-sm font-semibold text-[var(--text)] mb-4">User Growth</h3>
                   <div className="h-48 flex items-end justify-between gap-2 px-2">
@@ -1633,7 +1640,7 @@ export default function SuperAdminPage() {
               {/* Delivery vs Pickup Breakdown */}
               <div className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
                 <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Fulfilment Method Breakdown</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {[
                     { label: "Delivery Orders", value: "0", pct: "0%", icon: Truck, color: "#3B82F6" },
                     { label: "Pickup Orders", value: "0", pct: "0%", icon: Package, color: "#10B981" },
@@ -1659,14 +1666,14 @@ export default function SuperAdminPage() {
           {/* Revenue Page */}
           {activePage === "revenue" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <PoundSterling size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Revenue</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />£0 Earned</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />£0 Pending</span>
                     </div>
@@ -1678,7 +1685,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Revenue Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Total Revenue", value: "£0.00", icon: PoundSterling, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Platform Commission", value: "£0.00", icon: Wallet, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
@@ -1701,7 +1708,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Revenue by Source */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {[
                   { label: "Meals & Tiffin", value: "£0.00", icon: UtensilsCrossed, color: "#FF5A1F" },
                   { label: "Homemade Products", value: "£0.00", icon: Store, color: "#8B5CF6" },
@@ -1758,14 +1765,14 @@ export default function SuperAdminPage() {
           {/* Reports Page */}
           {activePage === "reports" && (
             <>
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <FileText size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Reports</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Generated</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />0 Pending</span>
                     </div>
@@ -1777,7 +1784,7 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Report Types */}
-              <div className="grid grid-cols-2 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
                 {[
                   { name: "Chef Performance Report", desc: "Detailed overview of each chef's orders, revenue, ratings and delivery/pickup stats", icon: ChefHat, color: "#8B5CF6" },
                   { name: "Revenue Report", desc: "Platform revenue breakdown by service type, commission earned, and chef payouts", icon: PoundSterling, color: "#10B981" },
@@ -1839,7 +1846,7 @@ export default function SuperAdminPage() {
             return (
               <>
                 <div
-                  className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                  className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
                 >
                   <div className="flex items-center gap-4">
@@ -1851,7 +1858,7 @@ export default function SuperAdminPage() {
                     </div>
                     <div>
                       <h2 className="text-[15px] font-semibold text-[var(--text)]">{PAGE_TITLES[activePage]}</h2>
-                      <div className="flex items-center gap-4 mt-1">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                         <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                           <span className="w-2 h-2 rounded-full bg-emerald-500" />
                           {meta.green}

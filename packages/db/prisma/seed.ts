@@ -102,6 +102,172 @@ async function main() {
   });
   console.log(`Pending Chef: ${pendingChefUser.email} (Awaiting approval)`);
 
+  // ==================== ADDITIONAL TEST CHEFS ====================
+
+  const testChefs = [
+    {
+      userEmail: "chef-watford@homeal.co.uk",
+      userName: "Anita's Kitchen",
+      phone: "+447700100010",
+      firebaseUid: "test-chef-watford-001",
+      kitchenName: "Anita's Home Kitchen",
+      description: "Authentic Gujarati home-cooked meals. Fresh dhokla, thepla, undhiyu and more — just like maa makes!",
+      cuisineTypes: JSON.stringify(["Gujarati", "Snacks", "Thali"]),
+      latitude: 51.6565,
+      longitude: -0.3903,
+      menuName: "Gujarati Thali Special",
+      items: [
+        { name: "Gujarati Thali", description: "Dal, sabji, rotli, rice, papad, pickle & sweet", price: 7.99, isVeg: true, calories: 580, prepTime: 20 },
+        { name: "Dhokla", description: "Steamed fermented gram flour cake with tempering", price: 3.49, isVeg: true, calories: 160, prepTime: 10 },
+        { name: "Pav Bhaji", description: "Spiced mixed veg mash with buttered pav buns", price: 5.49, isVeg: true, calories: 420, prepTime: 15 },
+      ],
+    },
+    {
+      userEmail: "chef-harrow@homeal.co.uk",
+      userName: "Mama Chen's Wok",
+      phone: "+447700100011",
+      firebaseUid: "test-chef-harrow-001",
+      kitchenName: "Mama Chen's Wok",
+      description: "Home-style Chinese and Indo-Chinese street food. Hakka noodles, manchurian, and dim sum made fresh daily.",
+      cuisineTypes: JSON.stringify(["Chinese", "Indo-Chinese", "Street Food"]),
+      latitude: 51.5836,
+      longitude: -0.3340,
+      menuName: "Wok Specials",
+      items: [
+        { name: "Hakka Noodles", description: "Stir-fried egg noodles with vegetables and soy", price: 6.49, isVeg: false, calories: 380, prepTime: 15 },
+        { name: "Veg Manchurian", description: "Crispy veg balls in spicy indo-chinese gravy", price: 5.99, isVeg: true, calories: 340, prepTime: 20 },
+        { name: "Chicken Fried Rice", description: "Wok-tossed rice with chicken and egg", price: 7.49, isVeg: false, calories: 450, prepTime: 15 },
+        { name: "Spring Rolls (6 pcs)", description: "Crispy rolls stuffed with vegetables", price: 4.49, isVeg: true, calories: 280, prepTime: 12 },
+      ],
+    },
+    {
+      userEmail: "chef-ealing@homeal.co.uk",
+      userName: "Nana's Caribbean",
+      phone: "+447700100012",
+      firebaseUid: "test-chef-ealing-001",
+      kitchenName: "Nana's Caribbean Kitchen",
+      description: "Authentic Caribbean flavours from the islands. Jerk chicken, rice & peas, plantain and curry goat.",
+      cuisineTypes: JSON.stringify(["Caribbean", "Jamaican", "West Indian"]),
+      latitude: 51.5130,
+      longitude: -0.3089,
+      menuName: "Island Flavours",
+      items: [
+        { name: "Jerk Chicken", description: "Grilled spiced chicken with rice & peas", price: 8.99, isVeg: false, calories: 520, prepTime: 25 },
+        { name: "Curry Goat", description: "Slow-cooked goat in Caribbean spices with rice", price: 9.99, isVeg: false, calories: 580, prepTime: 30 },
+        { name: "Ackee & Saltfish", description: "Traditional Jamaican breakfast served with fried dumpling", price: 7.49, isVeg: false, calories: 440, prepTime: 20 },
+      ],
+    },
+    {
+      userEmail: "chef-birmingham@homeal.co.uk",
+      userName: "Fatima's Biryani",
+      phone: "+447700100013",
+      firebaseUid: "test-chef-birmingham-001",
+      kitchenName: "Fatima's Biryani House",
+      description: "Famous Lucknowi biryani and kebabs, slow-cooked to perfection. Halal certified.",
+      cuisineTypes: JSON.stringify(["Mughlai", "Biryani", "Kebabs"]),
+      latitude: 52.4862,
+      longitude: -1.8904,
+      menuName: "Biryani & Kebab Feast",
+      items: [
+        { name: "Lucknowi Biryani", description: "Fragrant dum biryani with tender lamb", price: 10.99, isVeg: false, calories: 620, prepTime: 35 },
+        { name: "Seekh Kebab (4 pcs)", description: "Chargrilled spiced lamb mince kebabs", price: 6.99, isVeg: false, calories: 380, prepTime: 15 },
+        { name: "Paneer Biryani", description: "Vegetarian biryani with paneer and saffron", price: 8.49, isVeg: true, calories: 520, prepTime: 30 },
+        { name: "Gulab Jamun (4 pcs)", description: "Soft milk dumplings in rose syrup", price: 3.99, isVeg: true, calories: 320, prepTime: 5 },
+      ],
+    },
+    {
+      userEmail: "chef-manchester@homeal.co.uk",
+      userName: "Auntie Meera",
+      phone: "+447700100014",
+      firebaseUid: "test-chef-manchester-001",
+      kitchenName: "Auntie Meera's Kitchen",
+      description: "Homestyle South Asian comfort food. Butter chicken, dal makhani and naan — just like your mum's cooking.",
+      cuisineTypes: JSON.stringify(["North Indian", "Punjabi", "Comfort Food"]),
+      latitude: 53.4808,
+      longitude: -2.2426,
+      menuName: "Comfort Food Menu",
+      items: [
+        { name: "Butter Chicken", description: "Creamy tomato-based chicken curry", price: 8.49, isVeg: false, calories: 480, prepTime: 20 },
+        { name: "Dal Makhani", description: "Slow-cooked black lentils in butter and cream", price: 5.99, isVeg: true, calories: 350, prepTime: 25 },
+        { name: "Garlic Naan (2 pcs)", description: "Fresh tandoor-baked garlic naan", price: 2.99, isVeg: true, calories: 260, prepTime: 8 },
+      ],
+    },
+  ];
+
+  for (const tc of testChefs) {
+    const tcUser = await prisma.user.upsert({
+      where: { email: tc.userEmail },
+      update: {},
+      create: {
+        name: tc.userName,
+        email: tc.userEmail,
+        phone: tc.phone,
+        role: "CHEF",
+        firebaseUid: tc.firebaseUid,
+        isActive: true,
+      },
+    });
+
+    const tcChef = await prisma.chef.upsert({
+      where: { userId: tcUser.id },
+      update: { isVerified: true, isOnline: true, latitude: tc.latitude, longitude: tc.longitude },
+      create: {
+        userId: tcUser.id,
+        kitchenName: tc.kitchenName,
+        description: tc.description,
+        cuisineTypes: tc.cuisineTypes,
+        deliveryRadius: 10.0,
+        isVerified: true,
+        isOnline: true,
+        approvedAt,
+        trialEndsAt,
+        plan: "UNLIMITED",
+        operatingHours: JSON.stringify({
+          mon: { open: "08:00", close: "21:00" },
+          tue: { open: "08:00", close: "21:00" },
+          wed: { open: "08:00", close: "21:00" },
+          thu: { open: "08:00", close: "21:00" },
+          fri: { open: "08:00", close: "21:00" },
+          sat: { open: "09:00", close: "22:00" },
+          sun: { open: "09:00", close: "20:00" },
+        }),
+        commissionRate: 15.0,
+        latitude: tc.latitude,
+        longitude: tc.longitude,
+      },
+    });
+
+    const tcMenuId = `test-menu-${tc.userEmail.split("@")[0]}`;
+    const tcMenu = await prisma.menu.upsert({
+      where: { id: tcMenuId },
+      update: {},
+      create: {
+        id: tcMenuId,
+        chefId: tcChef.id,
+        name: tc.menuName,
+        date: today,
+        isActive: true,
+      },
+    });
+
+    for (const item of tc.items) {
+      const itemId = `test-item-${tc.userEmail.split("@")[0]}-${item.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+      await prisma.menuItem.upsert({
+        where: { id: itemId },
+        update: {},
+        create: {
+          id: itemId,
+          menuId: tcMenu.id,
+          categoryId: southIndianCat?.id,
+          ...item,
+        },
+      });
+    }
+
+    console.log(`  Test Chef: ${tc.kitchenName} (${tc.userEmail}) at [${tc.latitude}, ${tc.longitude}]`);
+  }
+  console.log(`Created ${testChefs.length} additional test chefs with menus`);
+
   // 3. End User / Customer
   const customer = await prisma.user.upsert({
     where: { email: "customer@homeal.co.uk" },

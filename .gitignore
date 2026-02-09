@@ -61,3 +61,7 @@ apps/mobile/android/
 
 # Turborepo / cache
 .turbo/
+
+# Deployment temp directories
+deploy-*/
+*.zip

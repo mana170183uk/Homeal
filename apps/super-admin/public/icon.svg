@@ -6,7 +6,13 @@
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="7" fill="url(#bg)"/>
-  <text x="16" y="23.5" text-anchor="middle" font-family="'Fredoka','Arial Rounded MT Bold',sans-serif" font-weight="600" font-size="20" fill="white">H</text>
-  <circle cx="24" cy="8" r="4" fill="#FF8534"/>
-  <path d="M22.5 8.5 C23 7 25 7 25.5 8.5" stroke="white" stroke-width="0.8" fill="none" stroke-linecap="round"/>
+  <!-- H letter -->
+  <text x="14" y="27" text-anchor="middle" font-family="'Fredoka','Arial Rounded MT Bold',sans-serif" font-weight="600" font-size="19" fill="white">H</text>
+  <!-- Fork (top-right corner, orange) -->
+  <line x1="22" y1="2" x2="22" y2="9" stroke="#FF8534" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="20.5" y1="2" x2="20.5" y2="5" stroke="#FF8534" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="23.5" y1="2" x2="23.5" y2="5" stroke="#FF8534" stroke-width="0.8" stroke-linecap="round"/>
+  <!-- Spoon (top-right corner, orange) -->
+  <ellipse cx="27" cy="3.5" rx="1.8" ry="2.2" fill="#FF8534"/>
+  <line x1="27" y1="5.7" x2="27" y2="9" stroke="#FF8534" stroke-width="1.3" stroke-linecap="round"/>
 </svg>

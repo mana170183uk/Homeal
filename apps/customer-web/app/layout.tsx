@@ -15,8 +15,9 @@ const fredoka = Fredoka({
 });
 
 export const metadata: Metadata = {
-  title: "Homeal - Super Admin",
-  description: "Homeal platform management and administration",
+  title: "Homeal - Healthy Food, From Home",
+  description:
+    "Discover delicious homemade food from local chefs near you. Order authentic home-cooked meals delivered to your door.",
   icons: {
     icon: [
       { url: "/favicon-final-2.png?v=5", sizes: "32x32", type: "image/png" },

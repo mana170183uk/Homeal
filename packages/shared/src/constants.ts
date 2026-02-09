@@ -21,6 +21,8 @@ export const JWT_REFRESH_EXPIRY = "7d";
 export const DELIVERY_RADIUS_KM_DEFAULT = 5;
 export const DELIVERY_RADIUS_KM_MAX = 15;
 
+export const SEARCH_RADIUS_MILES_DEFAULT = 10;
+
 export const COMMISSION_RATE_DEFAULT = 15;
 
 export const ORDER_STATUS_FLOW: Record<string, string[]> = {

@@ -18,9 +18,17 @@ export const metadata: Metadata = {
   title: "Homeal - Chef Dashboard",
   description: "Manage your kitchen, menus, and orders on Homeal",
   icons: {
-    icon: "/icon.svg",
-    apple: "/apple-icon.svg",
+    icon: [
+      { url: "/favicon-final-2.png?v=5", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-final-2.png?v=5", sizes: "48x48", type: "image/png" },
+      { url: "/favicon-final-2.png?v=5", sizes: "96x96", type: "image/png" },
+      { url: "/favicon-final-2.png?v=5", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/favicon-final-2.png?v=5", sizes: "180x180", type: "image/png" },
+    ],
   },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
@@ -30,6 +38,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${poppins.variable} ${fredoka.variable}`}>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+      </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
   );

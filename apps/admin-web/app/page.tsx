@@ -8,9 +8,8 @@ import {
   AlertCircle, Wallet, ShoppingBag, ChefHat, Check, Crown, Zap,
   Infinity, Store, Leaf, Award, ShieldCheck, MapPin, Calendar,
   Repeat, Truck, Gift, Sparkles, Heart, Box, Timer, Grip, Cake,
-  Navigation, Eye,
+  Navigation, Eye, Menu, X,
 } from "lucide-react";
-import HomealWordmark from "./components/HomealWordmark";
 
 type IconComponent = typeof LayoutDashboard;
 interface SidebarItem { icon: IconComponent; label: string; id: string }
@@ -235,6 +234,7 @@ const ADMIN_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3100"
 export default function DashboardPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [serviceToggles, setServiceToggles] = useState<Record<string, boolean>>({
     "daily-meals": true,
     "homemade-products": true,
@@ -379,22 +379,25 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex w-full overflow-x-hidden app-height">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 flex flex-col" style={{ background: "var(--sidebar-bg)" }}>
-        {/* Logo */}
-        <div className="px-4 py-5 flex items-center gap-3">
-          <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: "var(--logo-bg)" }}>
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-              <path d="M3 22L15 10L25 19" style={{ stroke: "var(--logo-green)" }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M22 5V19" style={{ stroke: "var(--logo-orange)" }} strokeWidth="2" strokeLinecap="round"/>
-              <path d="M20 5V11" style={{ stroke: "var(--logo-orange)" }} strokeWidth="1.5" strokeLinecap="round"/>
-              <path d="M24 5V11" style={{ stroke: "var(--logo-orange)" }} strokeWidth="1.5" strokeLinecap="round"/>
-              <ellipse cx="30" cy="9.5" rx="2.5" ry="4" style={{ fill: "var(--logo-orange)" }}/>
-              <path d="M30 13.5V19" style={{ stroke: "var(--logo-orange)" }} strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <HomealWordmark size="md" />
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`} style={{ background: "var(--sidebar-bg)" }}>
+        {/* Sidebar branding */}
+        <div className="py-3 px-3 flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
+              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
+            </div>
+            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="h-9 w-auto shrink-0" />
+          </a>
+          <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
+            <X size={20} style={{ color: "var(--sidebar-text)" }} />
+          </button>
         </div>
 
         {/* Nav */}
@@ -413,7 +416,7 @@ export default function DashboardPage() {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActivePage(item.id)}
+                    onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
                     className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-[14px] font-medium transition-all mb-0.5"
                     style={{
                       background: isActive ? "var(--sidebar-active-bg)" : "transparent",
@@ -458,24 +461,27 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
         {/* Top bar */}
-        <header className="px-6 py-3 border-b border-[var(--border)] flex justify-between items-center" style={{ background: "var(--header-bg)" }}>
-          <h1 className="text-lg font-semibold text-[var(--text)]">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
-          <div className="flex gap-3 items-center">
-            <button onClick={() => setActivePage("notifications")} className="p-2 rounded-lg hover:bg-[var(--input)] transition">
-              <Bell size={20} className="text-[var(--text-muted)]" />
+        <header className="px-4 md:px-6 h-14 border-b border-[var(--border)] flex items-center" style={{ background: "var(--header-bg)" }}>
+          <button className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition mr-3" onClick={() => setSidebarOpen(true)}>
+            <Menu size={20} className="text-[var(--text)]" />
+          </button>
+          <h1 className="text-lg font-semibold text-[var(--text)] flex-1 min-w-0 truncate">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-3">
+            <button onClick={() => setActivePage("notifications")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
+              <Bell size={18} className="text-[var(--text-muted)]" />
             </button>
-            <button onClick={() => setActivePage("settings")} className="p-2 rounded-lg hover:bg-[var(--input)] transition">
-              <Settings size={20} className="text-[var(--text-muted)]" />
+            <button onClick={() => setActivePage("settings")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
+              <Settings size={18} className="text-[var(--text-muted)]" />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>AK</div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>AK</div>
           </div>
         </header>
 
         {/* Trial Banner */}
         {trialDate && trialDaysLeft !== null && (
-          <div className="px-6 py-2.5 flex items-center justify-between" style={{
+          <div className="px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2" style={{
             background: trialDaysLeft > 30 ? "linear-gradient(135deg, rgba(139,92,246,0.08), rgba(255,133,52,0.08))" : trialDaysLeft > 7 ? "rgba(245,158,11,0.08)" : "rgba(239,68,68,0.08)",
             borderBottom: `1px solid ${trialDaysLeft > 30 ? "rgba(139,92,246,0.15)" : trialDaysLeft > 7 ? "rgba(245,158,11,0.2)" : "rgba(239,68,68,0.2)"}`,
           }}>
@@ -496,27 +502,27 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {/* Dashboard */}
           {activePage === "dashboard" && (
             <>
               {/* Kitchen Info Banner */}
               <div
-                className="rounded-2xl border border-[var(--border)] px-6 py-5 mb-5 flex items-start justify-between"
+                className="rounded-2xl border border-[var(--border)] px-4 sm:px-6 py-4 sm:py-5 mb-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3"
                 style={{ background: "var(--header-bg)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
                   <div
-                    className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
                   >
                     <ChefHat size={28} color="white" strokeWidth={2} />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-[var(--text)]">Amma&apos;s Kitchen</h2>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-[var(--text-muted)]">
+                    <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">Amma&apos;s Kitchen</h2>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1.5"><Phone size={12} /> +44 7700 900000</span>
-                      <span className="flex items-center gap-1.5"><Mail size={12} /> chef@homeal.co.uk</span>
+                      <span className="flex items-center gap-1.5 hidden sm:flex"><Mail size={12} /> chef@homeal.co.uk</span>
                       <span className="flex items-center gap-1.5"><MapPin size={12} /> London, UK</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
@@ -554,13 +560,13 @@ export default function DashboardPage() {
                   </h3>
                   <span className="text-[11px] text-[var(--text-muted)]">3 of 6 earned</span>
                 </div>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   {CHEF_BADGES.map((badge, i) => {
                     const BadgeIcon = badge.icon;
                     return (
                       <div
                         key={i}
-                        className="flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all"
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all"
                         style={{
                           background: badge.earned ? badge.bg : "transparent",
                           borderColor: badge.earned ? `${badge.color}30` : "var(--border)",
@@ -578,7 +584,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Active Services Summary */}
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
                 {SERVICE_TYPES.map((svc) => {
                   const SvcIcon = svc.icon;
                   const isOn = serviceToggles[svc.id];
@@ -634,7 +640,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Stats Row 1 - Today */}
-              <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 {STATS_ROW1.map((s, i) => {
                   const StatIcon = s.icon;
                   return (
@@ -653,7 +659,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Stats Row 2 - Weekly/Monthly */}
-              <div className="grid grid-cols-4 gap-4 mb-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
                 {STATS_ROW2.map((s, i) => {
                   const StatIcon = s.icon;
                   return (
@@ -688,11 +694,11 @@ export default function DashboardPage() {
             <>
               {/* Services Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Grip size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -717,7 +723,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Service Cards */}
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {SERVICE_TYPES.map((svc) => {
                   const SvcIcon = svc.icon;
                   const isOn = serviceToggles[svc.id];
@@ -784,16 +790,16 @@ export default function DashboardPage() {
             <>
               {/* Products Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Store size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Homemade Products</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{enabledCount} Active Categories</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full" style={{ background: "#8B5CF6" }} />{currentPlan} Plan ({planCategoryLimit === 9 ? "All" : planCategoryLimit} categories)</span>
                     </div>
@@ -876,7 +882,7 @@ export default function DashboardPage() {
               {/* Content based on active tab */}
               {activeProductTab === "all" ? (
                 <>
-                  <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                     {PRODUCT_CATEGORIES.filter(cat => enabledCategories[cat.name]).map((cat) => (
                       <div
                         key={cat.name}
@@ -923,7 +929,7 @@ export default function DashboardPage() {
 
                   {/* Cake sub-categories */}
                   {activeProductTab === "Cakes" && (
-                    <div className="grid grid-cols-4 gap-3 mb-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
                       {CAKE_CATEGORIES.map((cat, i) => (
                         <div key={i} className="rounded-xl border border-[var(--border)] p-3 text-center transition-all hover:scale-[1.02] cursor-pointer" style={{ background: "var(--header-bg)" }}>
                           <div className="text-2xl mb-1">{cat.icon}</div>
@@ -972,11 +978,11 @@ export default function DashboardPage() {
           {activePage === "add-product" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Store size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -994,7 +1000,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Left Column */}
                   <div className="space-y-5">
                     <div>
@@ -1077,11 +1083,11 @@ export default function DashboardPage() {
           {activePage === "add-dish" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <UtensilsCrossed size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -1099,7 +1105,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Left Column */}
                   <div className="space-y-5">
                     <div>
@@ -1197,11 +1203,11 @@ export default function DashboardPage() {
           {activePage === "add-cake" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Cake size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -1219,7 +1225,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Left Column */}
                   <div className="space-y-5">
                     <div>
@@ -1343,7 +1349,7 @@ export default function DashboardPage() {
             <>
               {/* Settings Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
                 <div className="flex items-center gap-4">
@@ -1388,7 +1394,7 @@ export default function DashboardPage() {
 
               {/* Subscription Plans */}
               <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Choose Your Plan</h3>
-              <div className="grid grid-cols-3 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 mb-6">
                 {PLANS.map((plan, i) => {
                   const PlanIcon = plan.icon;
                   const isCurrent = plan.name === currentPlan;
@@ -1535,7 +1541,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Category toggle grid */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {PRODUCT_CATEGORIES.map((cat) => {
                     const isEnabled = enabledCategories[cat.name];
                     const canEnable = isEnabled || enabledCount < planCategoryLimit;
@@ -1607,7 +1613,7 @@ export default function DashboardPage() {
                 </h3>
                 <p className="text-xs text-[var(--text-muted)] mb-4">Configure how customers receive their orders. These settings are visible on your public profile.</p>
 
-                <div className="grid grid-cols-2 gap-5 mb-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                   {/* Delivery Card */}
                   <div
                     className="rounded-2xl border p-5 transition-all"
@@ -1814,33 +1820,33 @@ export default function DashboardPage() {
             <>
               {/* Menu Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
-                    <UtensilsCrossed size={24} color="white" strokeWidth={2} />
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                    <UtensilsCrossed size={22} color="white" strokeWidth={2} />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Menu Management</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active Items</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Draft</span>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
-                    <RefreshCw size={18} className="text-[var(--text-muted)]" />
-                  </button>
-                  <button
-                    onClick={() => setActivePage("add-dish")}
-                    className="px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90"
-                    style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
-                  >
-                    <PlusCircle size={16} />
-                    <span>Add Dish</span>
-                  </button>
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <button className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                      <RefreshCw size={16} className="text-[var(--text-muted)]" />
+                    </button>
+                    <button
+                      onClick={() => setActivePage("add-dish")}
+                      className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 transition hover:opacity-90"
+                      style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                    >
+                      <PlusCircle size={14} />
+                      <span>Add Dish</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1877,16 +1883,16 @@ export default function DashboardPage() {
           {activePage === "active-orders" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <ClipboardList size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Active Orders</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />0 Preparing</span>
                     </div>
@@ -1956,16 +1962,16 @@ export default function DashboardPage() {
           {activePage === "order-history" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Package size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Order History</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Completed</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Cancelled</span>
                     </div>
@@ -1999,7 +2005,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Summary Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Total Orders", value: "0", icon: Package, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Completed", value: "0", icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
@@ -2052,16 +2058,16 @@ export default function DashboardPage() {
           {activePage === "notifications" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Bell size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Notifications</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Unread</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />0 Read</span>
                     </div>
@@ -2125,16 +2131,16 @@ export default function DashboardPage() {
           {activePage === "subscriptions" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Calendar size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Tiffin Subscriptions</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />0 Paused</span>
                     </div>
@@ -2150,7 +2156,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Subscription Plans Overview */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {[
                   { name: "Weekly Tiffin", price: "£35", period: "/week", meals: "5 meals/week", color: "#10B981", bg: "rgba(16,185,129,0.08)", subscribers: 0 },
                   { name: "Monthly Tiffin", price: "£120", period: "/month", meals: "20 meals/month", color: "#3B82F6", bg: "rgba(59,130,246,0.08)", subscribers: 0 },
@@ -2212,16 +2218,16 @@ export default function DashboardPage() {
           {activePage === "earnings" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <PoundSterling size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Earnings</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />£0 Today</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />£0 Pending</span>
                     </div>
@@ -2233,7 +2239,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Earnings Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Today's Earnings", value: "£0.00", sub: "0 orders", icon: TrendingUp, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
                   { label: "This Week", value: "£0.00", sub: "0 orders", icon: Wallet, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
@@ -2257,7 +2263,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Revenue Breakdown */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {[
                   { label: "Meals & Tiffin", value: "£0.00", icon: UtensilsCrossed, color: "#FF5A1F", pct: "0%" },
                   { label: "Homemade Products", value: "£0.00", icon: Store, color: "#8B5CF6", pct: "0%" },
@@ -2318,16 +2324,16 @@ export default function DashboardPage() {
           {activePage === "reviews" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <Star size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Reviews</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 New</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />0 Total</span>
                     </div>
@@ -2397,16 +2403,16 @@ export default function DashboardPage() {
           {activePage === "analytics" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
                     <BarChart3 size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Analytics</h2>
-                    <div className="flex items-center gap-4 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Profile Views</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full" style={{ background: "#8B5CF6" }} />{currentPlan} Plan</span>
                     </div>
@@ -2429,7 +2435,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Analytics Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
                   { label: "Profile Views", value: "0", icon: Users, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                   { label: "Menu Views", value: "0", icon: UtensilsCrossed, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
@@ -2452,7 +2458,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Chart Placeholders */}
-              <div className="grid grid-cols-2 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
                 <div className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
                   <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Orders Overview</h3>
                   <div className="h-48 flex items-end justify-between gap-2 px-2">
@@ -2513,7 +2519,7 @@ export default function DashboardPage() {
               <>
                 {/* Module Header Bar */}
                 <div
-                  className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-5 py-4 mb-6 flex items-center justify-between"
+                  className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
                 >
                   <div className="flex items-center gap-4">
@@ -2549,7 +2555,7 @@ export default function DashboardPage() {
                         onClick={() => {
                           if (meta.cta === "Add Product") setActivePage("add-product");
                         }}
-                        className="px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90"
+                        className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 transition hover:opacity-90 shrink-0"
                         style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
                       >
                         <PlusCircle size={16} />

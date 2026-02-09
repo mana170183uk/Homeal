@@ -253,8 +253,10 @@ async function main() {
       },
     });
 
-    for (const item of tc.items) {
-      const itemId = `test-item-${tc.userEmail.split("@")[0]}-${item.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+    for (let idx = 0; idx < tc.items.length; idx++) {
+      const item = tc.items[idx];
+      const shortKey = tc.userEmail.split("@")[0].slice(0, 20);
+      const itemId = `ti-${shortKey}-${idx}`;
       await prisma.menuItem.upsert({
         where: { id: itemId },
         update: {},

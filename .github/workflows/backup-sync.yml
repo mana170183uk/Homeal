@@ -175,38 +175,43 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to backup apps
+      - name: Configure startup & start backup apps for deploy
         run: |
-          # Deploy API backup
+          for APP in homeal-api-backup homeal-admin-backup homeal-superadmin-backup; do
+            az webapp config set --name $APP --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js" -o none
+            az webapp start --name $APP --resource-group ${{ env.RESOURCE_GROUP }} -o none || true
+          done
+          echo "Backup apps started, waiting 15s for readiness..."
+          sleep 15
+
+      - name: Zip and deploy to backup apps
+        run: |
           cd deploy-api && zip -qr ../api-backup.zip . && cd ..
-          echo "API zip size: $(du -h api-backup.zip | cut -f1)"
+          echo "API zip: $(du -h api-backup.zip | cut -f1)"
+          cd deploy-admin && zip -qr ../admin-backup.zip . && cd ..
+          echo "Admin zip: $(du -h admin-backup.zip | cut -f1)"
+          cd deploy-super-admin && zip -qr ../superadmin-backup.zip . && cd ..
+          echo "Super Admin zip: $(du -h superadmin-backup.zip | cut -f1)"
+
           az webapp deploy --name homeal-api-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path api-backup.zip --type zip --async true || true
+            --src-path api-backup.zip --type zip --timeout 120
+          echo "API backup deployed"
 
-          # Deploy Admin backup
-          cd deploy-admin && zip -qr ../admin-backup.zip . && cd ..
-          echo "Admin zip size: $(du -h admin-backup.zip | cut -f1)"
           az webapp deploy --name homeal-admin-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path admin-backup.zip --type zip --async true || true
+            --src-path admin-backup.zip --type zip --timeout 120
+          echo "Admin backup deployed"
 
-          # Deploy Super Admin backup
-          cd deploy-super-admin && zip -qr ../superadmin-backup.zip . && cd ..
-          echo "Super Admin zip size: $(du -h superadmin-backup.zip | cut -f1)"
           az webapp deploy --name homeal-superadmin-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path superadmin-backup.zip --type zip --async true || true
+            --src-path superadmin-backup.zip --type zip --timeout 120
+          echo "Super Admin backup deployed"
 
-      - name: Configure startup commands for backups
+      - name: Stop backup apps
+        if: always()
         run: |
-          az webapp config set --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
-          az webapp config set --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
-          az webapp config set --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }} --startup-file "node server.js"
-
-      - name: Ensure backup apps remain stopped
-        run: |
-          az webapp stop --name homeal-admin-backup --resource-group ${{ env.RESOURCE_GROUP }}
-          az webapp stop --name homeal-api-backup --resource-group ${{ env.RESOURCE_GROUP }}
-          az webapp stop --name homeal-superadmin-backup --resource-group ${{ env.RESOURCE_GROUP }}
+          for APP in homeal-api-backup homeal-admin-backup homeal-superadmin-backup; do
+            az webapp stop --name $APP --resource-group ${{ env.RESOURCE_GROUP }} -o none || true
+          done
           echo "All backup apps synced and stopped at $(date -u)"

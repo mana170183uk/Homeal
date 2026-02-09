@@ -24,8 +24,11 @@ router.post("/register", async (req: Request, res: Response) => {
   try {
     const { name, email, phone, firebaseUid, role, kitchenName } = req.body;
 
+    // Convert empty phone to null to avoid unique constraint collisions
+    const cleanPhone = phone && phone.trim() ? phone.trim() : null;
+
     const user = await prisma.user.create({
-      data: { name, email, phone, firebaseUid, role: role || "CUSTOMER" },
+      data: { name, email, phone: cleanPhone, firebaseUid, role: role || "CUSTOMER" },
     });
 
     // If registering as CHEF, create Chef record (pending approval)
@@ -64,7 +67,16 @@ router.post("/register", async (req: Request, res: Response) => {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Registration failed";
-    res.status(400).json({ success: false, error: message });
+    // Return user-friendly messages for common constraint violations
+    if (message.includes("Unique constraint") && message.includes("email")) {
+      res.status(409).json({ success: false, error: "An account with this email already exists. Please log in instead." });
+    } else if (message.includes("Unique constraint") && message.includes("phone")) {
+      res.status(409).json({ success: false, error: "This phone number is already registered. Please use a different number or log in." });
+    } else if (message.includes("Unique constraint") && message.includes("firebaseUid")) {
+      res.status(409).json({ success: false, error: "This account already exists. Please log in instead." });
+    } else {
+      res.status(400).json({ success: false, error: "Registration failed. Please try again." });
+    }
   }
 });
 

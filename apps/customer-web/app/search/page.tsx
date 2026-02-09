@@ -9,8 +9,10 @@ import {
   Search,
   ChefHat,
   Navigation,
+  UtensilsCrossed,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { parseCuisineTypes } from "../lib/utils";
 import Header from "../components/Header";
 
 interface Chef {
@@ -29,6 +31,20 @@ interface Chef {
     name: string;
     items: { id: string; name: string; price: number; image: string | null }[];
   }[];
+}
+
+function getMinPrice(chef: Chef): number | null {
+  let min: number | null = null;
+  for (const menu of chef.menus) {
+    for (const item of menu.items) {
+      if (min === null || item.price < min) min = item.price;
+    }
+  }
+  return min;
+}
+
+function getTotalDishes(chef: Chef): number {
+  return chef.menus.reduce((sum, m) => sum + m.items.length, 0);
 }
 
 function SearchContent() {
@@ -137,7 +153,7 @@ function SearchContent() {
             <button
               type="submit"
               disabled={searching}
-              className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-light transition disabled:opacity-50"
+              className="badge-gradient text-white px-4 py-2 rounded-lg text-sm font-medium transition hover:opacity-90 disabled:opacity-50"
             >
               {searching ? "..." : <Search className="w-4 h-4" />}
             </button>
@@ -186,76 +202,85 @@ function SearchContent() {
               miles
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {chefs.map((chef) => (
-                <a
-                  key={chef.id}
-                  href={`/chef/${chef.id}`}
-                  className="bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all"
-                >
-                  {/* Banner */}
-                  <div className="h-40 bg-gradient-to-br from-primary/20 to-accent/20 relative">
-                    {chef.bannerImage && (
-                      <img
-                        src={chef.bannerImage}
-                        alt={chef.kitchenName}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                    {chef.distance != null && (
-                      <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-primary" />
-                        {chef.distance} mi
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-lg text-[var(--text)] leading-tight">
-                        {chef.kitchenName}
-                      </h3>
-                      {chef.avgRating > 0 && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                          <span className="text-sm font-semibold">
-                            {chef.avgRating.toFixed(1)}
-                          </span>
-                          <span className="text-xs text-[var(--text-muted)]">
-                            ({chef.totalReviews})
-                          </span>
+              {chefs.map((chef) => {
+                const minPrice = getMinPrice(chef);
+                const totalDishes = getTotalDishes(chef);
+                return (
+                  <a
+                    key={chef.id}
+                    href={`/chef/${chef.id}`}
+                    className="group bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden hover:shadow-xl hover:scale-[1.02] transition-all duration-300"
+                  >
+                    {/* Banner */}
+                    <div className="h-40 relative overflow-hidden">
+                      {chef.bannerImage ? (
+                        <img
+                          src={chef.bannerImage}
+                          alt={chef.kitchenName}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full badge-gradient opacity-80" />
+                      )}
+                      {/* Distance badge */}
+                      {chef.distance != null && (
+                        <div className="absolute top-3 right-3 glass bg-white/80 dark:bg-[var(--card)]/80 text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-md">
+                          <MapPin className="w-3 h-3 text-primary" />
+                          {chef.distance} mi
+                        </div>
+                      )}
+                      {/* Price badge */}
+                      {minPrice != null && (
+                        <div className="absolute bottom-3 left-3 badge-gradient text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md">
+                          from &pound;{minPrice.toFixed(2)}
                         </div>
                       )}
                     </div>
 
-                    <p className="text-sm text-[var(--text-soft)] mb-3">
-                      by {chef.user.name}
-                    </p>
-
-                    {chef.cuisineTypes && (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {chef.cuisineTypes
-                          .split(",")
-                          .slice(0, 3)
-                          .map((cuisine) => (
-                            <span
-                              key={cuisine}
-                              className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium"
-                            >
-                              {cuisine.trim()}
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-bold text-lg text-[var(--text)] leading-tight">
+                          {chef.kitchenName}
+                        </h3>
+                        {chef.avgRating > 0 && (
+                          <div className="flex items-center gap-1 shrink-0 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                            <span className="text-sm font-semibold">
+                              {chef.avgRating.toFixed(1)}
                             </span>
-                          ))}
+                          </div>
+                        )}
                       </div>
-                    )}
 
-                    {chef.menus[0]?.items && chef.menus[0].items.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                        <Clock className="w-3.5 h-3.5" />
-                        {chef.menus[0].items.length} dishes available
-                      </div>
-                    )}
-                  </div>
-                </a>
-              ))}
+                      <p className="text-sm text-[var(--text-soft)] mb-3">
+                        by {chef.user.name}
+                      </p>
+
+                      {chef.cuisineTypes && (
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {parseCuisineTypes(chef.cuisineTypes)
+                            .slice(0, 3)
+                            .map((cuisine) => (
+                              <span
+                                key={cuisine}
+                                className="text-xs badge-gradient text-white px-2.5 py-1 rounded-full font-medium"
+                              >
+                                {cuisine}
+                              </span>
+                            ))}
+                        </div>
+                      )}
+
+                      {totalDishes > 0 && (
+                        <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                          <UtensilsCrossed className="w-3.5 h-3.5" />
+                          {totalDishes} dishes available
+                        </div>
+                      )}
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           </>
         )}

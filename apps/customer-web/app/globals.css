@@ -21,16 +21,19 @@
   --alert-rgb: 255 45 85;
   --alert-light: #FF6B81;
   --logo-bg: #FEF3EB;
+  --badge-from: #EC4899;
+  --badge-to: #8B5CF6;
+  --header-bg: #FFFFFF;
 }
 
 .dark {
-  --bg: #111C32;
-  --card: #192845;
-  --input: #213352;
-  --text: #E8EEFF;
-  --text-soft: #9BABC8;
-  --text-muted: #6478A0;
-  --border: rgba(100,160,255,0.12);
+  --bg: #0F0E2A;
+  --card: #1A1840;
+  --input: #231F52;
+  --text: #F0EDFF;
+  --text-soft: #A8A0CC;
+  --text-muted: #6B6394;
+  --border: rgba(139,92,246,0.15);
   --primary: #B16CFF;
   --primary-rgb: 177 108 255;
   --primary-light: #C990FF;
@@ -40,7 +43,10 @@
   --alert: #FF6B9D;
   --alert-rgb: 255 107 157;
   --alert-light: #FF8DB0;
-  --logo-bg: #1D2F4E;
+  --logo-bg: #1E1B4B;
+  --badge-from: #F472B6;
+  --badge-to: #A78BFA;
+  --header-bg: #16143A;
 }
 
 html, body {
@@ -60,4 +66,62 @@ body {
   font-family: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+/* Animations */
+@keyframes bounceIn {
+  0% { transform: translateY(20px); opacity: 0; }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.4s ease-out;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary), var(--badge-from), var(--badge-to));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient badge utility */
+.badge-gradient {
+  background: linear-gradient(135deg, var(--badge-from), var(--badge-to));
+}
+
+/* Glass effect */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }

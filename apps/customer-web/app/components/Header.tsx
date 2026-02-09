@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, LogOut, User } from "lucide-react";
+import { ArrowLeft, LogOut, ShoppingBag } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { useAuth } from "../lib/useAuth";
@@ -15,6 +15,7 @@ interface HeaderProps {
 export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps) {
   const { user, loading } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,10 +28,30 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    function updateCartCount() {
+      try {
+        const cart = JSON.parse(localStorage.getItem("homeal_cart") || "[]");
+        const count = cart.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0);
+        setCartCount(count);
+      } catch {
+        setCartCount(0);
+      }
+    }
+    updateCartCount();
+    window.addEventListener("cart-updated", updateCartCount);
+    window.addEventListener("storage", updateCartCount);
+    return () => {
+      window.removeEventListener("cart-updated", updateCartCount);
+      window.removeEventListener("storage", updateCartCount);
+    };
+  }, []);
+
   async function handleLogout() {
     await signOut(getFirebaseAuth());
     localStorage.removeItem("homeal_token");
     localStorage.removeItem("homeal_refresh_token");
+    localStorage.removeItem("homeal_cart");
     window.location.href = "/";
   }
 
@@ -39,7 +60,13 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
   const avatar = user?.photoURL;
 
   return (
-    <header className="bg-[var(--card)] border-b border-[var(--border)] sticky top-0 z-10">
+    <header
+      className="bg-[var(--header-bg,var(--card))] sticky top-0 z-10"
+      style={{
+        borderBottom: "2px solid transparent",
+        borderImage: "linear-gradient(90deg, var(--badge-from), var(--badge-to)) 1",
+      }}
+    >
       <div className={`px-4 sm:px-6 py-3 sm:py-4 ${maxWidth} mx-auto flex items-center gap-3 sm:gap-4`}>
         {showBack && (
           <a
@@ -58,6 +85,16 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
         <div className="flex-1" />
         <ThemeToggle />
 
+        {/* Cart indicator */}
+        {cartCount > 0 && (
+          <a href="#" onClick={(e) => { e.preventDefault(); alert(`Your cart has ${cartCount} item${cartCount !== 1 ? "s" : ""}. Ordering coming soon!`); }} className="relative p-2 rounded-xl hover:bg-[var(--input)] transition">
+            <ShoppingBag className="w-5 h-5 text-[var(--text-soft)]" />
+            <span className="absolute -top-0.5 -right-0.5 w-5 h-5 badge-gradient text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {cartCount}
+            </span>
+          </a>
+        )}
+
         {loading ? (
           <div className="w-8 h-8 rounded-full bg-[var(--input)] animate-pulse" />
         ) : user ? (
@@ -69,7 +106,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
               {avatar ? (
                 <img src={avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-sm font-bold text-primary">
+                <div className="w-8 h-8 rounded-full badge-gradient flex items-center justify-center text-sm font-bold text-white">
                   {initial}
                 </div>
               )}
@@ -104,7 +141,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             </a>
             <a
               href="/signup"
-              className="text-xs sm:text-sm font-semibold bg-primary text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-primary-light transition"
+              className="text-xs sm:text-sm font-semibold badge-gradient text-white px-3 sm:px-4 py-2 rounded-lg hover:opacity-90 transition"
             >
               Sign up
             </a>

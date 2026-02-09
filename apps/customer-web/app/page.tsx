@@ -13,18 +13,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api } from "./lib/api";
+import { saveLocation } from "./lib/location";
+import { POPULAR_CUISINES } from "./lib/constants";
 import Header from "./components/Header";
-
-const POPULAR_CUISINES = [
-  { name: "Indian", emoji: "\uD83C\uDDEE\uD83C\uDDF3", gradient: "from-orange-400 to-red-500" },
-  { name: "Chinese", emoji: "\uD83C\uDDE8\uD83C\uDDF3", gradient: "from-red-400 to-pink-500" },
-  { name: "Thai", emoji: "\uD83C\uDDF9\uD83C\uDDED", gradient: "from-green-400 to-emerald-500" },
-  { name: "Italian", emoji: "\uD83C\uDDEE\uD83C\uDDF9", gradient: "from-green-500 to-teal-500" },
-  { name: "Caribbean", emoji: "\uD83C\uDF34", gradient: "from-yellow-400 to-orange-500" },
-  { name: "Middle Eastern", emoji: "\uD83E\uDDC6", gradient: "from-amber-400 to-orange-500" },
-  { name: "South Indian", emoji: "\uD83C\uDF5B", gradient: "from-yellow-500 to-red-400" },
-  { name: "Japanese", emoji: "\uD83C\uDDEF\uD83C\uDDF5", gradient: "from-rose-400 to-red-500" },
-];
 
 export default function HomePage() {
   const router = useRouter();
@@ -48,6 +39,13 @@ export default function HomePage() {
         setError("Invalid postcode. Please enter a valid UK postcode.");
         return;
       }
+
+      saveLocation({
+        postcode: res.data.postcode,
+        lat: String(res.data.lat),
+        lng: String(res.data.lng),
+        area: res.data.area || "",
+      });
 
       router.push(
         `/search?lat=${res.data.lat}&lng=${res.data.lng}&postcode=${encodeURIComponent(res.data.postcode)}&area=${encodeURIComponent(res.data.area || "")}`
@@ -117,6 +115,12 @@ export default function HomePage() {
             </button>
           </form>
           {error && <p className="text-alert text-sm mt-3">{error}</p>}
+          <p className="text-sm text-[var(--text-muted)] mt-4">
+            or{" "}
+            <a href="/search" className="gradient-text font-semibold hover:opacity-80 transition">
+              browse all chefs
+            </a>
+          </p>
         </div>
       </section>
 
@@ -128,19 +132,14 @@ export default function HomePage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
             {POPULAR_CUISINES.map((cuisine) => (
-              <button
+              <a
                 key={cuisine.name}
-                onClick={() => {
-                  const el = document.querySelector<HTMLInputElement>("input[type='text']");
-                  if (el) {
-                    el.focus();
-                  }
-                }}
+                href={`/search?cuisine=${encodeURIComponent(cuisine.name)}`}
                 className={`inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r ${cuisine.gradient} text-white text-xs sm:text-sm font-medium px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full hover:scale-105 hover:shadow-lg transition-all duration-200`}
               >
                 <span>{cuisine.emoji}</span>
                 {cuisine.name}
-              </button>
+              </a>
             ))}
           </div>
         </div>

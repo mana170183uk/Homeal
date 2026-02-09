@@ -402,24 +402,30 @@ export default function DashboardPage() {
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`} style={{ background: "var(--sidebar-bg)" }}>
         {/* Sidebar branding */}
-        <div className="py-3 px-3 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
-            </div>
-            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="h-9 w-auto shrink-0" />
-          </a>
-          <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
-            <X size={20} style={{ color: "var(--sidebar-text)" }} />
-          </button>
+        <div className="py-3 px-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
+                <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
+              </div>
+              <img src="/logo-full.png" alt="Homeal" className="h-9 w-auto shrink-0" />
+            </a>
+            <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
+              <X size={20} style={{ color: "var(--sidebar-text)" }} />
+            </button>
+          </div>
+          <div className="px-2.5 py-2">
+            <p className="text-xs text-[var(--sidebar-muted)]">Welcome back</p>
+            <p className="text-sm font-semibold text-[var(--sidebar-text)]">Chef Dashboard</p>
+          </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 pt-3">
+        <nav className="flex-1 overflow-y-auto px-3 pt-1">
           {SIDEBAR_ITEMS.map((group, gi) => (
             <div key={gi} className="mb-4">
               <div
-                className="text-[11px] font-semibold tracking-widest uppercase px-3 mb-2"
+                className="text-[10px] font-bold tracking-[0.15em] uppercase px-3 mb-2 mt-2"
                 style={{ color: "var(--sidebar-section)" }}
               >
                 {group.section}
@@ -431,9 +437,9 @@ export default function DashboardPage() {
                   <button
                     key={item.id}
                     onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
-                    className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-[14px] font-medium transition-all mb-0.5"
+                    className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-[14px] font-medium transition-all mb-0.5"
                     style={{
-                      background: isActive ? "var(--sidebar-active-bg)" : "transparent",
+                      background: isActive ? "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(139,92,246,0.15))" : "transparent",
                       color: isActive ? "var(--sidebar-active-text)" : "var(--sidebar-text)",
                     }}
                     onMouseEnter={(e) => {
@@ -444,7 +450,7 @@ export default function DashboardPage() {
                     }}
                   >
                     <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
                       style={{
                         background: isActive ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "transparent",
                       }}
@@ -475,7 +481,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 pb-20 md:pb-0">
         {/* Top bar */}
         <header className="px-4 md:px-6 h-14 border-b border-[var(--border)] flex items-center" style={{ background: "var(--header-bg)" }}>
           <button className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition mr-3" onClick={() => setSidebarOpen(true)}>
@@ -2593,6 +2599,35 @@ export default function DashboardPage() {
           })()}
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)]" style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+        <div className="flex items-center justify-around px-2 py-2" style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}>
+          {[
+            { icon: LayoutDashboard, label: "Dashboard", id: "dashboard" },
+            { icon: ClipboardList, label: "Orders", id: "active-orders" },
+            { icon: UtensilsCrossed, label: "Menu", id: "menu" },
+            { icon: Bell, label: "Alerts", id: "notifications" },
+          ].map((item) => {
+            const BIcon = item.icon;
+            const isActive = activePage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActivePage(item.id)}
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[60px]"
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? "badge-gradient" : ""}`}>
+                  <BIcon size={18} style={{ color: isActive ? "#FFFFFF" : "var(--text-muted)" }} />
+                </div>
+                <span className={`text-[10px] font-medium ${isActive ? "gradient-text" : ""}`} style={!isActive ? { color: "var(--text-muted)" } : undefined}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

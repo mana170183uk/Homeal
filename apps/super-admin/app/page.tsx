@@ -389,24 +389,30 @@ export default function SuperAdminPage() {
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`} style={{ background: "var(--sidebar-bg)" }}>
         {/* Sidebar branding */}
-        <div className="py-3 px-3 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
-            </div>
-            <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="h-9 w-auto shrink-0" />
-          </a>
-          <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
-            <X size={20} style={{ color: "var(--sidebar-text)" }} />
-          </button>
+        <div className="py-3 px-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
+                <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
+              </div>
+              <img src="/logo-full.png" alt="Homeal" className="h-9 w-auto shrink-0" />
+            </a>
+            <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
+              <X size={20} style={{ color: "var(--sidebar-text)" }} />
+            </button>
+          </div>
+          <div className="px-2.5 py-2">
+            <p className="text-xs text-[var(--sidebar-muted)]">Welcome back</p>
+            <p className="text-sm font-semibold text-[var(--sidebar-text)]">Super Admin</p>
+          </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 pt-3">
+        <nav className="flex-1 overflow-y-auto px-3 pt-1">
           {SIDEBAR_ITEMS.map((group, gi) => (
             <div key={gi} className="mb-4">
               <div
-                className="text-[11px] font-semibold tracking-widest uppercase px-3 mb-2"
+                className="text-[10px] font-bold tracking-[0.15em] uppercase px-3 mb-2 mt-2"
                 style={{ color: "var(--sidebar-section)" }}
               >
                 {group.section}
@@ -418,9 +424,9 @@ export default function SuperAdminPage() {
                   <button
                     key={item.id}
                     onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
-                    className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-[14px] font-medium transition-all mb-0.5"
+                    className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-[14px] font-medium transition-all mb-0.5"
                     style={{
-                      background: isActive ? "var(--sidebar-active-bg)" : "transparent",
+                      background: isActive ? "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(139,92,246,0.15))" : "transparent",
                       color: isActive ? "var(--sidebar-active-text)" : "var(--sidebar-text)",
                     }}
                     onMouseEnter={(e) => {
@@ -431,7 +437,7 @@ export default function SuperAdminPage() {
                     }}
                   >
                     <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
                       style={{
                         background: isActive ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "transparent",
                       }}
@@ -462,7 +468,7 @@ export default function SuperAdminPage() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 pb-20 md:pb-0">
         {/* Top bar */}
         <header className="px-4 md:px-6 h-14 border-b border-[var(--border)] flex items-center" style={{ background: "var(--header-bg)" }}>
           <button className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition mr-3" onClick={() => setSidebarOpen(true)}>
@@ -1137,7 +1143,8 @@ export default function SuperAdminPage() {
 
               {/* Chefs Table */}
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
-                <table className="w-full text-xs">
+                {/* Desktop table */}
+                <table className="w-full text-xs hidden md:table">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Chef / Kitchen</th>
@@ -1179,13 +1186,13 @@ export default function SuperAdminPage() {
                             <div className="font-semibold text-[var(--text)]">{c.kitchenName}</div>
                             <div className="text-[11px] text-[var(--text-muted)]">{c.user.name}</div>
                           </td>
-                          <td className="px-4 py-3 text-[var(--text-muted)]">{c.user.email || "—"}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)]">{c.user.email || "\u2014"}</td>
                           <td className="px-4 py-3 text-center">
                             <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{
                               background: c.plan === "UNLIMITED" ? "rgba(139,92,246,0.12)" : "rgba(16,185,129,0.12)",
                               color: c.plan === "UNLIMITED" ? "#8B5CF6" : "#10B981",
                             }}>
-                              {c.plan || "—"}
+                              {c.plan || "\u2014"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center text-[var(--text-muted)]">
@@ -1194,7 +1201,7 @@ export default function SuperAdminPage() {
                                 {trialEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                                 {trialExpired && <span className="block text-[10px]">Expired</span>}
                               </span>
-                            ) : "—"}
+                            ) : "\u2014"}
                           </td>
                           <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">{c._count.orders}</td>
                           <td className="px-4 py-3 text-center">
@@ -1204,64 +1211,32 @@ export default function SuperAdminPage() {
                                 <span className="font-semibold text-[var(--text)]">{c.avgRating.toFixed(1)}</span>
                                 <span className="text-[var(--text-muted)]">({c.totalReviews})</span>
                               </span>
-                            ) : <span className="text-[var(--text-muted)]">—</span>}
+                            ) : <span className="text-[var(--text-muted)]">\u2014</span>}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {isPending && (
-                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>
-                                Pending
-                              </span>
-                            )}
-                            {isApproved && (
-                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>
-                                Approved
-                              </span>
-                            )}
-                            {isRejected && !isApproved && (
-                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>
-                                Rejected
-                              </span>
-                            )}
+                            {isPending && <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>Pending</span>}
+                            {isApproved && <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>Approved</span>}
+                            {isRejected && !isApproved && <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>Rejected</span>}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1.5">
                               {isPending && (
                                 <>
-                                  <button
-                                    onClick={() => handleApproveChef(c.id)}
-                                    disabled={chefActionLoading === c.id}
-                                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                                    style={{ background: "#10B981" }}
-                                  >
+                                  <button onClick={() => handleApproveChef(c.id)} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: "#10B981" }}>
                                     {chefActionLoading === c.id ? "..." : "Approve"}
                                   </button>
-                                  <button
-                                    onClick={() => { setRejectModalChef(c); setRejectReason(""); }}
-                                    disabled={chefActionLoading === c.id}
-                                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                                    style={{ background: "#EF4444" }}
-                                  >
+                                  <button onClick={() => { setRejectModalChef(c); setRejectReason(""); }} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: "#EF4444" }}>
                                     Reject
                                   </button>
                                 </>
                               )}
                               {isApproved && trialEnd && (
-                                <button
-                                  onClick={() => handleExtendTrial(c.id)}
-                                  disabled={chefActionLoading === c.id}
-                                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition hover:opacity-90 disabled:opacity-50"
-                                  style={{ background: "rgba(139,92,246,0.12)", color: "#8B5CF6" }}
-                                >
+                                <button onClick={() => handleExtendTrial(c.id)} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition hover:opacity-90 disabled:opacity-50" style={{ background: "rgba(139,92,246,0.12)", color: "#8B5CF6" }}>
                                   {chefActionLoading === c.id ? "..." : "+3 Months"}
                                 </button>
                               )}
                               {isRejected && !isApproved && (
-                                <button
-                                  onClick={() => handleApproveChef(c.id)}
-                                  disabled={chefActionLoading === c.id}
-                                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                                  style={{ background: "#10B981" }}
-                                >
+                                <button onClick={() => handleApproveChef(c.id)} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: "#10B981" }}>
                                   {chefActionLoading === c.id ? "..." : "Approve"}
                                 </button>
                               )}
@@ -1272,6 +1247,86 @@ export default function SuperAdminPage() {
                     })}
                   </tbody>
                 </table>
+
+                {/* Mobile card view */}
+                <div className="md:hidden">
+                  {chefLoading ? (
+                    <div className="px-5 py-16 text-center text-[var(--text-muted)]">
+                      <RefreshCw size={32} className="mx-auto mb-3 opacity-30 animate-spin" />
+                      <p className="text-sm font-medium">Loading chefs...</p>
+                    </div>
+                  ) : chefs.length === 0 ? (
+                    <div className="px-5 py-16 text-center text-[var(--text-muted)]">
+                      <ChefHat size={40} className="mx-auto mb-3 opacity-20" />
+                      <p className="text-sm font-medium">{chefFilter === "all" ? "No chefs registered yet" : `No ${chefFilter} chefs`}</p>
+                      <p className="text-[11px] mt-1">Chefs who register will appear here for approval</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[var(--border)]">
+                      {chefs.map((c) => {
+                        const isPending = !c.isVerified && !c.rejectedAt;
+                        const isApproved = c.isVerified;
+                        const isRejected = !!c.rejectedAt;
+                        const trialEnd = c.trialEndsAt ? new Date(c.trialEndsAt) : null;
+                        const trialExpired = trialEnd ? trialEnd < new Date() : false;
+                        return (
+                          <div key={c.id} className="p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="font-semibold text-sm text-[var(--text)]">{c.kitchenName}</div>
+                                <div className="text-xs text-[var(--text-muted)]">{c.user.name}</div>
+                              </div>
+                              <div>
+                                {isPending && <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>Pending</span>}
+                                {isApproved && <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>Approved</span>}
+                                {isRejected && !isApproved && <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>Rejected</span>}
+                              </div>
+                            </div>
+                            <div className="text-xs text-[var(--text-muted)] truncate">{c.user.email || "\u2014"}</div>
+                            <div className="flex flex-wrap gap-3 text-xs">
+                              <span className="text-[var(--text-muted)]">Plan: <span className="font-semibold text-[var(--text)]">{c.plan || "\u2014"}</span></span>
+                              <span className="text-[var(--text-muted)]">Orders: <span className="font-semibold text-[var(--text)]">{c._count.orders}</span></span>
+                              {c.avgRating > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Star size={12} className="text-amber-500 fill-amber-500" />
+                                  <span className="font-semibold text-[var(--text)]">{c.avgRating.toFixed(1)}</span>
+                                </span>
+                              )}
+                            </div>
+                            {trialEnd && (
+                              <div className="text-xs text-[var(--text-muted)]">
+                                Trial ends: {trialEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                {trialExpired && <span className="ml-1.5 text-red-500 font-semibold">Expired</span>}
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              {isPending && (
+                                <>
+                                  <button onClick={() => handleApproveChef(c.id)} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: "#10B981" }}>
+                                    {chefActionLoading === c.id ? "..." : "Approve"}
+                                  </button>
+                                  <button onClick={() => { setRejectModalChef(c); setRejectReason(""); }} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: "#EF4444" }}>
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              {isApproved && trialEnd && (
+                                <button onClick={() => handleExtendTrial(c.id)} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-xs font-semibold transition hover:opacity-90 disabled:opacity-50" style={{ background: "rgba(139,92,246,0.12)", color: "#8B5CF6" }}>
+                                  {chefActionLoading === c.id ? "..." : "+3 Months"}
+                                </button>
+                              )}
+                              {isRejected && !isApproved && (
+                                <button onClick={() => handleApproveChef(c.id)} disabled={chefActionLoading === c.id} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: "#10B981" }}>
+                                  {chefActionLoading === c.id ? "..." : "Approve"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Reject Modal */}
@@ -1379,7 +1434,7 @@ export default function SuperAdminPage() {
 
               {/* Customers Table */}
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
-                <table className="w-full text-xs">
+                <table className="hidden md:table w-full text-xs">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Customer</th>
@@ -1401,6 +1456,12 @@ export default function SuperAdminPage() {
                     </tr>
                   </tbody>
                 </table>
+                {/* Mobile empty state */}
+                <div className="md:hidden px-5 py-16 text-center text-[var(--text-muted)]">
+                  <Users size={40} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-sm font-medium">No customers registered yet</p>
+                  <p className="text-[11px] mt-1">Customers will appear here after signing up on the mobile app</p>
+                </div>
               </div>
             </>
           )}
@@ -1469,7 +1530,7 @@ export default function SuperAdminPage() {
 
               {/* Orders Table */}
               <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
-                <table className="w-full text-xs">
+                <table className="hidden md:table w-full text-xs">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
@@ -1491,6 +1552,12 @@ export default function SuperAdminPage() {
                     </tr>
                   </tbody>
                 </table>
+                {/* Mobile empty state */}
+                <div className="md:hidden px-5 py-16 text-center text-[var(--text-muted)]">
+                  <ClipboardList size={40} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-sm font-medium">No orders yet</p>
+                  <p className="text-[11px] mt-1">Platform-wide orders (delivery &amp; pickup) will appear here</p>
+                </div>
               </div>
             </>
           )}
@@ -1962,6 +2029,33 @@ export default function SuperAdminPage() {
           })()}
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)]" style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}>
+        <div className="flex items-center justify-around px-2 pt-2">
+          {[
+            { icon: LayoutDashboard, label: "Dashboard", id: "dashboard" },
+            { icon: ChefHat, label: "Chefs", id: "chefs" },
+            { icon: ClipboardList, label: "Orders", id: "orders" },
+            { icon: Settings, label: "Settings", id: "settings" },
+          ].map((item) => {
+            const NavIcon = item.icon;
+            const isActive = activePage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
+                className="flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all"
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isActive ? "badge-gradient" : ""}`} style={!isActive ? { background: "transparent" } : undefined}>
+                  <NavIcon size={18} className={isActive ? "text-white" : "text-[var(--text-muted)]"} />
+                </div>
+                <span className={`text-[10px] font-semibold ${isActive ? "gradient-text" : "text-[var(--text-muted)]"}`}>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

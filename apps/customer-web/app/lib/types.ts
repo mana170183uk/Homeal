@@ -24,6 +24,8 @@ export interface Chef {
   totalReviews: number;
   deliveryRadius: number;
   distance?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   user: { name: string; avatar: string | null };
   menus: ChefMenu[];
 }

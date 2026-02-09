@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ChefHat, ShieldCheck, Heart, Truck, Star } from "lucide-react";
+import { ChefHat, ShieldCheck, Heart, Truck, Star, Map as MapIcon, LayoutGrid } from "lucide-react";
 import Header from "../components/Header";
 import ChefCard from "../components/ChefCard";
 import ChefCardSkeleton from "../components/ChefCardSkeleton";
 import SearchControls from "../components/SearchControls";
 import CuisineFilters from "../components/CuisineFilters";
+import FeaturedChefs from "../components/FeaturedChefs";
+import ChefMapWrapper from "../components/ChefMapWrapper";
 import { api } from "../lib/api";
 import { parseCuisineTypes } from "../lib/utils";
 import { Chef } from "../lib/types";
@@ -54,6 +56,7 @@ function SearchContent() {
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [vegetarianOnly, setVegetarianOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
 
   const hasLocation = !!(lat && lng);
 
@@ -242,6 +245,11 @@ function SearchContent() {
           onToggleVegetarian={() => setVegetarianOnly((v) => !v)}
         />
 
+        {/* Featured Chefs */}
+        {!loading && chefs.length > 0 && (
+          <FeaturedChefs chefs={chefs} hasLocation={hasLocation} />
+        )}
+
         {/* Why Homeal strip */}
         {!hasLocation && !loading && chefs.length > 0 && (
           <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 mb-8">
@@ -261,14 +269,25 @@ function SearchContent() {
           </div>
         )}
 
-        {/* Results count */}
+        {/* Results count + view toggle */}
         {!loading && !error && (
-          <p className="text-sm text-[var(--text-muted)] mb-4">
-            {filteredChefs.length} {filteredChefs.length === 1 ? "chef" : "chefs"} found
-            {hasLocation && ` within ${radius} miles`}
-            {selectedCuisines.length > 0 && ` \u00B7 ${selectedCuisines.join(", ")}`}
-            {vegetarianOnly && " \u00B7 Vegetarian"}
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-[var(--text-muted)]">
+              {filteredChefs.length} {filteredChefs.length === 1 ? "chef" : "chefs"} found
+              {hasLocation && ` within ${radius} miles`}
+              {selectedCuisines.length > 0 && ` \u00B7 ${selectedCuisines.join(", ")}`}
+              {vegetarianOnly && " \u00B7 Vegetarian"}
+            </p>
+            {hasLocation && filteredChefs.length > 0 && (
+              <button
+                onClick={() => setViewMode(viewMode === "grid" ? "map" : "grid")}
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-[var(--input)] text-[var(--text-soft)] border border-[var(--border)] hover:border-primary/30 transition"
+              >
+                {viewMode === "grid" ? <MapIcon className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+                {viewMode === "grid" ? "Map" : "Grid"}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Content */}
@@ -312,6 +331,12 @@ function SearchContent() {
               </button>
             )}
           </div>
+        ) : viewMode === "map" && hasLocation && lat && lng ? (
+          <ChefMapWrapper
+            chefs={filteredChefs}
+            center={[parseFloat(lat), parseFloat(lng)]}
+            radius={radius}
+          />
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredChefs.map((chef) => (

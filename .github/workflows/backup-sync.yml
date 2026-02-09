@@ -175,25 +175,28 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to backup apps (keep them stopped)
+      - name: Deploy to backup apps
         run: |
           # Deploy API backup
           cd deploy-api && zip -qr ../api-backup.zip . && cd ..
+          echo "API zip size: $(du -h api-backup.zip | cut -f1)"
           az webapp deploy --name homeal-api-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path api-backup.zip --type zip 2>/dev/null || true
+            --src-path api-backup.zip --type zip --async true || true
 
           # Deploy Admin backup
           cd deploy-admin && zip -qr ../admin-backup.zip . && cd ..
+          echo "Admin zip size: $(du -h admin-backup.zip | cut -f1)"
           az webapp deploy --name homeal-admin-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path admin-backup.zip --type zip 2>/dev/null || true
+            --src-path admin-backup.zip --type zip --async true || true
 
           # Deploy Super Admin backup
           cd deploy-super-admin && zip -qr ../superadmin-backup.zip . && cd ..
+          echo "Super Admin zip size: $(du -h superadmin-backup.zip | cut -f1)"
           az webapp deploy --name homeal-superadmin-backup \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --src-path superadmin-backup.zip --type zip 2>/dev/null || true
+            --src-path superadmin-backup.zip --type zip --async true || true
 
       - name: Configure startup commands for backups
         run: |

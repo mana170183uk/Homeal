@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: Build Super Admin
-        run: npm run build:superadmin
+        run: npm run build:super-admin
         env:
           NEXT_PUBLIC_API_URL: https://api.homeal.uk
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}

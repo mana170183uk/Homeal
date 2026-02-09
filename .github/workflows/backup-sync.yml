@@ -19,7 +19,7 @@ env:
   RESOURCE_GROUP: rg-visualstudio-lab-mana
   MYSQL_HOST: restrovision-mysql.mysql.database.azure.com
   MYSQL_USER: restrovision_admin
-  MYSQL_PASS: Homeal2026SecureDb
+  MYSQL_PASS: Homeal2026Db
   PROD_DB: homeal_db
   BACKUP_DB: homeal_db_backup
 
@@ -56,14 +56,45 @@ jobs:
             --rule-name github-actions-runner \
             --start-ip-address $RUNNER_IP \
             --end-ip-address $RUNNER_IP 2>/dev/null || true
-          sleep 5
+          echo "Waiting 15s for firewall rule to propagate..."
+          sleep 15
+
+      - name: Test MySQL connection
+        env:
+          MYSQL_PWD: ${{ env.MYSQL_PASS }}
+        run: |
+          echo "=== Connection Test ==="
+          echo "Host: ${{ env.MYSQL_HOST }}"
+          echo "User: ${{ env.MYSQL_USER }}"
+          echo "Password length: $(echo -n '${{ env.MYSQL_PASS }}' | wc -c) chars"
+
+          # Retry connection up to 3 times with 10s wait
+          for i in 1 2 3; do
+            echo "Attempt $i/3..."
+            if mysql \
+              --host=${{ env.MYSQL_HOST }} \
+              --user=${{ env.MYSQL_USER }} \
+              --ssl-mode=REQUIRED \
+              --connect-timeout=10 \
+              -e "SELECT 'Connection OK' AS status; SHOW DATABASES;" 2>&1; then
+              echo "Connection successful on attempt $i"
+              exit 0
+            else
+              echo "Attempt $i failed, waiting 10s..."
+              sleep 10
+            fi
+          done
+          echo "ERROR: All 3 connection attempts failed"
+          exit 1
 
       - name: Dump production database
+        env:
+          MYSQL_PWD: ${{ env.MYSQL_PASS }}
         run: |
+          echo "Starting mysqldump of ${{ env.PROD_DB }}..."
           mysqldump \
             --host=${{ env.MYSQL_HOST }} \
             --user=${{ env.MYSQL_USER }} \
-            --password="${{ env.MYSQL_PASS }}" \
             --ssl-mode=REQUIRED \
             --single-transaction \
             --routines \
@@ -71,21 +102,26 @@ jobs:
             --set-gtid-purged=OFF \
             ${{ env.PROD_DB }} > prod_dump.sql
           echo "Dump size: $(du -h prod_dump.sql | cut -f1)"
+          echo "Dump completed at $(date -u)"
 
       - name: Restore to backup database
+        env:
+          MYSQL_PWD: ${{ env.MYSQL_PASS }}
         run: |
+          echo "Restoring to ${{ env.BACKUP_DB }}..."
           mysql \
             --host=${{ env.MYSQL_HOST }} \
             --user=${{ env.MYSQL_USER }} \
-            --password="${{ env.MYSQL_PASS }}" \
             --ssl-mode=REQUIRED \
             ${{ env.BACKUP_DB }} < prod_dump.sql
           echo "Database sync completed at $(date -u)"
 
       - name: Verify backup
+        env:
+          MYSQL_PWD: ${{ env.MYSQL_PASS }}
         run: |
-          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
-          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --password="${{ env.MYSQL_PASS }}" --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
+          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
+          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
           echo "Production tables: $PROD_TABLES"
           echo "Backup tables: $BACKUP_TABLES"
           if [ "$PROD_TABLES" != "$BACKUP_TABLES" ]; then

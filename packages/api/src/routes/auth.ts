@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
+import { authenticate } from "../middleware/auth";
 import { notifySuperAdminNewChef, notifySuperAdminAccessRequest } from "../services/email";
 
 const router = Router();
@@ -113,8 +114,9 @@ router.post("/login", async (req: Request, res: Response) => {
     const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
     const approval = getApprovalStatus(user.chef);
+    const hasChefProfile = !!user.chef;
 
-    res.json({ success: true, data: { user, token, refreshToken, ...approval } });
+    res.json({ success: true, data: { user, token, refreshToken, hasChefProfile, ...approval } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Login failed";
     res.status(500).json({ success: false, error: message });
@@ -146,8 +148,9 @@ router.post("/test-login", async (req: Request, res: Response) => {
     const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);
 
     const approval = getApprovalStatus(user.chef);
+    const hasChefProfile = !!user.chef;
 
-    res.json({ success: true, data: { user, token, refreshToken, ...approval } });
+    res.json({ success: true, data: { user, token, refreshToken, hasChefProfile, ...approval } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Test login failed";
     res.status(500).json({ success: false, error: message });
@@ -244,8 +247,18 @@ router.post("/refresh", async (req: Request, res: Response) => {
       process.env.JWT_REFRESH_SECRET || "dev-refresh-secret"
     ) as { userId: string; role: string };
 
+    // Re-read role from DB instead of copying stale JWT role
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { role: true },
+    });
+    if (!user) {
+      res.status(401).json({ success: false, error: "User not found" });
+      return;
+    }
+
     const token = signToken(
-      { userId: payload.userId, role: payload.role },
+      { userId: payload.userId, role: user.role },
       process.env.JWT_SECRET || "dev-secret",
       JWT_EXPIRY
     );
@@ -253,6 +266,29 @@ router.post("/refresh", async (req: Request, res: Response) => {
     res.json({ success: true, data: { token } });
   } catch {
     res.status(401).json({ success: false, error: "Invalid refresh token" });
+  }
+});
+
+// GET /api/v1/auth/me — fresh user data from DB (for role re-sync)
+router.get("/me", authenticate, async (req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: { chef: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+
+    const approval = getApprovalStatus(user.chef);
+    const hasChefProfile = !!user.chef;
+
+    res.json({ success: true, data: { user, hasChefProfile, ...approval } });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch user";
+    res.status(500).json({ success: false, error: message });
   }
 });
 

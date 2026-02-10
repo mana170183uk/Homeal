@@ -427,24 +427,24 @@ async function main() {
   // ==================== CATEGORIES ====================
 
   const categories = [
-    { name: "South Indian", icon: "🍛", sortOrder: 1 },
-    { name: "North Indian", icon: "🫓", sortOrder: 2 },
-    { name: "Chinese", icon: "🥡", sortOrder: 3 },
-    { name: "Snacks & Starters", icon: "🍿", sortOrder: 4 },
-    { name: "Breads", icon: "🍞", sortOrder: 5 },
-    { name: "Rice & Biryani", icon: "🍚", sortOrder: 6 },
-    { name: "Desserts", icon: "🍮", sortOrder: 7 },
-    { name: "Beverages", icon: "🥤", sortOrder: 8 },
-    { name: "Thali", icon: "🍽️", sortOrder: 9 },
-    { name: "Pickles & Chutneys", icon: "🫙", sortOrder: 10 },
-    { name: "Sweets", icon: "🍬", sortOrder: 11 },
-    { name: "Cakes & Bakery", icon: "🎂", sortOrder: 12 },
+    { name: "South Indian", icon: "🍛", sortOrder: 1, type: "FOOD" as const },
+    { name: "North Indian", icon: "🫓", sortOrder: 2, type: "FOOD" as const },
+    { name: "Chinese", icon: "🥡", sortOrder: 3, type: "FOOD" as const },
+    { name: "Snacks & Starters", icon: "🍿", sortOrder: 4, type: "FOOD" as const },
+    { name: "Breads", icon: "🍞", sortOrder: 5, type: "FOOD" as const },
+    { name: "Rice & Biryani", icon: "🍚", sortOrder: 6, type: "FOOD" as const },
+    { name: "Desserts", icon: "🍮", sortOrder: 7, type: "FOOD" as const },
+    { name: "Thali", icon: "🍽️", sortOrder: 8, type: "FOOD" as const },
+    { name: "Pickles & Chutneys", icon: "🫙", sortOrder: 9, type: "PRODUCT" as const },
+    { name: "Sweets", icon: "🍬", sortOrder: 10, type: "PRODUCT" as const },
+    { name: "Cakes & Bakery", icon: "🎂", sortOrder: 11, type: "PRODUCT" as const },
+    { name: "Beverages", icon: "🥤", sortOrder: 12, type: "PRODUCT" as const },
   ];
 
   for (const cat of categories) {
     const c = await prisma.category.upsert({
       where: { name: cat.name },
-      update: { icon: cat.icon, sortOrder: cat.sortOrder },
+      update: { icon: cat.icon, sortOrder: cat.sortOrder, type: cat.type },
       create: cat,
     });
     categoryMap[cat.name] = c.id;

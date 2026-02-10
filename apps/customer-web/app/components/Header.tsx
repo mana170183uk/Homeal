@@ -9,9 +9,10 @@ import {
   ChevronDown,
   ClipboardList,
   Compass,
-  Package,
+  UtensilsCrossed,
   MapPin,
   Store,
+  ShoppingBasket,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
@@ -77,6 +78,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
     localStorage.removeItem("homeal_cart");
     localStorage.removeItem("homeal_user_name");
     localStorage.removeItem("homeal_user_role");
+    localStorage.removeItem("homeal_has_chef_profile");
     window.location.href = "/";
   }
 
@@ -86,8 +88,9 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
   const avatar = user?.photoURL;
 
   const navLinks = [
-    { label: "Discover", href: "/search", icon: Compass },
-    { label: "Products", href: "/products", icon: Package },
+    { label: "Discover Kitchens", href: "/search", icon: Compass },
+    { label: "Dishes", href: "/products", icon: UtensilsCrossed },
+    { label: "Homemade Products", href: "/homemade-products", icon: ShoppingBasket },
   ];
 
   function isActive(href: string) {
@@ -215,13 +218,13 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                 </a>
 
                 {/* Role switch links */}
-                {userRole === "CHEF" && (
+                {(userRole === "CHEF" || localStorage.getItem("homeal_has_chef_profile") === "true") && (
                   <a
-                    href="https://admin.homeal.uk"
+                    href={`https://admin.homeal.uk?token=${encodeURIComponent(localStorage.getItem("homeal_token") || "")}`}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-accent hover:bg-accent/5 transition"
                   >
                     <Store className="w-4 h-4" />
-                    Switch to Chef Portal
+                    Seller Dashboard
                   </a>
                 )}
                 {(userRole === "SUPER_ADMIN" || userRole === "ADMIN") && (
@@ -230,7 +233,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                     className="flex items-center gap-3 px-4 py-3 text-sm text-accent hover:bg-accent/5 transition"
                   >
                     <Store className="w-4 h-4" />
-                    Switch to Admin Portal
+                    Admin Portal
                   </a>
                 )}
 

@@ -7,7 +7,7 @@ import {
   Bell, Sun, Moon, Package, RefreshCw, PlusCircle, TrendingUp,
   TrendingDown, ShoppingBag, AlertCircle, Wallet, Globe, Shield,
   Check, Crown, Zap, Edit3, Store, Truck, Repeat, UtensilsCrossed,
-  Grip, Award, Sparkles, MapPin, Heart, Leaf, ShieldCheck, Box, Cake,
+  Grip, Award, Sparkles, MapPin, Heart, Leaf, ShieldCheck, Cake,
   Navigation, Eye, Star, Search, Download, Filter, Clock, Calendar,
   Menu, X, ChevronDown,
 } from "lucide-react";
@@ -27,9 +27,8 @@ const SIDEBAR_ITEMS: SidebarGroup[] = [
   ]},
   { section: "PLATFORM", items: [
     { icon: Grip, label: "Service Types", id: "service-types" },
-    { icon: Store, label: "Product Categories", id: "product-categories" },
     { icon: Tag, label: "Promo Codes", id: "promos" },
-    { icon: FolderOpen, label: "Food Categories", id: "categories" },
+    { icon: FolderOpen, label: "Categories", id: "categories" },
     { icon: Settings, label: "Settings", id: "settings" },
   ]},
   { section: "REPORTS", items: [
@@ -59,9 +58,8 @@ const PAGE_TITLES: Record<string, string> = {
   "customers": "Customer Management",
   "orders": "All Orders",
   "service-types": "Service Types",
-  "product-categories": "Product Categories",
   "promos": "Promo Codes",
-  "categories": "Food Categories",
+  "categories": "Categories",
   "settings": "Platform Settings",
   "analytics": "Analytics",
   "revenue": "Revenue",
@@ -73,7 +71,6 @@ const PAGE_META: Record<string, { green: string; red: string; cta?: string }> = 
   "customers": { green: "0 Active", red: "0 Inactive" },
   "orders": { green: "0 Completed", red: "0 Cancelled" },
   "service-types": { green: "4 Types", red: "0 Disabled" },
-  "product-categories": { green: "9 Active", red: "0 Hidden", cta: "Add Category" },
   "promos": { green: "0 Active", red: "0 Expired", cta: "Add Promo" },
   "categories": { green: "0 Listed", red: "0 Hidden", cta: "Add Category" },
   "settings": { green: "System", red: "0 Pending" },
@@ -191,18 +188,6 @@ const PLATFORM_SERVICES = [
   },
 ];
 
-const PRODUCT_CATEGORIES_ADMIN = [
-  { name: "Pickles", icon: "🫙", products: 0, chefs: 0, color: "#EF4444" },
-  { name: "Papads", icon: "🫓", products: 0, chefs: 0, color: "#F59E0B" },
-  { name: "Chutneys", icon: "🥫", products: 0, chefs: 0, color: "#10B981" },
-  { name: "Masalas", icon: "🌶️", products: 0, chefs: 0, color: "#EF4444" },
-  { name: "Sweets", icon: "🍬", products: 0, chefs: 0, color: "#EC4899" },
-  { name: "Snacks", icon: "🥜", products: 0, chefs: 0, color: "#F97316" },
-  { name: "Bakery", icon: "🍞", products: 0, chefs: 0, color: "#8B5CF6" },
-  { name: "Cakes", icon: "🎂", products: 0, chefs: 0, color: "#EC4899" },
-  { name: "Beverages", icon: "🥤", products: 0, chefs: 0, color: "#06B6D4" },
-];
-
 const BADGE_SYSTEM = [
   { name: "Verified Kitchen", icon: ShieldCheck, color: "#10B981", description: "Kitchen passes video verification and hygiene standards" },
   { name: "Hygiene Certified", icon: Sparkles, color: "#3B82F6", description: "Holds valid food safety certification (Level 2+)" },
@@ -289,7 +274,7 @@ export default function SuperAdminPage() {
   const [adminCategories, setAdminCategories] = useState<any[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [categoryForm, setCategoryForm] = useState({ name: '', icon: '', sortOrder: 0 });
+  const [categoryForm, setCategoryForm] = useState({ name: '', icon: '', sortOrder: 0, type: 'FOOD' as 'FOOD' | 'PRODUCT' });
   const [editingCategory, setEditingCategory] = useState<any>(null);
 
   // Promos state
@@ -518,7 +503,7 @@ export default function SuperAdminPage() {
       const data = await safeJson(res);
       if (data.success) {
         setShowCategoryModal(false);
-        setCategoryForm({ name: '', icon: '', sortOrder: 0 });
+        setCategoryForm({ name: '', icon: '', sortOrder: 0, type: 'FOOD' });
         fetchCategories();
       }
     } catch (err) {
@@ -537,7 +522,7 @@ export default function SuperAdminPage() {
       const data = await safeJson(res);
       if (data.success) {
         setEditingCategory(null);
-        setCategoryForm({ name: '', icon: '', sortOrder: 0 });
+        setCategoryForm({ name: '', icon: '', sortOrder: 0, type: 'FOOD' });
         setShowCategoryModal(false);
         fetchCategories();
       }
@@ -754,7 +739,7 @@ export default function SuperAdminPage() {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  const customPages = ["dashboard", "settings", "service-types", "product-categories", "chefs", "customers", "orders", "promos", "categories", "analytics", "revenue", "reports"];
+  const customPages = ["dashboard", "settings", "service-types", "chefs", "customers", "orders", "promos", "categories", "analytics", "revenue", "reports"];
 
   return (
     <div className="flex w-full overflow-x-hidden app-height">
@@ -1353,71 +1338,6 @@ export default function SuperAdminPage() {
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Product Categories Management */}
-          {activePage === "product-categories" && (
-            <>
-              {/* Header */}
-              <div
-                className="glass-card rounded-2xl px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
-              >
-                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
-                    <Store size={24} color="white" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <h2 className="text-[15px] font-semibold text-[var(--text)]">Homemade Product Categories</h2>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />9 Active</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Hidden</span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  className="btn-premium px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90"
-                >
-                  <PlusCircle size={16} />
-                  <span>Add Category</span>
-                </button>
-              </div>
-
-              {/* Categories Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-                {PRODUCT_CATEGORIES_ADMIN.map((cat, i) => (
-                  <div
-                    key={i}
-                    className="glass-card rounded-2xl p-5 transition-all hover:scale-[1.02] duration-300 hover:shadow-xl"
-                  >
-                    <div className="text-4xl mb-3 text-center">{cat.icon}</div>
-                    <h4 className="text-sm font-bold text-[var(--text)] text-center">{cat.name}</h4>
-                    <div className="flex justify-between mt-3 text-[11px] text-[var(--text-muted)]">
-                      <span>{cat.products} products</span>
-                      <span>{cat.chefs} chefs</span>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-center">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ color: "#10B981", background: "rgba(16,185,129,0.1)" }}>
-                        Active
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Info */}
-              <div
-                className="rounded-2xl border px-5 py-4 flex items-center gap-3"
-                style={{ background: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.2)" }}
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(59,130,246,0.15)" }}>
-                  <Box size={20} style={{ color: "#3B82F6" }} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--text)]">Homemade products are a key differentiator</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Chefs can list pickles, papads, chutneys, masalas, sweets, cakes (with egg/eggless options) and more. Each product includes shelf life, weight, ingredients and allergen info.</p>
                 </div>
               </div>
             </>
@@ -2909,7 +2829,7 @@ export default function SuperAdminPage() {
             </>
           )}
 
-          {/* Food Categories Page */}
+          {/* Categories Page */}
           {activePage === "categories" && (
             <>
               <div className="glass-card rounded-2xl px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up">
@@ -2918,10 +2838,12 @@ export default function SuperAdminPage() {
                     <FolderOpen size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
-                    <h2 className="text-[15px] font-semibold text-[var(--text)]">Food Categories</h2>
+                    <h2 className="text-[15px] font-semibold text-[var(--text)]">Categories</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{adminCategories.filter(c => c.isActive !== false).length} Listed</span>
                       <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />{adminCategories.filter(c => c.isActive === false).length} Hidden</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full" style={{ background: "#10B981" }} />{adminCategories.filter(c => c.type === 'FOOD').length} Food</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full" style={{ background: "#3B82F6" }} />{adminCategories.filter(c => c.type === 'PRODUCT').length} Product</span>
                     </div>
                   </div>
                 </div>
@@ -2929,7 +2851,7 @@ export default function SuperAdminPage() {
                   <button onClick={() => fetchCategories()} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
                     <RefreshCw size={18} className={`text-[var(--text-muted)] ${categoriesLoading ? "animate-spin" : ""}`} />
                   </button>
-                  <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', icon: '', sortOrder: 0 }); setShowCategoryModal(true); }} className="btn-premium px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90">
+                  <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', icon: '', sortOrder: 0, type: 'FOOD' }); setShowCategoryModal(true); }} className="btn-premium px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90">
                     <PlusCircle size={16} /> Add Category
                   </button>
                 </div>
@@ -2947,9 +2869,9 @@ export default function SuperAdminPage() {
                     <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
                       <FolderOpen size={36} className="text-white" />
                     </div>
-                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No food categories yet</h3>
-                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Add categories so chefs can classify their dishes and customers can browse by cuisine type.</p>
-                    <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', icon: '', sortOrder: 0 }); setShowCategoryModal(true); }} className="mt-4 btn-premium px-5 py-2.5 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2 transition hover:opacity-90">
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No categories yet</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Add food or product categories so chefs can classify their dishes and products, and customers can browse easily.</p>
+                    <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', icon: '', sortOrder: 0, type: 'FOOD' }); setShowCategoryModal(true); }} className="mt-4 btn-premium px-5 py-2.5 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2 transition hover:opacity-90">
                       <PlusCircle size={16} /> Add First Category
                     </button>
                   </div>
@@ -2965,6 +2887,12 @@ export default function SuperAdminPage() {
                         <p className="text-[10px] text-[var(--text-muted)] mt-1">{cat._count?.items || 0} items</p>
                         <div className="mt-2 pt-2 border-t border-[var(--border)] flex items-center justify-center gap-2">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{
+                            color: cat.type === 'PRODUCT' ? "#3B82F6" : "#10B981",
+                            background: cat.type === 'PRODUCT' ? "rgba(59,130,246,0.1)" : "rgba(16,185,129,0.1)",
+                          }}>
+                            {cat.type === 'PRODUCT' ? "Product" : "Food"}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{
                             color: isActive ? "#10B981" : "#6B7280",
                             background: isActive ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.1)",
                           }}>
@@ -2973,7 +2901,7 @@ export default function SuperAdminPage() {
                         </div>
                         <div className="mt-2 flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, icon: cat.icon || '', sortOrder: cat.sortOrder || 0 }); setShowCategoryModal(true); }}
+                            onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, icon: cat.icon || '', sortOrder: cat.sortOrder || 0, type: cat.type || 'FOOD' }); setShowCategoryModal(true); }}
                             className="p-1.5 rounded-lg transition hover:opacity-80"
                             style={{ background: "rgba(59,130,246,0.1)" }}
                             title="Edit"
@@ -3008,8 +2936,8 @@ export default function SuperAdminPage() {
                   <FolderOpen size={20} style={{ color: "#3B82F6" }} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--text)]">Food categories help customers discover chefs</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Chefs assign food categories to their dishes. Customers browse by category to find nearby kitchens that match their cravings.</p>
+                  <p className="text-sm font-semibold text-[var(--text)]">Categories help customers discover chefs and products</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Food categories are assigned to dishes, product categories to homemade items like pickles, papads, and sweets. Customers browse by category to find what they want.</p>
                 </div>
               </div>
 
@@ -3018,15 +2946,44 @@ export default function SuperAdminPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
                   <div className="glass-card rounded-2xl p-6 w-[440px] max-w-[95vw]">
                     <h3 className="text-base font-semibold text-[var(--text)] mb-1">{editingCategory ? "Edit Category" : "Add Category"}</h3>
-                    <p className="text-xs text-[var(--text-muted)] mb-4">{editingCategory ? "Update the category details below" : "Create a new food category for the platform"}</p>
+                    <p className="text-xs text-[var(--text-muted)] mb-4">{editingCategory ? "Update the category details below" : "Create a new category for the platform"}</p>
                     <div className="space-y-3">
+                      <div>
+                        <label className="text-[11px] font-medium text-[var(--text-muted)] mb-1 block">Category Type</label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCategoryForm(prev => ({ ...prev, type: 'FOOD' }))}
+                            className="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all"
+                            style={{
+                              background: categoryForm.type === 'FOOD' ? "rgba(16,185,129,0.12)" : "var(--input)",
+                              borderColor: categoryForm.type === 'FOOD' ? "#10B981" : "var(--border)",
+                              color: categoryForm.type === 'FOOD' ? "#10B981" : "var(--text-muted)",
+                            }}
+                          >
+                            Food
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCategoryForm(prev => ({ ...prev, type: 'PRODUCT' }))}
+                            className="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all"
+                            style={{
+                              background: categoryForm.type === 'PRODUCT' ? "rgba(59,130,246,0.12)" : "var(--input)",
+                              borderColor: categoryForm.type === 'PRODUCT' ? "#3B82F6" : "var(--border)",
+                              color: categoryForm.type === 'PRODUCT' ? "#3B82F6" : "var(--text-muted)",
+                            }}
+                          >
+                            Product
+                          </button>
+                        </div>
+                      </div>
                       <div>
                         <label className="text-[11px] font-medium text-[var(--text-muted)] mb-1 block">Category Name</label>
                         <input
                           type="text"
                           value={categoryForm.name}
                           onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="e.g. South Indian"
+                          placeholder={categoryForm.type === 'FOOD' ? "e.g. South Indian" : "e.g. Pickles"}
                           className="w-full px-4 py-2.5 rounded-xl border border-[var(--border)] text-sm"
                           style={{ background: "var(--input)", color: "var(--text)" }}
                         />
@@ -3037,7 +2994,7 @@ export default function SuperAdminPage() {
                           type="text"
                           value={categoryForm.icon}
                           onChange={(e) => setCategoryForm(prev => ({ ...prev, icon: e.target.value }))}
-                          placeholder="e.g. 🍛"
+                          placeholder={categoryForm.type === 'FOOD' ? "e.g. 🍛" : "e.g. 🫙"}
                           className="w-full px-4 py-2.5 rounded-xl border border-[var(--border)] text-sm"
                           style={{ background: "var(--input)", color: "var(--text)" }}
                         />
@@ -3056,7 +3013,7 @@ export default function SuperAdminPage() {
                     </div>
                     <div className="flex gap-3 mt-5 justify-end">
                       <button
-                        onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', icon: '', sortOrder: 0 }); }}
+                        onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', icon: '', sortOrder: 0, type: 'FOOD' }); }}
                         className="px-4 py-2 rounded-xl text-xs font-semibold border border-[var(--border)]"
                         style={{ color: "var(--text-muted)" }}
                       >

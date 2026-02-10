@@ -6,7 +6,7 @@ import {
   Search,
   Leaf,
   MapPin,
-  UtensilsCrossed,
+  ShoppingBasket,
   Star,
   Plus,
   Minus,
@@ -46,26 +46,23 @@ function saveCart(items: CartItem[]) {
 
 const PAGE_LIMIT = 40;
 
-function ProductsContent() {
+function HomemadeProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Auth gate — redirect to login if not logged in
   useEffect(() => {
     const token = localStorage.getItem("homeal_token");
     if (!token) {
-      router.push("/login?redirect=/products");
+      router.push("/login?redirect=/homemade-products");
       return;
     }
     setAuthChecked(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // URL params
   const urlCategory = searchParams.get("category") || "";
   const urlSearch = searchParams.get("search") || "";
 
-  // State
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
@@ -74,22 +71,18 @@ function ProductsContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
-  // Filters
   const [selectedCategory, setSelectedCategory] = useState(urlCategory);
   const [searchQuery, setSearchQuery] = useState(urlSearch);
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [vegOnly, setVegOnly] = useState(false);
 
-  // Location
   const [lat, setLat] = useState<string | null>(null);
   const [lng, setLng] = useState<string | null>(null);
   const [radius, setRadius] = useState(15);
 
-  // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
   const [toast, setToast] = useState("");
 
-  // Initialize location from localStorage
   useEffect(() => {
     const saved = getSavedLocation();
     if (saved) {
@@ -102,22 +95,20 @@ function ProductsContent() {
     setCart(getCart());
   }, []);
 
-  // Fetch categories on mount
   useEffect(() => {
     async function fetchCategories() {
       try {
-        const res = await api<Category[]>("/products/categories?type=FOOD");
+        const res = await api<Category[]>("/products/categories?type=PRODUCT");
         if (res.success && res.data) {
           setCategories(res.data);
         }
       } catch {
-        // Categories are optional UI; silently fail
+        // silently fail
       }
     }
     fetchCategories();
   }, []);
 
-  // Fetch products
   const fetchProducts = useCallback(
     async (reset: boolean = true) => {
       if (reset) {
@@ -132,9 +123,9 @@ function ProductsContent() {
 
       try {
         const params = new URLSearchParams();
+        params.set("categoryType", "PRODUCT");
         if (selectedCategory) params.set("category", selectedCategory);
         if (searchQuery) params.set("search", searchQuery);
-        params.set("categoryType", "FOOD");
         if (vegOnly) params.set("veg", "true");
         if (lat && lng) {
           params.set("lat", lat);
@@ -173,43 +164,35 @@ function ProductsContent() {
     [selectedCategory, searchQuery, vegOnly, lat, lng, radius, offset]
   );
 
-  // Refetch when filters change
   useEffect(() => {
     fetchProducts(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, searchQuery, vegOnly, lat, lng, radius]);
 
-  // Sync filters to URL
   useEffect(() => {
     const params = new URLSearchParams();
     if (selectedCategory) params.set("category", selectedCategory);
     if (searchQuery) params.set("search", searchQuery);
     const qs = params.toString();
-    router.replace(`/products${qs ? `?${qs}` : ""}`, { scroll: false });
+    router.replace(`/homemade-products${qs ? `?${qs}` : ""}`, { scroll: false });
   }, [selectedCategory, searchQuery, router]);
 
-  // Search submit
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSearchQuery(searchInput.trim());
   }
 
-  // Category select
   function handleCategorySelect(catId: string) {
     setSelectedCategory(catId === selectedCategory ? "" : catId);
   }
 
-  // Toast
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(""), 2000);
   }
 
-  // Cart operations
   function addToCart(product: Product) {
     let currentCart = getCart();
-
-    // Single-chef policy
     if (currentCart.length > 0 && currentCart[0].chefId !== product.chef.id) {
       const confirmed = window.confirm(
         `Your cart has items from "${currentCart[0].chefName}". Adding items from "${product.chef.kitchenName}" will clear your current cart. Continue?`
@@ -217,7 +200,6 @@ function ProductsContent() {
       if (!confirmed) return;
       currentCart = [];
     }
-
     const existing = currentCart.find((c) => c.id === product.id);
     if (existing) {
       existing.quantity += 1;
@@ -232,7 +214,6 @@ function ProductsContent() {
         chefName: product.chef.kitchenName,
       });
     }
-
     saveCart(currentCart);
     setCart([...currentCart]);
     showToast(`Added "${product.name}" to cart`);
@@ -242,12 +223,10 @@ function ProductsContent() {
     const currentCart = getCart();
     const idx = currentCart.findIndex((c) => c.id === itemId);
     if (idx === -1) return;
-
     currentCart[idx].quantity += delta;
     if (currentCart[idx].quantity <= 0) {
       currentCart.splice(idx, 1);
     }
-
     saveCart(currentCart);
     setCart([...currentCart]);
   }
@@ -275,9 +254,14 @@ function ProductsContent() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Page title */}
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-[var(--text)] mb-6">
-          Browse <span className="gradient-text">Dishes</span>
-        </h1>
+        <div className="mb-6">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[var(--text)]">
+            Homemade <span className="gradient-text">Products</span>
+          </h1>
+          <p className="text-sm text-[var(--text-soft)] mt-1">
+            Pickles, sweets, cakes, masalas & more from home kitchens near you
+          </p>
+        </div>
 
         {/* Search bar */}
         <form onSubmit={handleSearchSubmit} className="mb-4">
@@ -287,7 +271,7 @@ function ProductsContent() {
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search for dishes, ingredients..."
+              placeholder="Search pickles, cakes, masalas..."
               className="w-full pl-12 pr-4 py-3 rounded-xl bg-[var(--input)] border border-[var(--border)] text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
             />
             {searchInput && (
@@ -311,7 +295,7 @@ function ProductsContent() {
           </div>
         </form>
 
-        {/* Filter row: veg toggle + location indicator */}
+        {/* Filter row */}
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => setVegOnly((v) => !v)}
@@ -381,7 +365,7 @@ function ProductsContent() {
         {/* Results count */}
         {!loading && !error && (
           <p className="text-sm text-[var(--text-muted)] mb-4">
-            {total} {total === 1 ? "dish" : "dishes"} found
+            {total} {total === 1 ? "product" : "products"} found
             {selectedCategory &&
               categories.find((c) => c.id === selectedCategory) &&
               ` in ${categories.find((c) => c.id === selectedCategory)!.name}`}
@@ -392,7 +376,6 @@ function ProductsContent() {
 
         {/* Content */}
         {loading ? (
-          /* Skeleton loader */
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
@@ -412,9 +395,8 @@ function ProductsContent() {
             ))}
           </div>
         ) : error ? (
-          /* Error state */
           <div className="text-center py-16">
-            <UtensilsCrossed className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
+            <ShoppingBasket className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
             <h2 className="font-display text-2xl font-bold text-[var(--text)] mb-2">
               Oops!
             </h2>
@@ -429,18 +411,17 @@ function ProductsContent() {
             </button>
           </div>
         ) : products.length === 0 ? (
-          /* Empty state */
           <div className="text-center py-16 animate-fade-in-up">
             <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-[var(--input)] flex items-center justify-center">
-              <UtensilsCrossed className="w-10 h-10 text-[var(--text-muted)]" />
+              <ShoppingBasket className="w-10 h-10 text-[var(--text-muted)]" />
             </div>
             <h2 className="font-display text-2xl font-bold text-[var(--text)] mb-2">
-              No dishes found
+              No products found
             </h2>
             <p className="text-[var(--text-soft)] mb-6 max-w-sm mx-auto">
               {searchQuery || selectedCategory || vegOnly
                 ? "Try adjusting your filters or search terms."
-                : "No dishes are available right now. Check back later!"}
+                : "No homemade products are available right now. Check back later!"}
             </p>
             {(searchQuery || selectedCategory || vegOnly) && (
               <button
@@ -480,7 +461,7 @@ function ProductsContent() {
                         />
                       ) : (
                         <div className="w-full h-full badge-gradient opacity-30 flex items-center justify-center">
-                          <UtensilsCrossed className="w-12 h-12 text-white opacity-60" />
+                          <ShoppingBasket className="w-12 h-12 text-white opacity-60" />
                         </div>
                       )}
 
@@ -514,12 +495,12 @@ function ProductsContent() {
                         </h3>
                       </a>
 
-                      {/* Chef name */}
+                      {/* Seller name */}
                       <a
                         href={`/chef/${product.chef.id}`}
                         className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-primary transition mb-2"
                       >
-                        <UtensilsCrossed className="w-3 h-3" />
+                        <ShoppingBasket className="w-3 h-3" />
                         <span className="truncate">
                           {product.chef.kitchenName}
                         </span>
@@ -533,7 +514,7 @@ function ProductsContent() {
 
                       {/* Category tag */}
                       {product.category && (
-                        <span className="inline-block text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full mb-3">
+                        <span className="inline-block text-[10px] font-medium bg-accent/10 text-accent px-2 py-0.5 rounded-full mb-3">
                           {product.category.icon && `${product.category.icon} `}
                           {product.category.name}
                         </span>
@@ -594,7 +575,7 @@ function ProductsContent() {
                       Loading...
                     </>
                   ) : (
-                    <>Load More Dishes</>
+                    <>Load More Products</>
                   )}
                 </button>
               </div>
@@ -643,14 +624,15 @@ function ProductsContent() {
   );
 }
 
-export default function ProductsPage() {
+export default function HomemadeProductsPage() {
   return (
     <Suspense
       fallback={
         <div className="min-h-screen w-full overflow-x-hidden">
           <Header showBack />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-            <div className="h-8 w-48 bg-[var(--input)] rounded animate-pulse mb-6" />
+            <div className="h-8 w-64 bg-[var(--input)] rounded animate-pulse mb-2" />
+            <div className="h-4 w-80 bg-[var(--input)] rounded animate-pulse mb-6" />
             <div className="h-12 bg-[var(--input)] rounded-xl animate-pulse mb-4" />
             <div className="flex gap-2 mb-6">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -682,7 +664,7 @@ export default function ProductsPage() {
         </div>
       }
     >
-      <ProductsContent />
+      <HomemadeProductsContent />
     </Suspense>
   );
 }

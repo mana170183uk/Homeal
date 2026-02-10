@@ -33,6 +33,7 @@ export default function LoginPage() {
         user: { id: string; role: string; name: string };
         token: string;
         refreshToken: string;
+        hasChefProfile?: boolean;
       }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ firebaseUid: credential.user.uid }),
@@ -47,12 +48,13 @@ export default function LoginPage() {
       localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
       if (res.data.user.name) localStorage.setItem("homeal_user_name", res.data.user.name);
       localStorage.setItem("homeal_user_role", res.data.user.role);
+      if (res.data.hasChefProfile) localStorage.setItem("homeal_has_chef_profile", "true");
 
-      if (res.data.user.role === "CHEF") {
-        window.location.href = "https://admin.homeal.uk";
-      } else if (res.data.user.role === "SUPER_ADMIN" || res.data.user.role === "ADMIN") {
+      // SUPER_ADMIN/ADMIN still redirect to their portal
+      if (res.data.user.role === "SUPER_ADMIN" || res.data.user.role === "ADMIN") {
         window.location.href = "https://superadmin.homeal.uk";
       } else {
+        // All other users (including CHEFs) land on customer-web
         router.push("/search");
       }
     } catch (err: unknown) {
@@ -76,7 +78,7 @@ export default function LoginPage() {
       const credential = await signInWithPopup(getFirebaseAuth(), googleProvider);
       const user = credential.user;
 
-      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
+      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string; hasChefProfile?: boolean }>(
         "/auth/login",
         {
           method: "POST",
@@ -89,9 +91,8 @@ export default function LoginPage() {
         localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
         if (res.data.user.name) localStorage.setItem("homeal_user_name", res.data.user.name);
         localStorage.setItem("homeal_user_role", res.data.user.role);
-        if (res.data.user.role === "CHEF") {
-          window.location.href = "https://admin.homeal.uk";
-        } else if (res.data.user.role === "SUPER_ADMIN" || res.data.user.role === "ADMIN") {
+        if (res.data.hasChefProfile) localStorage.setItem("homeal_has_chef_profile", "true");
+        if (res.data.user.role === "SUPER_ADMIN" || res.data.user.role === "ADMIN") {
           window.location.href = "https://superadmin.homeal.uk";
         } else {
           router.push("/search");

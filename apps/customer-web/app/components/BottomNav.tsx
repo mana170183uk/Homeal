@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Home, Compass, Package, ClipboardList, ShoppingBag } from "lucide-react";
+import { Home, Compass, UtensilsCrossed, ShoppingBasket, ClipboardList, ShoppingBag } from "lucide-react";
 import { useAuth } from "../lib/useAuth";
 
 export default function BottomNav() {
@@ -36,9 +36,9 @@ export default function BottomNav() {
 
   const navItems = [
     { label: "Home", href: "/", icon: Home },
-    { label: "Discover", href: "/search", icon: Compass },
-    { label: "Products", href: "/products", icon: Package },
-    { label: "Orders", href: "/orders", icon: ClipboardList },
+    { label: "Kitchens", href: "/search", icon: Compass },
+    { label: "Dishes", href: "/products", icon: UtensilsCrossed },
+    { label: "Homemade", href: "/homemade-products", icon: ShoppingBasket },
     { label: "Cart", href: "/cart", icon: ShoppingBag },
   ];
 

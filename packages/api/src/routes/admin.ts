@@ -477,10 +477,10 @@ router.get("/categories", async (_req: Request, res: Response) => {
 // POST /api/v1/admin/categories
 router.post("/categories", async (req: Request, res: Response) => {
   try {
-    const { name, icon, sortOrder } = req.body;
+    const { name, icon, sortOrder, type } = req.body;
     if (!name) { res.status(400).json({ success: false, error: "Name is required" }); return; }
     const category = await prisma.category.create({
-      data: { name, icon: icon || null, sortOrder: sortOrder || 0, isActive: true },
+      data: { name, icon: icon || null, sortOrder: sortOrder || 0, type: type || "FOOD", isActive: true },
     });
     res.status(201).json({ success: true, data: category });
   } catch (error: unknown) {
@@ -492,12 +492,13 @@ router.post("/categories", async (req: Request, res: Response) => {
 // PATCH /api/v1/admin/categories/:id
 router.patch("/categories/:id", async (req: Request, res: Response) => {
   try {
-    const { name, icon, sortOrder, isActive } = req.body;
+    const { name, icon, sortOrder, isActive, type } = req.body;
     const updates: Record<string, unknown> = {};
     if (name !== undefined) updates.name = name;
     if (icon !== undefined) updates.icon = icon;
     if (sortOrder !== undefined) updates.sortOrder = sortOrder;
     if (isActive !== undefined) updates.isActive = isActive;
+    if (type !== undefined) updates.type = type;
     const category = await prisma.category.update({
       where: { id: req.params.id as string },
       data: updates,

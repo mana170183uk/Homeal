@@ -24,10 +24,16 @@ function haversineDistanceMiles(
 }
 
 // GET /api/v1/products/categories — list active categories
-router.get("/categories", async (_req: Request, res: Response) => {
+// Optional query: ?type=FOOD|PRODUCT
+router.get("/categories", async (req: Request, res: Response) => {
   try {
+    const type = req.query.type as string | undefined;
+    const where: Record<string, unknown> = { isActive: true };
+    if (type === "FOOD" || type === "PRODUCT") {
+      where.type = type;
+    }
     const categories = await prisma.category.findMany({
-      where: { isActive: true },
+      where,
       orderBy: { sortOrder: "asc" },
     });
     res.json({ success: true, data: categories });
@@ -42,6 +48,7 @@ router.get("/categories", async (_req: Request, res: Response) => {
 router.get("/", async (req: Request, res: Response) => {
   try {
     const categoryId = req.query.category as string | undefined;
+    const categoryType = req.query.categoryType as string | undefined;
     const search = req.query.search as string | undefined;
     const vegOnly = req.query.veg === "true";
     const lat = parseFloat(req.query.lat as string);
@@ -61,6 +68,10 @@ router.get("/", async (req: Request, res: Response) => {
 
     if (categoryId && categoryId !== "all") {
       itemWhere.categoryId = categoryId;
+    }
+    // Filter by category type (FOOD or PRODUCT)
+    if (categoryType === "FOOD" || categoryType === "PRODUCT") {
+      itemWhere.category = { ...((itemWhere.category as object) || {}), type: categoryType };
     }
     if (vegOnly) {
       itemWhere.isVeg = true;

@@ -9,6 +9,7 @@ import {
   Infinity, Store, Leaf, Award, ShieldCheck, MapPin, Calendar,
   Repeat, Truck, Gift, Sparkles, Heart, Box, Timer, Grip, Cake,
   Navigation, Eye, Menu, X, Trash2, Pencil, Power, Save, MessageSquare, Send,
+  ExternalLink,
 } from "lucide-react";
 
 type IconComponent = typeof LayoutDashboard;
@@ -956,8 +957,20 @@ export default function DashboardPage() {
           ))}
         </nav>
 
-        {/* Theme toggle */}
+        {/* Customer view link + Theme toggle */}
         <div className="px-3 pb-4">
+          <a
+            href="https://homeal.uk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all"
+            style={{ color: "#8B5CF6" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <ExternalLink size={20} strokeWidth={1.8} />
+            <span>Switch to Customer View</span>
+          </a>
           <button
             onClick={() => setDarkMode(!darkMode)}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all"

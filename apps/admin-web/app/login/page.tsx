@@ -1,16 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Mail, Lock, ChefHat } from "lucide-react";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 
-export default function LoginPage() {
+function LoginContent() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Handle cross-domain token login from customer-web
+  useEffect(() => {
+    const token = searchParams.get("token");
+    if (token) {
+      localStorage.setItem("homeal_token", token);
+      // Validate token via /auth/me
+      api<{ user: { id: string; role: string }; hasChefProfile: boolean }>("/auth/me", { token })
+        .then((res) => {
+          if (res.success && res.data?.hasChefProfile) {
+            window.location.href = "/";
+          } else {
+            localStorage.removeItem("homeal_token");
+            setError("Unable to verify your chef access. Please log in.");
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem("homeal_token");
+          setError("Token expired. Please log in again.");
+        });
+    }
+  }, [searchParams]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +53,7 @@ export default function LoginPage() {
         user: { id: string; role: string };
         token: string;
         refreshToken: string;
+        hasChefProfile?: boolean;
         approvalStatus?: string;
       }>("/auth/login", {
         method: "POST",
@@ -40,8 +65,8 @@ export default function LoginPage() {
         return;
       }
 
-      if (res.data.user.role !== "CHEF") {
-        setError("This portal is for chefs only. Please use the correct login.");
+      if (!res.data.hasChefProfile && res.data.user.role !== "CHEF") {
+        setError("This portal is for sellers only. Please register as a chef at homeal.uk first.");
         return;
       }
 
@@ -72,6 +97,7 @@ export default function LoginPage() {
         user: { id: string; role: string };
         token: string;
         refreshToken: string;
+        hasChefProfile?: boolean;
         approvalStatus?: string;
       }>("/auth/login", {
         method: "POST",
@@ -83,8 +109,8 @@ export default function LoginPage() {
         return;
       }
 
-      if (res.data.user.role !== "CHEF") {
-        setError("This portal is for chefs only. Please use the correct login.");
+      if (!res.data.hasChefProfile && res.data.user.role !== "CHEF") {
+        setError("This portal is for sellers only. Please register as a chef at homeal.uk first.");
         return;
       }
 
@@ -193,5 +219,17 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
+        <div className="w-8 h-8 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

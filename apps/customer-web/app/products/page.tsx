@@ -45,6 +45,7 @@ function saveCart(items: CartItem[]) {
 }
 
 const PAGE_LIMIT = 40;
+const PRODUCT_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&q=80&fit=crop";
 
 function ProductsContent() {
   const router = useRouter();
@@ -472,17 +473,11 @@ function ProductsContent() {
                       href={`/products/${product.id}`}
                       className="block relative h-44 overflow-hidden"
                     >
-                      {product.image ? (
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                      ) : (
-                        <div className="w-full h-full badge-gradient opacity-30 flex items-center justify-center">
-                          <UtensilsCrossed className="w-12 h-12 text-white opacity-60" />
-                        </div>
-                      )}
+                      <img
+                        src={product.image || PRODUCT_IMAGE_FALLBACK}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
 
                       {/* Price badge */}
                       <div className="absolute top-3 right-3 badge-gradient text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
@@ -537,6 +532,22 @@ function ProductsContent() {
                           {product.category.icon && `${product.category.icon} `}
                           {product.category.name}
                         </span>
+                      )}
+
+                      {/* Egg option badges */}
+                      {product.eggOption && (
+                        <div className="flex items-center gap-1.5 mb-2">
+                          {(product.eggOption === "egg" || product.eggOption === "both") && (
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                              Egg
+                            </span>
+                          )}
+                          {(product.eggOption === "eggless" || product.eggOption === "both") && (
+                            <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                              Eggless
+                            </span>
+                          )}
+                        </div>
                       )}
 
                       {/* Add to cart */}

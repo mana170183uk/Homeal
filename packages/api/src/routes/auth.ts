@@ -23,7 +23,7 @@ function signToken(payload: object, secret: string, expiresIn: string): string {
 // POST /api/v1/auth/register
 router.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, firebaseUid, role, kitchenName } = req.body;
+    const { name, email, phone, firebaseUid, role, kitchenName, sellerType, businessName } = req.body;
 
     // Convert empty phone to null to avoid unique constraint collisions
     const cleanPhone = phone && phone.trim() ? phone.trim() : null;
@@ -51,7 +51,11 @@ router.post("/register", async (req: Request, res: Response) => {
       chef = await prisma.chef.create({
         data: {
           userId: user.id,
-          kitchenName: kitchenName || `${name}'s Kitchen`,
+          kitchenName: kitchenName || businessName || `${name}'s Kitchen`,
+          businessName: businessName || null,
+          sellerType: sellerType || "KITCHEN",
+          cakeEnabled: sellerType === "CAKE",
+          bakeryEnabled: sellerType === "BAKERY" || sellerType === "CAKE",
           isVerified: false,
         },
       });

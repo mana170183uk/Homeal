@@ -61,6 +61,14 @@ enum NotificationType {
   PROMOTION
   SYSTEM
   CHAT
+  CHEF_UPDATE
+}
+
+enum SellerType {
+  KITCHEN
+  CAKE
+  BAKERY
+  OTHER
 }
 
 enum CategoryType {
@@ -92,6 +100,7 @@ model User {
   subscriptions Subscription[]
   favorites     Favorite[]
   cart          Cart?
+  follows       ChefFollow[]
 
   @@index([email])
   @@index([phone])
@@ -121,9 +130,14 @@ model Chef {
   operatingHours  String?  @db.Text
   bankDetails     String?  @db.Text
   commissionRate  Float    @default(15.0)
-  stripeAccountId String?  @db.VarChar(191)
-  createdAt       DateTime @default(now()) @db.DateTime(3)
-  updatedAt       DateTime @updatedAt @db.DateTime(3)
+  stripeAccountId String?    @db.VarChar(191)
+  sellerType      SellerType @default(KITCHEN)
+  businessName    String?    @db.VarChar(255)
+  cakeEnabled     Boolean    @default(false)
+  bakeryEnabled   Boolean    @default(false)
+  paymentConfig   String?    @db.Text
+  createdAt       DateTime   @default(now()) @db.DateTime(3)
+  updatedAt       DateTime   @updatedAt @db.DateTime(3)
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   menus     Menu[]
@@ -131,6 +145,7 @@ model Chef {
   reviews   Review[]
   services  Service[]
   payments  Payment[]
+  followers ChefFollow[]
 
   @@index([latitude, longitude])
   @@index([isOnline])
@@ -168,6 +183,7 @@ model MenuItem {
   ingredients  String?  @db.Text
   prepTime     Int?
   servingSize  String?  @db.VarChar(100)
+  eggOption    String?  @db.VarChar(20)
   createdAt    DateTime @default(now()) @db.DateTime(3)
   updatedAt    DateTime @updatedAt @db.DateTime(3)
 
@@ -420,4 +436,17 @@ model PromoCode {
   orders Order[]
 
   @@index([code])
+}
+
+model ChefFollow {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  chefId    String   @db.VarChar(36)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chef Chef @relation(fields: [chefId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chefId])
+  @@index([chefId])
 }

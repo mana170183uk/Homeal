@@ -16,6 +16,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { parseCuisineTypes } from "../../lib/utils";
@@ -32,6 +34,7 @@ interface MenuItem {
   calories: number | null;
   prepTime: number | null;
   stockCount: number | null;
+  eggOption: string | null;
 }
 
 interface Menu {
@@ -134,6 +137,9 @@ function saveCart(items: CartItem[]) {
   window.dispatchEvent(new Event("cart-updated"));
 }
 
+const BANNER_FALLBACK = "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&q=80&fit=crop";
+const MENU_ITEM_FALLBACK = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&q=80&fit=crop";
+
 export default function ChefProfilePage({
   params,
 }: {
@@ -148,6 +154,8 @@ export default function ChefProfilePage({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [toast, setToast] = useState("");
   const [showAllHours, setShowAllHours] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   // Auth gate
   useEffect(() => {
@@ -180,6 +188,44 @@ export default function ChefProfilePage({
     }
     fetchChef();
   }, [id]);
+
+  // Check follow status on mount
+  useEffect(() => {
+    async function checkFollow() {
+      const token = localStorage.getItem("homeal_token");
+      if (!token) return;
+      try {
+        const res = await api<{ following: boolean }>(`/follows/check/${id}`, { token });
+        if (res.success && res.data) {
+          setIsFollowing(res.data.following);
+        }
+      } catch {
+        // silently fail
+      }
+    }
+    checkFollow();
+  }, [id]);
+
+  async function toggleFollow() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await api(`/follows/${id}`, { method: "DELETE", token });
+        setIsFollowing(false);
+        showToast("Unfollowed");
+      } else {
+        await api(`/follows/${id}`, { method: "POST", token });
+        setIsFollowing(true);
+        showToast("You will be notified of updates");
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setFollowLoading(false);
+    }
+  }
 
   function showToast(msg: string) {
     setToast(msg);
@@ -296,15 +342,11 @@ export default function ChefProfilePage({
 
       {/* Banner */}
       <div className="h-56 md:h-72 relative overflow-hidden">
-        {chef.bannerImage ? (
-          <img
-            src={chef.bannerImage}
-            alt={chef.kitchenName}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full badge-gradient opacity-80" />
-        )}
+        <img
+          src={chef.bannerImage || BANNER_FALLBACK}
+          alt={chef.kitchenName}
+          className="w-full h-full object-cover"
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg)]/80 to-transparent" />
       </div>
 
@@ -344,9 +386,32 @@ export default function ChefProfilePage({
                   </span>
                 )}
               </div>
-              <p className="text-[var(--text-soft)] mb-3">
-                by {chef.user.name}
-              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-[var(--text-soft)]">
+                  by {chef.user.name}
+                </p>
+                <button
+                  onClick={toggleFollow}
+                  disabled={followLoading}
+                  className={`ml-auto flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-200 ${
+                    isFollowing
+                      ? "bg-primary/10 text-primary border border-primary/30"
+                      : "badge-gradient text-white hover:opacity-90"
+                  } ${followLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+                >
+                  {isFollowing ? (
+                    <>
+                      <BellOff className="w-3.5 h-3.5" />
+                      Following
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="w-3.5 h-3.5" />
+                      Notify me
+                    </>
+                  )}
+                </button>
+              </div>
 
               {/* Today's hours */}
               {operatingHours && (
@@ -505,17 +570,11 @@ export default function ChefProfilePage({
                   >
                     {/* Image with offer badge */}
                     <div className="relative shrink-0">
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-20 h-20 rounded-xl object-cover"
-                        />
-                      ) : (
-                        <div className="w-20 h-20 badge-gradient opacity-20 rounded-xl flex items-center justify-center">
-                          <UtensilsCrossed className="w-8 h-8 text-white opacity-60" />
-                        </div>
-                      )}
+                      <img
+                        src={item.image || MENU_ITEM_FALLBACK}
+                        alt={item.name}
+                        className="w-20 h-20 rounded-xl object-cover"
+                      />
                       {hasOffer && (
                         <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
                           {discountPct}% OFF
@@ -547,6 +606,22 @@ export default function ChefProfilePage({
                           </span>
                         )}
                       </div>
+
+                      {/* Egg option badges */}
+                      {item.eggOption && (
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          {(item.eggOption === "egg" || item.eggOption === "both") && (
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                              Egg
+                            </span>
+                          )}
+                          {(item.eggOption === "eggless" || item.eggOption === "both") && (
+                            <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                              Eggless
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Stock indicator */}
                       {item.stockCount !== null && (

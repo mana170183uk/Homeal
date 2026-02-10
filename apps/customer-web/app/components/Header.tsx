@@ -13,11 +13,13 @@ import {
   MapPin,
   Store,
   ShoppingBasket,
+  Bell,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { useAuth } from "../lib/useAuth";
 import ThemeToggle from "./ThemeToggle";
+import { api } from "../lib/api";
 
 interface HeaderProps {
   showBack?: boolean;
@@ -31,6 +33,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
   const [signupMenuOpen, setSignupMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [notifCount, setNotifCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const signupMenuRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +73,28 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
     const role = localStorage.getItem("homeal_user_role");
     setUserRole(role);
   }, []);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    async function fetchUnreadCount() {
+      const token = localStorage.getItem("homeal_token");
+      if (!token) return;
+      try {
+        const res = await api<{ notifications: unknown[]; unreadCount: number }>(
+          "/notifications?limit=1",
+          { token }
+        );
+        if (res.success && res.data) {
+          setNotifCount(res.data.unreadCount);
+        }
+      } catch {
+        // silently fail
+      }
+    }
+    if (!loading && user) {
+      fetchUnreadCount();
+    }
+  }, [loading, user]);
 
   async function handleLogout() {
     await signOut(getFirebaseAuth());
@@ -148,6 +173,22 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
 
         <div className="flex-1" />
         <ThemeToggle />
+
+        {/* Notification bell (logged-in users) - desktop only */}
+        {!loading && user && (
+          <a
+            href="/notifications"
+            className="relative p-2 rounded-xl hover:bg-[var(--input)] transition hidden md:flex"
+            aria-label="Notifications"
+          >
+            <Bell className="w-5 h-5 text-[var(--text-soft)]" />
+            {notifCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {notifCount > 99 ? "99+" : notifCount}
+              </span>
+            )}
+          </a>
+        )}
 
         {/* Orders link (logged-in users) - desktop only */}
         {!loading && user && (

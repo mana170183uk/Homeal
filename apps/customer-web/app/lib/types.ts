@@ -8,6 +8,7 @@ export interface ChefMenuItem {
   calories: number | null;
   prepTime: number | null;
   stockCount: number | null;
+  eggOption: string | null;
 }
 
 export interface ChefMenu {
@@ -76,6 +77,7 @@ export interface Product {
   servingSize: string | null;
   allergens: string | null;
   ingredients: string | null;
+  eggOption: string | null;
   category: Category | null;
   chef: {
     id: string;

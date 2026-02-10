@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import prisma from "@homeal/db";
 import { authenticate, authorize } from "../middleware/auth";
 import { SEARCH_RADIUS_MILES_DEFAULT } from "@homeal/shared";
+import { notifyChefFollowers } from "../services/notifications";
 
 const router = Router();
 
@@ -133,20 +134,168 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/v1/chefs/me - update chef profile
+// PATCH /api/v1/chefs/me - update chef profile (whitelisted fields)
+const ALLOWED_CHEF_FIELDS = [
+  "kitchenName", "description", "cuisineTypes", "bannerImage", "latitude", "longitude",
+  "deliveryRadius", "isOnline", "operatingHours", "bankDetails", "sellerType", "businessName",
+  "cakeEnabled", "bakeryEnabled",
+];
+
 router.patch(
   "/me",
   authenticate,
   authorize("CHEF"),
   async (req: Request, res: Response) => {
     try {
+      const data: Record<string, unknown> = {};
+      for (const key of ALLOWED_CHEF_FIELDS) {
+        if (req.body[key] !== undefined) data[key] = req.body[key];
+      }
       const chef = await prisma.chef.update({
         where: { userId: req.user!.userId },
-        data: req.body,
+        data,
       });
+      // Notify followers of profile update
+      notifyChefFollowers(chef.id, `${chef.kitchenName} updated their profile`, "Check out what's new!", { chefId: chef.id }).catch(console.error);
       res.json({ success: true, data: chef });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Update failed";
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
+
+// ==================== PAYMENT CONFIG ====================
+
+// GET /api/v1/chefs/me/payment-config — masked payment settings
+router.get(
+  "/me/payment-config",
+  authenticate,
+  authorize("CHEF"),
+  async (req: Request, res: Response) => {
+    try {
+      const chef = await prisma.chef.findUnique({
+        where: { userId: req.user!.userId },
+        select: { paymentConfig: true, stripeAccountId: true },
+      });
+      if (!chef) { res.status(404).json({ success: false, error: "Chef not found" }); return; }
+
+      let config = { stripeEnabled: false, paypalEnabled: false, stripeConnectEnabled: false };
+      if (chef.paymentConfig) {
+        try {
+          const raw = JSON.parse(chef.paymentConfig);
+          config = {
+            stripeEnabled: !!raw.stripeSecretKey,
+            paypalEnabled: !!raw.paypalClientId,
+            stripeConnectEnabled: !!chef.stripeAccountId,
+          };
+        } catch { /* invalid JSON */ }
+      }
+      config.stripeConnectEnabled = !!chef.stripeAccountId;
+      res.json({ success: true, data: config });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to fetch payment config";
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
+
+// PUT /api/v1/chefs/me/payment-config — save payment keys (server-side only)
+router.put(
+  "/me/payment-config",
+  authenticate,
+  authorize("CHEF"),
+  async (req: Request, res: Response) => {
+    try {
+      const { stripeSecretKey, stripePublishableKey, paypalClientId, paypalSecretKey } = req.body;
+      const paymentConfig = JSON.stringify({
+        stripeSecretKey: stripeSecretKey || null,
+        stripePublishableKey: stripePublishableKey || null,
+        paypalClientId: paypalClientId || null,
+        paypalSecretKey: paypalSecretKey || null,
+      });
+      await prisma.chef.update({
+        where: { userId: req.user!.userId },
+        data: { paymentConfig },
+      });
+      res.json({ success: true, data: { message: "Payment settings saved" } });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to save payment config";
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
+
+// POST /api/v1/chefs/me/payment-config/test — test payment connection
+router.post(
+  "/me/payment-config/test",
+  authenticate,
+  authorize("CHEF"),
+  async (req: Request, res: Response) => {
+    try {
+      const { provider } = req.body;
+      const chef = await prisma.chef.findUnique({
+        where: { userId: req.user!.userId },
+        select: { paymentConfig: true },
+      });
+      if (!chef?.paymentConfig) {
+        res.status(400).json({ success: false, error: "No payment config saved" });
+        return;
+      }
+
+      const config = JSON.parse(chef.paymentConfig);
+
+      if (provider === "stripe" && config.stripeSecretKey) {
+        const Stripe = (await import("stripe")).default;
+        const stripe = new Stripe(config.stripeSecretKey);
+        await stripe.balance.retrieve();
+        res.json({ success: true, data: { provider: "stripe", status: "connected" } });
+      } else if (provider === "paypal" && config.paypalClientId) {
+        res.json({ success: true, data: { provider: "paypal", status: "keys_saved" } });
+      } else {
+        res.status(400).json({ success: false, error: `${provider} not configured` });
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Connection test failed";
+      res.status(400).json({ success: false, error: `Connection failed: ${message}` });
+    }
+  }
+);
+
+// POST /api/v1/chefs/me/stripe-connect — initiate Stripe Connect onboarding
+router.post(
+  "/me/stripe-connect",
+  authenticate,
+  authorize("CHEF"),
+  async (req: Request, res: Response) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        res.status(500).json({ success: false, error: "Platform Stripe not configured" });
+        return;
+      }
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+      const chef = await prisma.chef.findUnique({ where: { userId: req.user!.userId } });
+      if (!chef) { res.status(404).json({ success: false, error: "Chef not found" }); return; }
+
+      let accountId = chef.stripeAccountId;
+      if (!accountId) {
+        const account = await stripe.accounts.create({ type: "express", country: "GB" });
+        accountId = account.id;
+        await prisma.chef.update({ where: { id: chef.id }, data: { stripeAccountId: accountId } });
+      }
+
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${req.headers.origin || "https://admin.homeal.uk"}/?page=settings&stripe=retry`,
+        return_url: `${req.headers.origin || "https://admin.homeal.uk"}/?page=settings&stripe=success`,
+        type: "account_onboarding",
+      });
+
+      res.json({ success: true, data: { url: accountLink.url } });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Stripe Connect setup failed";
       res.status(500).json({ success: false, error: message });
     }
   }

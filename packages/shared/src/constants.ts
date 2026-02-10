@@ -37,3 +37,9 @@ export const ORDER_STATUS_FLOW: Record<string, string[]> = {
 };
 
 export const AZURE_BLOB_CONTAINER = "homeal-images";
+
+// Placeholder / fallback images (Unsplash free-to-use)
+export const PLACEHOLDER_KITCHEN_BANNER = "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&q=80&fit=crop";
+export const PLACEHOLDER_FOOD_IMAGE = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&q=80&fit=crop";
+export const PLACEHOLDER_CAKE_IMAGE = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80&fit=crop";
+export const PLACEHOLDER_AVATAR = "https://images.unsplash.com/photo-1566554273541-37a9ca77b91f?w=200&q=80&fit=crop";

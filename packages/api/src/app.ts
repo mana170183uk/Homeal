@@ -13,6 +13,8 @@ import adminRoutes from "./routes/admin";
 import productRoutes from "./routes/products";
 import approveActionRoutes from "./routes/approveAction";
 import reviewRoutes from "./routes/reviews";
+import followRoutes from "./routes/follows";
+import notificationRoutes from "./routes/notifications";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -61,6 +63,8 @@ app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/products`, productRoutes);
 app.use(`${API_PREFIX}/approve-action`, approveActionRoutes);
 app.use(`${API_PREFIX}/reviews`, reviewRoutes);
+app.use(`${API_PREFIX}/follows`, followRoutes);
+app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 
 // 404 catch-all (return JSON, not Express default HTML)
 app.use((_req, res) => {

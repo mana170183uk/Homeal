@@ -9,7 +9,7 @@ import {
   Infinity, Store, Leaf, Award, ShieldCheck, MapPin, Calendar,
   Repeat, Truck, Gift, Sparkles, Heart, Box, Timer, Grip, Cake,
   Navigation, Eye, Menu, X, Trash2, Pencil, Power, Save, MessageSquare, Send,
-  ExternalLink,
+  ExternalLink, CreditCard, Upload, Image,
 } from "lucide-react";
 
 type IconComponent = typeof LayoutDashboard;
@@ -263,7 +263,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [chefMenuId, setChefMenuId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [dishForm, setDishForm] = useState({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '' });
+  const [dishForm, setDishForm] = useState({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '', eggOption: '' });
   const [dishSubmitting, setDishSubmitting] = useState(false);
   // Kitchen
   const [chefProfile, setChefProfile] = useState<any>(null);
@@ -278,6 +278,16 @@ export default function DashboardPage() {
     Sunday: {open: '09:00', close: '21:00', enabled: false},
   });
   const [bankDetails, setBankDetails] = useState({ bankName: '', accountNumber: '', sortCode: '' });
+  // Payment settings
+  const [stripeSecretKey, setStripeSecretKey] = useState('');
+  const [stripePublishableKey, setStripePublishableKey] = useState('');
+  const [paypalClientId, setPaypalClientId] = useState('');
+  const [paypalSecretKey, setPaypalSecretKey] = useState('');
+  const [paymentConfig, setPaymentConfig] = useState<any>(null);
+  const [paymentTestResult, setPaymentTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Image upload
+  const [imageMode, setImageMode] = useState<"upload" | "url">("url");
+  const [imageUploading, setImageUploading] = useState(false);
   // Earnings
   const [earnings, setEarnings] = useState<any>(null);
   const [earningsLoading, setEarningsLoading] = useState(false);
@@ -650,6 +660,7 @@ export default function DashboardPage() {
         isAvailable,
         stockCount: dishForm.stockCount ? parseInt(dishForm.stockCount) : undefined,
         offerPrice: dishForm.offerPrice ? parseFloat(dishForm.offerPrice) : undefined,
+        eggOption: dishForm.eggOption || undefined,
       };
 
       let res;
@@ -686,7 +697,8 @@ export default function DashboardPage() {
 
   function resetDishForm() {
     setEditingItem(null);
-    setDishForm({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '' });
+    setDishForm({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '', eggOption: '' });
+    setImageMode("url");
   }
 
   function startEditItem(item: any) {
@@ -703,7 +715,9 @@ export default function DashboardPage() {
       stockCount: item.stockCount?.toString() || '',
       offerPrice: item.offerPrice?.toString() || '',
       image: item.image || '',
+      eggOption: item.eggOption || '',
     });
+    setImageMode(item.image ? "url" : "url");
     setActivePage("add-dish");
   }
 
@@ -753,11 +767,128 @@ export default function DashboardPage() {
     }
   }
 
+  // --- Payment config functions ---
+  async function fetchPaymentConfig() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setPaymentConfig(data.data);
+        if (data.data.stripeSecretKey) setStripeSecretKey(data.data.stripeSecretKey);
+        if (data.data.stripePublishableKey) setStripePublishableKey(data.data.stripePublishableKey);
+        if (data.data.paypalClientId) setPaypalClientId(data.data.paypalClientId);
+        if (data.data.paypalSecretKey) setPaypalSecretKey(data.data.paypalSecretKey);
+      }
+    } catch (e) {
+      console.error("Failed to fetch payment config:", e);
+    }
+  }
+
+  async function savePaymentConfig(configData: Record<string, string>) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(configData),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Payment settings saved successfully!");
+        fetchPaymentConfig();
+      } else {
+        showToast(data.error || "Failed to save payment settings", "error");
+      }
+    } catch (e) {
+      console.error("Failed to save payment config:", e);
+      showToast("Failed to save payment settings", "error");
+    }
+  }
+
+  async function testPaymentConnection(provider: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setPaymentTestResult(null);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config/test`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPaymentTestResult({ success: true, message: "Connection successful!" });
+        showToast("Payment connection test passed!");
+      } else {
+        setPaymentTestResult({ success: false, message: data.error || "Connection test failed" });
+        showToast(data.error || "Connection test failed", "error");
+      }
+    } catch (e) {
+      console.error("Failed to test payment connection:", e);
+      setPaymentTestResult({ success: false, message: "Connection test failed" });
+      showToast("Connection test failed", "error");
+    }
+  }
+
+  async function setupStripeConnect() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/stripe-connect`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data?.url) {
+        window.open(data.data.url, "_blank");
+      } else {
+        showToast(data.error || "Failed to set up Stripe Connect", "error");
+      }
+    } catch (e) {
+      console.error("Failed to set up Stripe Connect:", e);
+      showToast("Failed to set up Stripe Connect", "error");
+    }
+  }
+
+  // --- Image upload handler ---
+  async function handleImageUpload(file: File) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.data?.url) {
+        setDishForm(f => ({ ...f, image: data.data.url }));
+        showToast("Image uploaded successfully!");
+      } else {
+        showToast(data.error || "Failed to upload image", "error");
+      }
+    } catch (e) {
+      console.error("Failed to upload image:", e);
+      showToast("Failed to upload image", "error");
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
   // Fetch menu items and categories on mount
   useEffect(() => {
     fetchMenuItems();
     fetchCategories();
     fetchChefProfile();
+    fetchPaymentConfig();
   }, []);
 
   // Fetch earnings when on dashboard or earnings page
@@ -1567,6 +1698,17 @@ export default function DashboardPage() {
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Allergen Info</label>
                       <input type="text" placeholder="e.g. Contains mustard, nuts" value={dishForm.allergens} onChange={e => setDishForm(f => ({...f, allergens: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Egg Option</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[{ label: "None", val: "" }, { label: "Egg", val: "egg" }, { label: "Eggless", val: "eggless" }, { label: "Both", val: "both" }].map((opt) => (
+                          <label key={opt.label} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer hover:border-[var(--primary)] transition text-xs ${dishForm.eggOption === opt.val ? 'border-[var(--primary)] bg-[rgba(var(--primary-rgb),0.06)]' : 'border-[var(--border)]'}`}>
+                            <input type="radio" name="productEggOption" checked={dishForm.eggOption === opt.val} onChange={() => setDishForm(f => ({...f, eggOption: opt.val}))} className="accent-[var(--primary)]" />
+                            <span className="text-sm text-[var(--text)]">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Right Column */}
@@ -1592,8 +1734,44 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Image URL</label>
-                      <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Product Image</label>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setImageMode("upload")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${imageMode === "upload" ? "bg-[var(--primary)] text-white" : "bg-[var(--input)] text-[var(--text)] border border-[var(--border)]"}`}
+                        >
+                          <Upload size={12} /> Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImageMode("url")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${imageMode === "url" ? "bg-[var(--primary)] text-white" : "bg-[var(--input)] text-[var(--text)] border border-[var(--border)]"}`}
+                        >
+                          <Image size={12} /> Image URL
+                        </button>
+                      </div>
+                      {imageMode === "upload" ? (
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--primary)] file:text-white"
+                          />
+                          {imageUploading && <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Uploading...</p>}
+                        </div>
+                      ) : (
+                        <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      )}
+                      {dishForm.image && (
+                        <div className="mt-3 relative inline-block">
+                          <img src={dishForm.image} alt="Preview" className="w-20 h-20 rounded-xl object-cover border border-[var(--border)]" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <button type="button" onClick={() => setDishForm(f => ({...f, image: ''}))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition">
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1670,6 +1848,17 @@ export default function DashboardPage() {
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Egg Option</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[{ label: "None", val: "" }, { label: "Egg", val: "egg" }, { label: "Eggless", val: "eggless" }, { label: "Both", val: "both" }].map((opt) => (
+                          <label key={opt.label} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer hover:border-[var(--primary)] transition text-xs ${dishForm.eggOption === opt.val ? 'border-[var(--primary)] bg-[rgba(var(--primary-rgb),0.06)]' : 'border-[var(--border)]'}`}>
+                            <input type="radio" name="eggOption" checked={dishForm.eggOption === opt.val} onChange={() => setDishForm(f => ({...f, eggOption: opt.val}))} className="accent-[var(--primary)]" />
+                            <span className="text-sm text-[var(--text)]">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Right Column */}
@@ -1705,8 +1894,44 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Image URL</label>
-                      <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Dish Image</label>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setImageMode("upload")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${imageMode === "upload" ? "bg-[var(--primary)] text-white" : "bg-[var(--input)] text-[var(--text)] border border-[var(--border)]"}`}
+                        >
+                          <Upload size={12} /> Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImageMode("url")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${imageMode === "url" ? "bg-[var(--primary)] text-white" : "bg-[var(--input)] text-[var(--text)] border border-[var(--border)]"}`}
+                        >
+                          <Image size={12} /> Image URL
+                        </button>
+                      </div>
+                      {imageMode === "upload" ? (
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--primary)] file:text-white"
+                          />
+                          {imageUploading && <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Uploading...</p>}
+                        </div>
+                      ) : (
+                        <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      )}
+                      {dishForm.image && (
+                        <div className="mt-3 relative inline-block">
+                          <img src={dishForm.image} alt="Preview" className="w-20 h-20 rounded-xl object-cover border border-[var(--border)]" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <button type="button" onClick={() => setDishForm(f => ({...f, image: ''}))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition">
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1795,6 +2020,17 @@ export default function DashboardPage() {
                         </label>
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Egg Option</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[{ label: "None", val: "" }, { label: "Egg", val: "egg" }, { label: "Eggless", val: "eggless" }, { label: "Both", val: "both" }].map((opt) => (
+                          <label key={opt.label} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer hover:border-[var(--primary)] transition text-xs ${dishForm.eggOption === opt.val ? 'border-[var(--primary)] bg-[rgba(var(--primary-rgb),0.06)]' : 'border-[var(--border)]'}`}>
+                            <input type="radio" name="cakeEggOption" checked={dishForm.eggOption === opt.val} onChange={() => setDishForm(f => ({...f, eggOption: opt.val}))} className="accent-[var(--primary)]" />
+                            <span className="text-sm text-[var(--text)]">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Right Column */}
@@ -1824,8 +2060,44 @@ export default function DashboardPage() {
                       <input type="text" placeholder="e.g. Contains dairy, gluten, nuts" value={dishForm.allergens} onChange={e => setDishForm(f => ({...f, allergens: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Image URL</label>
-                      <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Cake Image</label>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setImageMode("upload")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${imageMode === "upload" ? "bg-[var(--primary)] text-white" : "bg-[var(--input)] text-[var(--text)] border border-[var(--border)]"}`}
+                        >
+                          <Upload size={12} /> Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImageMode("url")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${imageMode === "url" ? "bg-[var(--primary)] text-white" : "bg-[var(--input)] text-[var(--text)] border border-[var(--border)]"}`}
+                        >
+                          <Image size={12} /> Image URL
+                        </button>
+                      </div>
+                      {imageMode === "upload" ? (
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--primary)] file:text-white"
+                          />
+                          {imageUploading && <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Uploading...</p>}
+                        </div>
+                      ) : (
+                        <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      )}
+                      {dishForm.image && (
+                        <div className="mt-3 relative inline-block">
+                          <img src={dishForm.image} alt="Preview" className="w-20 h-20 rounded-xl object-cover border border-[var(--border)]" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <button type="button" onClick={() => setDishForm(f => ({...f, image: ''}))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition">
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2486,6 +2758,121 @@ export default function DashboardPage() {
                         onChange={e => setBankDetails(prev => ({ ...prev, sortCode: e.target.value }))}
                         className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Online Payments */}
+                <div className="rounded-2xl border border-[var(--border)] p-5 mt-5" style={{ background: "var(--header-bg)" }}>
+                  <h4 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2 mb-1">
+                    <CreditCard size={14} style={{ color: "#3B82F6" }} /> Online Payments
+                  </h4>
+                  <p className="text-[11px] text-[var(--text-muted)] mb-5">Configure payment providers to accept online payments from customers</p>
+
+                  <div className="space-y-5">
+                    {/* Stripe Connect */}
+                    <div className="rounded-xl border border-[var(--border)] p-4" style={{ background: "var(--card-bg)" }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h5 className="text-xs font-semibold text-[var(--text)]">Stripe Connect</h5>
+                          {paymentConfig?.stripeConnectEnabled && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-emerald-700 bg-emerald-100">
+                              <Check size={10} /> Connected
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={setupStripeConnect}
+                          className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 flex items-center gap-1.5"
+                          style={{ background: "#635BFF" }}
+                        >
+                          <ExternalLink size={12} /> {paymentConfig?.stripeConnectEnabled ? "Manage" : "Set Up Stripe Connect"}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[var(--text-muted)]">Recommended: Let Stripe handle payments, payouts, and compliance. No API keys needed.</p>
+                    </div>
+
+                    {/* Direct Stripe Keys */}
+                    <div className="rounded-xl border border-[var(--border)] p-4" style={{ background: "var(--card-bg)" }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="text-xs font-semibold text-[var(--text)]">Direct Stripe Keys</h5>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => testPaymentConnection("stripe")}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80 flex items-center gap-1.5"
+                          >
+                            <Zap size={10} /> Test Connection
+                          </button>
+                          <button
+                            onClick={() => savePaymentConfig({ stripeSecretKey, stripePublishableKey })}
+                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 btn-premium flex items-center gap-1.5"
+                          >
+                            <Save size={12} /> Save
+                          </button>
+                        </div>
+                      </div>
+                      {paymentTestResult && (
+                        <div className={`mb-3 px-3 py-2 rounded-lg text-xs font-medium ${paymentTestResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                          {paymentTestResult.message}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Secret Key</label>
+                          <input
+                            type="password"
+                            placeholder="sk_live_..."
+                            value={stripeSecretKey}
+                            onChange={e => setStripeSecretKey(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#635BFF] transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Publishable Key</label>
+                          <input
+                            type="password"
+                            placeholder="pk_live_..."
+                            value={stripePublishableKey}
+                            onChange={e => setStripePublishableKey(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#635BFF] transition"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PayPal */}
+                    <div className="rounded-xl border border-[var(--border)] p-4" style={{ background: "var(--card-bg)" }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="text-xs font-semibold text-[var(--text)]">PayPal</h5>
+                        <button
+                          onClick={() => savePaymentConfig({ paypalClientId, paypalSecretKey })}
+                          className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 btn-premium flex items-center gap-1.5"
+                        >
+                          <Save size={12} /> Save
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Client ID</label>
+                          <input
+                            type="text"
+                            placeholder="PayPal Client ID"
+                            value={paypalClientId}
+                            onChange={e => setPaypalClientId(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#0070BA] transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Secret Key</label>
+                          <input
+                            type="password"
+                            placeholder="PayPal Secret Key"
+                            value={paypalSecretKey}
+                            onChange={e => setPaypalSecretKey(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#0070BA] transition"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

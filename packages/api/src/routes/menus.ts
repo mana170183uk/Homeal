@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import prisma from "@homeal/db";
 import { authenticate, authorize } from "../middleware/auth";
+import { notifyChefFollowers } from "../services/notifications";
 
 const router = Router();
 
@@ -98,7 +99,7 @@ router.post(
       if (!menu) { res.status(404).json({ success: false, error: "Menu not found" }); return; }
       if (menu.chef.userId !== req.user!.userId) { res.status(403).json({ success: false, error: "Not your menu" }); return; }
 
-      const { name, description, price, image, isVeg, calories, allergens, ingredients, prepTime, servingSize, categoryId, stockCount, offerPrice, isAvailable } = req.body;
+      const { name, description, price, image, isVeg, calories, allergens, ingredients, prepTime, servingSize, categoryId, stockCount, offerPrice, isAvailable, eggOption } = req.body;
       const item = await prisma.menuItem.create({
         data: {
           menuId: menu.id,
@@ -116,9 +117,12 @@ router.post(
           stockCount: stockCount !== undefined && stockCount !== null && stockCount !== "" ? parseInt(stockCount) : null,
           offerPrice: offerPrice ? parseFloat(offerPrice) : null,
           isAvailable: isAvailable !== undefined ? isAvailable : true,
+          eggOption: eggOption || null,
         },
         include: { category: true },
       });
+      // Notify followers
+      notifyChefFollowers(menu.chef.id, `${menu.chef.kitchenName} added a new item!`, `"${item.name}" is now available`, { chefId: menu.chef.id }).catch(console.error);
       res.status(201).json({ success: true, data: item });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to add item";
@@ -142,7 +146,7 @@ router.patch(
       if (!existing) { res.status(404).json({ success: false, error: "Item not found" }); return; }
 
       const updates: Record<string, unknown> = {};
-      const { name, description, price, image, isVeg, calories, allergens, ingredients, prepTime, servingSize, categoryId, stockCount, offerPrice, isAvailable } = req.body;
+      const { name, description, price, image, isVeg, calories, allergens, ingredients, prepTime, servingSize, categoryId, stockCount, offerPrice, isAvailable, eggOption } = req.body;
       if (name !== undefined) updates.name = name;
       if (description !== undefined) updates.description = description || null;
       if (price !== undefined) updates.price = parseFloat(price);
@@ -157,12 +161,15 @@ router.patch(
       if (stockCount !== undefined) updates.stockCount = stockCount !== null && stockCount !== "" ? parseInt(stockCount) : null;
       if (offerPrice !== undefined) updates.offerPrice = offerPrice ? parseFloat(offerPrice) : null;
       if (isAvailable !== undefined) updates.isAvailable = isAvailable;
+      if (eggOption !== undefined) updates.eggOption = eggOption || null;
 
       const item = await prisma.menuItem.update({
         where: { id: existing.id },
         data: updates,
         include: { category: true },
       });
+      // Notify followers
+      notifyChefFollowers(menu.chef.id, `${menu.chef.kitchenName} updated their menu`, `"${item.name}" has been updated`, { chefId: menu.chef.id }).catch(console.error);
       res.json({ success: true, data: item });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to update item";

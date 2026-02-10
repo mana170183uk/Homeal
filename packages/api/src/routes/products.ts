@@ -127,6 +127,7 @@ router.get("/", async (req: Request, res: Response) => {
           servingSize: item.servingSize,
           allergens: item.allergens,
           ingredients: item.ingredients,
+          eggOption: item.eggOption,
           category: item.category,
           chef: {
             id: chef.id,

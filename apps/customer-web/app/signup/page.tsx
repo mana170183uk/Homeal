@@ -18,6 +18,8 @@ import {
   Flame,
   Cherry,
   Sparkles,
+  Cake,
+  CookingPot,
 } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
@@ -25,22 +27,37 @@ import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
 
 type Role = "CUSTOMER" | "CHEF";
+type SellerType = "KITCHEN" | "CAKE" | "BAKERY" | "OTHER";
+
+const SELLER_TYPE_OPTIONS: { value: SellerType; label: string; icon: typeof UtensilsCrossed; placeholder: string }[] = [
+  { value: "KITCHEN", label: "Kitchen", icon: UtensilsCrossed, placeholder: "e.g. Priya's Kitchen" },
+  { value: "CAKE", label: "Cake", icon: Cake, placeholder: "e.g. Sarah's Cake Studio" },
+  { value: "BAKERY", label: "Bakery", icon: CookingPot, placeholder: "e.g. Fresh Bakes" },
+  { value: "OTHER", label: "Other", icon: Store, placeholder: "e.g. Food by Maria" },
+];
 
 function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [role, setRole] = useState<Role | null>(null);
+  const [sellerType, setSellerType] = useState<SellerType>("KITCHEN");
   const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
     password: "",
-    kitchenName: "",
+    businessName: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [chefSubmitted, setChefSubmitted] = useState(false);
+  const [pendingGoogleChef, setPendingGoogleChef] = useState<{
+    firebaseUid: string;
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null);
 
   useEffect(() => {
     const roleParam = searchParams.get("role");
@@ -65,8 +82,8 @@ function SignupContent() {
       setError("Password must be at least 6 characters.");
       return;
     }
-    if (role === "CHEF" && !form.kitchenName) {
-      setError("Please enter your kitchen name.");
+    if (role === "CHEF" && !form.businessName) {
+      setError("Please enter your business name.");
       return;
     }
 
@@ -93,7 +110,7 @@ function SignupContent() {
             phone: form.phone,
             firebaseUid: credential.user.uid,
             role,
-            ...(role === "CHEF" ? { kitchenName: form.kitchenName } : {}),
+            ...(role === "CHEF" ? { kitchenName: form.businessName, sellerType, businessName: form.businessName } : {}),
           }),
         }
       );
@@ -134,8 +151,20 @@ function SignupContent() {
     try {
       const credential = await signInWithPopup(getFirebaseAuth(), googleProvider);
       const user = credential.user;
-
       const googleName = user.displayName || "Google User";
+
+      // If signing up as a chef, collect seller type + business name first
+      if (role === "CHEF") {
+        setPendingGoogleChef({
+          firebaseUid: user.uid,
+          name: googleName,
+          email: user.email || "",
+          phone: user.phoneNumber || "",
+        });
+        setLoading(false);
+        return;
+      }
+
       const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
         "/auth/register",
         {
@@ -181,7 +210,7 @@ function SignupContent() {
         localStorage.setItem("homeal_user_role", res.data.user?.role || role || "CUSTOMER");
       }
 
-      if (role === "CHEF" || res.data?.user.role === "CHEF") {
+      if (res.data?.user.role === "CHEF") {
         setChefSubmitted(true);
       } else {
         router.push("/search");
@@ -194,6 +223,170 @@ function SignupContent() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleGoogleChefComplete() {
+    if (!pendingGoogleChef) return;
+    if (!form.businessName) {
+      setError("Please enter your business name.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
+        "/auth/register",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: pendingGoogleChef.name,
+            email: pendingGoogleChef.email,
+            phone: pendingGoogleChef.phone,
+            firebaseUid: pendingGoogleChef.firebaseUid,
+            role: "CHEF",
+            kitchenName: form.businessName,
+            sellerType,
+            businessName: form.businessName,
+          }),
+        }
+      );
+
+      if (!res.success) {
+        setError(res.error || "Registration failed. Please try again.");
+        return;
+      }
+
+      if (res.data?.token) {
+        localStorage.setItem("homeal_token", res.data.token);
+        localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+        localStorage.setItem("homeal_user_name", res.data.user?.name || pendingGoogleChef.name);
+        localStorage.setItem("homeal_user_role", res.data.user?.role || "CHEF");
+      }
+
+      setChefSubmitted(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Registration failed";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Google chef pending: collect seller type + business name
+  if (pendingGoogleChef) {
+    const selectedOption = SELLER_TYPE_OPTIONS.find((o) => o.value === sellerType)!;
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden">
+        {/* Animated gradient background orbs */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-gradient-to-br from-[var(--badge-from)] to-[var(--badge-to)] opacity-[0.07] blur-3xl animate-glow-pulse" />
+          <div className="absolute top-1/3 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-[var(--badge-to)] to-[var(--accent)] opacity-[0.05] blur-3xl animate-glow-pulse" style={{ animationDelay: "1.5s" }} />
+          <div className="absolute -bottom-20 right-1/4 w-72 h-72 rounded-full bg-gradient-to-br from-[var(--badge-from)] to-[var(--primary)] opacity-[0.06] blur-3xl animate-glow-pulse" style={{ animationDelay: "3s" }} />
+        </div>
+
+        {/* Header */}
+        <header className="relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3">
+          <button onClick={() => setPendingGoogleChef(null)} className="flex items-center text-[var(--text-soft)] hover:text-primary transition">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
+            <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
+              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
+            </div>
+          </a>
+          <div className="flex-1" />
+          <ThemeToggle />
+        </header>
+
+        <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-8">
+          <div className="max-w-md w-full animate-slide-up" style={{ opacity: 0, animationFillMode: "forwards" }}>
+            <div className="glass-card rounded-3xl p-6 sm:p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-accent/10 flex items-center justify-center">
+                  <ChefHat className="w-8 h-8 text-accent" />
+                </div>
+                <h1 className="font-display text-2xl font-bold text-[var(--text)] mb-2">
+                  Almost there, {pendingGoogleChef.name.split(" ")[0]}!
+                </h1>
+                <p className="text-[var(--text-soft)] text-sm">
+                  Tell us about your business to complete your seller application.
+                </p>
+              </div>
+
+              {/* Seller Type Picker */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-[var(--text-soft)] mb-3">
+                  What type of seller are you?
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {SELLER_TYPE_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    const isSelected = sellerType === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSellerType(option.value)}
+                        className={`flex flex-col items-center gap-2 p-3.5 rounded-xl border-2 transition-all duration-200 ${
+                          isSelected
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--text-muted)]"
+                        }`}
+                      >
+                        <Icon className={`w-6 h-6 ${isSelected ? "text-primary" : "text-[var(--text-muted)]"}`} />
+                        <span className={`text-sm font-medium ${isSelected ? "text-primary" : "text-[var(--text-soft)]"}`}>
+                          {option.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Business Name */}
+              <div className="relative group mb-4">
+                <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                <input
+                  type="text"
+                  value={form.businessName}
+                  onChange={(e) => updateField("businessName", e.target.value)}
+                  placeholder={selectedOption.placeholder}
+                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                />
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="animate-fade-in-up mb-4">
+                  <p className="text-alert text-sm bg-alert/5 border border-alert/20 rounded-xl px-4 py-2.5">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="button"
+                onClick={handleGoogleChefComplete}
+                disabled={loading}
+                className="btn-premium w-full font-semibold py-3.5 rounded-xl text-white disabled:opacity-50 disabled:transform-none"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Submitting...
+                  </span>
+                ) : (
+                  "Submit Chef Application"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Chef application submitted success
@@ -447,15 +640,47 @@ function SignupContent() {
                   </button>
                 </div>
 
-                {/* Kitchen Name (Chef only) */}
+                {/* Seller Type Picker (Chef only) */}
+                {role === "CHEF" && (
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-soft)] mb-2.5">
+                      What type of seller are you?
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {SELLER_TYPE_OPTIONS.map((option) => {
+                        const Icon = option.icon;
+                        const isSelected = sellerType === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setSellerType(option.value)}
+                            className={`flex flex-col items-center gap-2 p-3.5 rounded-xl border-2 transition-all duration-200 ${
+                              isSelected
+                                ? "border-primary bg-primary/10 shadow-sm"
+                                : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--text-muted)]"
+                            }`}
+                          >
+                            <Icon className={`w-6 h-6 ${isSelected ? "text-primary" : "text-[var(--text-muted)]"}`} />
+                            <span className={`text-sm font-medium ${isSelected ? "text-primary" : "text-[var(--text-soft)]"}`}>
+                              {option.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Business Name (Chef only) */}
                 {role === "CHEF" && (
                   <div className="relative group">
                     <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
                     <input
                       type="text"
-                      value={form.kitchenName}
-                      onChange={(e) => updateField("kitchenName", e.target.value)}
-                      placeholder="Store name (e.g. Priya's Home Kitchen)"
+                      value={form.businessName}
+                      onChange={(e) => updateField("businessName", e.target.value)}
+                      placeholder={SELLER_TYPE_OPTIONS.find((o) => o.value === sellerType)?.placeholder || "Business name"}
                       className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
                     />
                   </div>

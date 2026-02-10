@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
 import {
   Star,
   MapPin,
@@ -12,6 +13,9 @@ import {
   Minus,
   ShoppingBag,
   Check,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { parseCuisineTypes } from "../../lib/utils";
@@ -22,10 +26,12 @@ interface MenuItem {
   name: string;
   description: string | null;
   price: number;
+  offerPrice: number | null;
   image: string | null;
   isVeg: boolean;
   calories: number | null;
   prepTime: number | null;
+  stockCount: number | null;
 }
 
 interface Menu {
@@ -59,6 +65,7 @@ interface ChefDetail {
   avgRating: number;
   totalReviews: number;
   deliveryRadius: number;
+  isOnline?: boolean;
   operatingHours: string | null;
   user: { name: string; avatar: string | null };
   menus: Menu[];
@@ -74,6 +81,43 @@ interface CartItem {
   quantity: number;
   chefId: string;
   chefName: string;
+}
+
+interface DayHours {
+  open: string;
+  close: string;
+  enabled: boolean;
+}
+
+type OperatingHoursMap = Record<string, DayHours>;
+
+const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function parseOperatingHours(raw: string | null): OperatingHoursMap | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === "object" && parsed !== null) {
+      return parsed as OperatingHoursMap;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function formatTime(time24: string): string {
+  const [hourStr, minuteStr] = time24.split(":");
+  let hour = parseInt(hourStr, 10);
+  const minute = minuteStr || "00";
+  const ampm = hour >= 12 ? "PM" : "AM";
+  if (hour === 0) hour = 12;
+  else if (hour > 12) hour -= 12;
+  return `${hour}:${minute} ${ampm}`;
+}
+
+function getTodayName(): string {
+  return new Date().toLocaleDateString("en-US", { weekday: "long" });
 }
 
 function getCart(): CartItem[] {
@@ -96,11 +140,24 @@ export default function ChefProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const [chef, setChef] = useState<ChefDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [toast, setToast] = useState("");
+  const [showAllHours, setShowAllHours] = useState(false);
+
+  // Auth gate
+  useEffect(() => {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) {
+      router.push(`/login?redirect=/chef/${id}`);
+      return;
+    }
+    setAuthChecked(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setCart(getCart());
@@ -132,6 +189,12 @@ export default function ChefProfilePage({
   function addToCart(item: MenuItem) {
     if (!chef) return;
 
+    // Block adding if kitchen is closed
+    if (chef.isOnline === false) return;
+
+    // Block adding if sold out
+    if (item.stockCount !== null && item.stockCount <= 0) return;
+
     let currentCart = getCart();
 
     // Single-chef policy
@@ -143,6 +206,11 @@ export default function ChefProfilePage({
       currentCart = [];
     }
 
+    const effectivePrice =
+      item.offerPrice != null && item.offerPrice < item.price
+        ? item.offerPrice
+        : item.price;
+
     const existing = currentCart.find((c) => c.id === item.id);
     if (existing) {
       existing.quantity += 1;
@@ -150,7 +218,7 @@ export default function ChefProfilePage({
       currentCart.push({
         id: item.id,
         name: item.name,
-        price: item.price,
+        price: effectivePrice,
         image: item.image,
         quantity: 1,
         chefId: chef.id,
@@ -184,6 +252,14 @@ export default function ChefProfilePage({
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.quantity, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+        <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -209,6 +285,10 @@ export default function ChefProfilePage({
   }
 
   const allItems = chef.menus.flatMap((m) => m.items);
+  const isKitchenOpen = chef.isOnline !== false;
+  const operatingHours = parseOperatingHours(chef.operatingHours);
+  const todayName = getTodayName();
+  const todayHours = operatingHours?.[todayName] ?? null;
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">
@@ -230,7 +310,7 @@ export default function ChefProfilePage({
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-10 relative z-[1]">
         {/* Chef Info Card */}
-        <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-lg p-6 mb-8">
+        <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-lg p-6 mb-4">
           <div className="flex flex-col md:flex-row md:items-start gap-4">
             {/* Avatar with gradient ring */}
             <div className="w-20 h-20 rounded-2xl p-0.5 badge-gradient shrink-0">
@@ -247,12 +327,41 @@ export default function ChefProfilePage({
               </div>
             </div>
             <div className="flex-1">
-              <h1 className="font-display text-3xl font-bold text-[var(--text)] mb-1">
-                {chef.kitchenName}
-              </h1>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
+                <h1 className="font-display text-3xl font-bold text-[var(--text)]">
+                  {chef.kitchenName}
+                </h1>
+                {/* Kitchen Open/Closed Badge */}
+                {isKitchenOpen ? (
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full w-fit">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    Kitchen Open
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-semibold px-3 py-1.5 rounded-full w-fit">
+                    <span className="w-2 h-2 bg-red-500 rounded-full" />
+                    Kitchen Closed
+                  </span>
+                )}
+              </div>
               <p className="text-[var(--text-soft)] mb-3">
                 by {chef.user.name}
               </p>
+
+              {/* Today's hours */}
+              {operatingHours && (
+                <div className="flex items-center gap-1.5 text-sm text-[var(--text-soft)] mb-3">
+                  <Clock className="w-4 h-4 text-[var(--text-muted)]" />
+                  {todayHours && todayHours.enabled ? (
+                    <span>
+                      Open today: {formatTime(todayHours.open)} &ndash; {formatTime(todayHours.close)}
+                    </span>
+                  ) : (
+                    <span className="text-red-500 dark:text-red-400">Closed today</span>
+                  )}
+                </div>
+              )}
+
               {chef.description && (
                 <p className="text-[var(--text-soft)] text-sm mb-4">
                   {chef.description}
@@ -277,7 +386,7 @@ export default function ChefProfilePage({
                 {allItems.length > 0 && (
                   <div className="flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-full text-primary">
                     <UtensilsCrossed className="w-4 h-4" />
-                    {allItems.length} dishes
+                    {allItems.length} items
                   </div>
                 )}
               </div>
@@ -295,7 +404,78 @@ export default function ChefProfilePage({
               )}
             </div>
           </div>
+
+          {/* Collapsible Operating Hours */}
+          {operatingHours && (
+            <div className="mt-4 pt-4 border-t border-[var(--border)]">
+              <button
+                onClick={() => setShowAllHours(!showAllHours)}
+                className="flex items-center gap-1.5 text-sm font-medium text-primary hover:opacity-80 transition"
+              >
+                <Clock className="w-4 h-4" />
+                {showAllHours ? "Hide hours" : "View all hours"}
+                {showAllHours ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              {showAllHours && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {DAY_ORDER.map((day) => {
+                    const hours = operatingHours[day];
+                    const isToday = day === todayName;
+                    return (
+                      <div
+                        key={day}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                          isToday
+                            ? "bg-primary/5 border border-primary/20"
+                            : "bg-[var(--input)]/50"
+                        }`}
+                      >
+                        <span
+                          className={`font-medium ${
+                            isToday ? "text-primary" : "text-[var(--text)]"
+                          }`}
+                        >
+                          {day}
+                          {isToday && (
+                            <span className="text-[10px] ml-1.5 text-primary/70 font-normal">
+                              (Today)
+                            </span>
+                          )}
+                        </span>
+                        {hours && hours.enabled ? (
+                          <span className="text-[var(--text-soft)]">
+                            {formatTime(hours.open)} &ndash; {formatTime(hours.close)}
+                          </span>
+                        ) : (
+                          <span className="text-red-400 text-xs font-medium">
+                            Closed
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Kitchen Closed Banner */}
+        {!isKitchenOpen && (
+          <div className="flex items-start gap-3 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-3 mb-8">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 dark:text-red-400">
+              This kitchen is currently closed. You can browse the menu but ordering is not available right now.
+            </p>
+          </div>
+        )}
+
+        {/* Spacer when kitchen is open (replaces the closed banner) */}
+        {isKitchenOpen && <div className="mb-4" />}
 
         {/* Menu Items */}
         {allItems.length > 0 && (
@@ -306,22 +486,42 @@ export default function ChefProfilePage({
             <div className="grid sm:grid-cols-2 gap-4">
               {allItems.map((item) => {
                 const qty = getItemQty(item.id);
+                const isSoldOut = item.stockCount !== null && item.stockCount <= 0;
+                const hasOffer =
+                  item.offerPrice != null && item.offerPrice < item.price;
+                const discountPct = hasOffer
+                  ? Math.round((1 - item.offerPrice! / item.price) * 100)
+                  : 0;
+                const isAddDisabled = !isKitchenOpen || isSoldOut;
+
                 return (
                   <div
                     key={item.id}
-                    className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 flex gap-4 hover:shadow-lg hover:scale-[1.01] transition-all duration-200"
+                    className={`bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 flex gap-4 transition-all duration-200 ${
+                      isSoldOut
+                        ? "opacity-60"
+                        : "hover:shadow-lg hover:scale-[1.01]"
+                    }`}
                   >
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-20 h-20 rounded-xl object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 badge-gradient opacity-20 rounded-xl flex items-center justify-center shrink-0">
-                        <UtensilsCrossed className="w-8 h-8 text-white opacity-60" />
-                      </div>
-                    )}
+                    {/* Image with offer badge */}
+                    <div className="relative shrink-0">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-20 h-20 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 badge-gradient opacity-20 rounded-xl flex items-center justify-center">
+                          <UtensilsCrossed className="w-8 h-8 text-white opacity-60" />
+                        </div>
+                      )}
+                      {hasOffer && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                          {discountPct}% OFF
+                        </span>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-1.5">
@@ -347,15 +547,61 @@ export default function ChefProfilePage({
                           </span>
                         )}
                       </div>
+
+                      {/* Stock indicator */}
+                      {item.stockCount !== null && (
+                        <div className="mt-1.5">
+                          {isSoldOut ? (
+                            <span className="text-[10px] font-semibold text-red-500 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
+                              Sold Out
+                            </span>
+                          ) : (
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                item.stockCount < 5
+                                  ? "text-red-500 dark:text-red-400 bg-red-500/10"
+                                  : item.stockCount <= 10
+                                    ? "text-amber-600 dark:text-amber-400 bg-amber-500/10"
+                                    : "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                              }`}
+                            >
+                              {item.stockCount} plates left
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Price + Add to cart */}
                       <div className="flex items-center justify-between mt-3">
-                        <span className="text-primary font-bold">
-                          &pound;{item.price.toFixed(2)}
-                        </span>
-                        {qty === 0 ? (
+                        <div className="flex items-center gap-2">
+                          {hasOffer ? (
+                            <>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                &pound;{item.offerPrice!.toFixed(2)}
+                              </span>
+                              <span className="text-[var(--text-muted)] text-xs line-through">
+                                &pound;{item.price.toFixed(2)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-primary font-bold">
+                              &pound;{item.price.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        {isSoldOut ? (
+                          <span className="text-xs text-[var(--text-muted)] font-medium px-3.5 py-1.5">
+                            Unavailable
+                          </span>
+                        ) : qty === 0 ? (
                           <button
                             onClick={() => addToCart(item)}
-                            className="badge-gradient text-white text-xs font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1 hover:opacity-90 transition"
+                            disabled={isAddDisabled}
+                            className={`text-xs font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1 transition ${
+                              isAddDisabled
+                                ? "bg-[var(--input)] text-[var(--text-muted)] cursor-not-allowed"
+                                : "badge-gradient text-white hover:opacity-90"
+                            }`}
                           >
                             <Plus className="w-3.5 h-3.5" />
                             Add
@@ -373,7 +619,12 @@ export default function ChefProfilePage({
                             </span>
                             <button
                               onClick={() => addToCart(item)}
-                              className="w-7 h-7 rounded-full badge-gradient flex items-center justify-center text-white hover:opacity-90 transition"
+                              disabled={isAddDisabled}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition ${
+                                isAddDisabled
+                                  ? "bg-[var(--input)] text-[var(--text-muted)] cursor-not-allowed"
+                                  : "badge-gradient text-white hover:opacity-90"
+                              }`}
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -495,9 +746,7 @@ export default function ChefProfilePage({
               </div>
             </div>
             <button
-              onClick={() => {
-                alert(`Ordering coming soon! Your cart has ${cartCount} item${cartCount !== 1 ? "s" : ""} totalling \u00A3${cartTotal.toFixed(2)}. Your cart has been saved.`);
-              }}
+              onClick={() => router.push("/cart")}
               className="badge-gradient text-white font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition shadow-lg"
             >
               View Cart

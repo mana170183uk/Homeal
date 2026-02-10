@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins, Fredoka } from "next/font/google";
 import "./globals.css";
+import BottomNav from "./components/BottomNav";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -15,9 +16,9 @@ const fredoka = Fredoka({
 });
 
 export const metadata: Metadata = {
-  title: "Homeal - Healthy Food, From Home",
+  title: "Homeal - Homemade Products, From Home",
   description:
-    "Discover delicious homemade food from local chefs near you. Order authentic home-cooked meals delivered to your door.",
+    "Discover delicious homemade food, cakes, pickles, masalas, and more from local home chefs near you. Order authentic homemade products delivered to your door.",
   icons: {
     icon: [
       { url: "/favicon-final-2.png?v=5", sizes: "32x32", type: "image/png" },
@@ -42,7 +43,10 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body className="pb-16 md:pb-0" suppressHydrationWarning>
+        {children}
+        <BottomNav />
+      </body>
     </html>
   );
 }

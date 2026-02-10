@@ -156,6 +156,8 @@ model MenuItem {
   image        String?  @db.VarChar(500)
   isVeg        Boolean  @default(true)
   isAvailable  Boolean  @default(true)
+  stockCount   Int?
+  offerPrice   Float?
   calories     Int?
   allergens    String?  @db.Text
   ingredients  String?  @db.Text
@@ -376,6 +378,20 @@ model Favorite {
   menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@unique([userId, menuItemId])
+}
+
+model AdminAccessRequest {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  name        String   @db.VarChar(255)
+  email       String   @db.VarChar(191)
+  firebaseUid String   @db.VarChar(128)
+  status      String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  reviewedAt  DateTime? @db.DateTime(3)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([email])
+  @@unique([firebaseUid])
+  @@index([status])
 }
 
 model PromoCode {

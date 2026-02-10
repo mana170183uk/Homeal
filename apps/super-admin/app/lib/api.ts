@@ -16,6 +16,10 @@ export async function api<T>(
     headers: { ...headers, ...(fetchOptions.headers as Record<string, string>) },
   });
 
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) {
+    return { success: false, error: `Unexpected response (${res.status})` };
+  }
   return res.json();
 }
 

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
-import { sendChefApprovalEmail, sendChefRejectionEmail } from "../services/email";
+import { sendChefApprovalEmail, sendChefRejectionEmail, sendAdminAccessApprovedEmail, sendAdminAccessRejectedEmail } from "../services/email";
 
 const router = Router();
 
@@ -124,6 +124,99 @@ router.get("/", async (req: Request, res: Response) => {
         `<strong>${chef.kitchenName}</strong> has been rejected. A notification email has been sent to ${chef.user.email}.`,
         false
       ));
+    } else if (action === "approve_admin") {
+      const requestId = req.query.requestId as string;
+      if (!requestId) {
+        res.status(400).send(renderPage("Invalid Link", "Missing request ID.", false));
+        return;
+      }
+
+      // Verify token has requestId
+      const adminPayload = jwt.verify(token, secret) as { requestId: string; action: string; type: string };
+      if (adminPayload.requestId !== requestId || adminPayload.type !== "admin_access") {
+        res.status(400).send(renderPage("Invalid Link", "This link is invalid.", false));
+        return;
+      }
+
+      const request = await prisma.adminAccessRequest.findUnique({ where: { id: requestId } });
+      if (!request) {
+        res.status(404).send(renderPage("Request Not Found", "The access request could not be found.", false));
+        return;
+      }
+
+      if (request.status === "APPROVED") {
+        res.send(renderPage("Already Approved", `${request.name} has already been granted Super Admin access.`, true));
+        return;
+      }
+
+      // Create the user with SUPER_ADMIN role
+      await prisma.user.create({
+        data: {
+          name: request.name,
+          email: request.email,
+          firebaseUid: request.firebaseUid,
+          role: "SUPER_ADMIN",
+        },
+      });
+
+      await prisma.adminAccessRequest.update({
+        where: { id: requestId },
+        data: { status: "APPROVED", reviewedAt: new Date() },
+      });
+
+      // Send approval email
+      sendAdminAccessApprovedEmail({
+        email: request.email,
+        name: request.name,
+      }).catch((err) => console.error("[ApproveAction] Failed to send admin access approved email:", err));
+
+      res.send(renderPage(
+        "Admin Access Granted!",
+        `<strong>${request.name}</strong> (${request.email}) now has Super Admin access. They have been notified by email.`,
+        true
+      ));
+
+    } else if (action === "reject_admin") {
+      const requestId = req.query.requestId as string;
+      if (!requestId) {
+        res.status(400).send(renderPage("Invalid Link", "Missing request ID.", false));
+        return;
+      }
+
+      const adminPayload = jwt.verify(token, secret) as { requestId: string; action: string; type: string };
+      if (adminPayload.requestId !== requestId || adminPayload.type !== "admin_access") {
+        res.status(400).send(renderPage("Invalid Link", "This link is invalid.", false));
+        return;
+      }
+
+      const request = await prisma.adminAccessRequest.findUnique({ where: { id: requestId } });
+      if (!request) {
+        res.status(404).send(renderPage("Request Not Found", "The access request could not be found.", false));
+        return;
+      }
+
+      if (request.status === "REJECTED") {
+        res.send(renderPage("Already Rejected", `${request.name}'s request has already been rejected.`, false));
+        return;
+      }
+
+      await prisma.adminAccessRequest.update({
+        where: { id: requestId },
+        data: { status: "REJECTED", reviewedAt: new Date() },
+      });
+
+      // Send rejection email
+      sendAdminAccessRejectedEmail({
+        email: request.email,
+        name: request.name,
+      }).catch((err) => console.error("[ApproveAction] Failed to send admin access rejected email:", err));
+
+      res.send(renderPage(
+        "Request Rejected",
+        `<strong>${request.name}</strong>'s Super Admin access request has been rejected. They have been notified by email.`,
+        false
+      ));
+
     } else {
       res.status(400).send(renderPage("Invalid Action", "Unknown action. Please use the Super Admin Panel.", false));
     }

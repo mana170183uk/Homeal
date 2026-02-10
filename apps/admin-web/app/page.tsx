@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard, ClipboardList, Package, Bell, UtensilsCrossed,
   PlusCircle, PoundSterling, Star, BarChart3, Sun, Moon, Settings,
@@ -8,7 +8,7 @@ import {
   AlertCircle, Wallet, ShoppingBag, ChefHat, Check, Crown, Zap,
   Infinity, Store, Leaf, Award, ShieldCheck, MapPin, Calendar,
   Repeat, Truck, Gift, Sparkles, Heart, Box, Timer, Grip, Cake,
-  Navigation, Eye, Menu, X,
+  Navigation, Eye, Menu, X, Trash2, Pencil, Power, Save, MessageSquare, Send,
 } from "lucide-react";
 
 type IconComponent = typeof LayoutDashboard;
@@ -256,10 +256,48 @@ export default function DashboardPage() {
   const planCategoryLimit = currentPlan === "Starter" ? 1 : currentPlan === "Growth" ? 4 : 9;
   const enabledCount = Object.values(enabledCategories).filter(Boolean).length;
 
+  // Menu & dish state
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [chefMenuId, setChefMenuId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [dishForm, setDishForm] = useState({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '' });
+  const [dishSubmitting, setDishSubmitting] = useState(false);
+  // Kitchen
+  const [chefProfile, setChefProfile] = useState<any>(null);
+  const [kitchenOnline, setKitchenOnline] = useState(true);
+  const [operatingHours, setOperatingHours] = useState<Record<string, {open: string, close: string, enabled: boolean}>>({
+    Monday: {open: '09:00', close: '21:00', enabled: true},
+    Tuesday: {open: '09:00', close: '21:00', enabled: true},
+    Wednesday: {open: '09:00', close: '21:00', enabled: true},
+    Thursday: {open: '09:00', close: '21:00', enabled: true},
+    Friday: {open: '09:00', close: '21:00', enabled: true},
+    Saturday: {open: '09:00', close: '21:00', enabled: true},
+    Sunday: {open: '09:00', close: '21:00', enabled: false},
+  });
+  const [bankDetails, setBankDetails] = useState({ bankName: '', accountNumber: '', sortCode: '' });
+  // Earnings
+  const [earnings, setEarnings] = useState<any>(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
+  // Reviews
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  // Toast notification
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
   // Approval state
   const [approvalStatus, setApprovalStatus] = useState<"loading" | "approved" | "pending" | "rejected">("loading");
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [chefName, setChefName] = useState("");
+
+  // Order state
+  const [orders, setOrders] = useState<any[]>([]);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [activeOrderFilter, setActiveOrderFilter] = useState("All Orders");
+  const [historyFilter, setHistoryFilter] = useState("All");
+  const prevOrderCountRef = useRef<number>(0);
 
   // Check auth + approval status on load
   useEffect(() => {
@@ -297,9 +335,445 @@ export default function DashboardPage() {
     checkApproval();
   }, []);
 
+  // --- Order functions ---
+  function formatRelativeTime(dateStr: string) {
+    const now = Date.now();
+    const diff = now - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  }
+
+  function getOrderItemsSummary(items: any[]) {
+    if (!items || items.length === 0) return "No items";
+    return items.map((item: any) => `${item.quantity}x ${item.menuItem?.name || "Item"}`).join(", ");
+  }
+
+  const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+    PLACED: { label: "New", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+    ACCEPTED: { label: "Accepted", color: "#6366F1", bg: "rgba(99,102,241,0.12)" },
+    PREPARING: { label: "Preparing", color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+    READY: { label: "Ready", color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+    OUT_FOR_DELIVERY: { label: "Out for Delivery", color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+    DELIVERED: { label: "Delivered", color: "#059669", bg: "rgba(5,150,105,0.12)" },
+    CANCELLED: { label: "Cancelled", color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+    REJECTED: { label: "Rejected", color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+  };
+
+  function playNotificationBeep() {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 800;
+      gain.gain.value = 0.3;
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {}
+  }
+
+  async function fetchOrders() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setOrderLoading(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const newOrders = data.data || [];
+        const activeNew = newOrders.filter((o: any) => !["DELIVERED","CANCELLED","REJECTED"].includes(o.status));
+        const activePrev = orders.filter((o: any) => !["DELIVERED","CANCELLED","REJECTED"].includes(o.status));
+        if (activeNew.length > activePrev.length && prevOrderCountRef.current > 0) {
+          playNotificationBeep();
+        }
+        prevOrderCountRef.current = activeNew.length;
+        setOrders(newOrders);
+      }
+    } catch (e) {
+      console.error("Failed to fetch orders:", e);
+    } finally {
+      setOrderLoading(false);
+    }
+  }
+
+  async function updateOrderStatus(orderId: string, status: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrders();
+      }
+    } catch (e) {
+      console.error("Failed to update order:", e);
+    }
+  }
+
+  // Fetch orders when on order pages
+  useEffect(() => {
+    if (activePage === "active-orders" || activePage === "order-history") {
+      fetchOrders();
+    }
+  }, [activePage]);
+
+  // Poll for new orders on active-orders page
+  useEffect(() => {
+    if (activePage !== "active-orders") return;
+    const interval = setInterval(fetchOrders, 15000);
+    return () => clearInterval(interval);
+  }, [activePage]);
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
+
+  // Toast auto-hide
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    setToast({ message, type });
+  }
+
+  // --- Menu / Category / Earnings / Reviews fetch functions ---
+  async function fetchMenuItems() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setMenuLoading(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/my`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        const menus = data.data;
+        if (menus.length > 0) {
+          setChefMenuId(menus[0].id);
+        }
+        const allItems: any[] = [];
+        menus.forEach((menu: any) => {
+          if (menu.items) {
+            menu.items.forEach((item: any) => {
+              allItems.push({ ...item, menuId: menu.id });
+            });
+          }
+        });
+        setMenuItems(allItems);
+      }
+    } catch (e) {
+      console.error("Failed to fetch menu items:", e);
+    } finally {
+      setMenuLoading(false);
+    }
+  }
+
+  async function fetchCategories() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/products/categories`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setCategories(data.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch categories:", e);
+    }
+  }
+
+  async function fetchEarnings() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setEarningsLoading(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/orders/earnings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setEarnings(data.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch earnings:", e);
+    } finally {
+      setEarningsLoading(false);
+    }
+  }
+
+  async function fetchReviews() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setReviewsLoading(true);
+    try {
+      // First get chef profile to get the chef ID
+      const meRes = await fetch(`${ADMIN_API_URL}/api/v1/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const meData = await meRes.json();
+      if (meData.success && meData.data?.chefId) {
+        const chefRes = await fetch(`${ADMIN_API_URL}/api/v1/chefs/${meData.data.chefId}`);
+        const chefData = await chefRes.json();
+        if (chefData.success && chefData.data?.reviews) {
+          setReviews(chefData.data.reviews);
+          setChefProfile(chefData.data);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch reviews:", e);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }
+
+  async function fetchChefProfile() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const meRes = await fetch(`${ADMIN_API_URL}/api/v1/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const meData = await meRes.json();
+      if (meData.success && meData.data?.chefId) {
+        const chefRes = await fetch(`${ADMIN_API_URL}/api/v1/chefs/${meData.data.chefId}`);
+        const chefData = await chefRes.json();
+        if (chefData.success && chefData.data) {
+          const chef = chefData.data;
+          setChefProfile(chef);
+          setKitchenOnline(chef.isOnline ?? true);
+          if (chef.operatingHours) {
+            try {
+              const parsed = typeof chef.operatingHours === 'string' ? JSON.parse(chef.operatingHours) : chef.operatingHours;
+              setOperatingHours(prev => ({ ...prev, ...parsed }));
+            } catch {}
+          }
+          if (chef.bankDetails) {
+            try {
+              const parsed = typeof chef.bankDetails === 'string' ? JSON.parse(chef.bankDetails) : chef.bankDetails;
+              setBankDetails(prev => ({ ...prev, ...parsed }));
+            } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch chef profile:", e);
+    }
+  }
+
+  async function toggleItemAvailability(menuId: string, itemId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}/toggle`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchMenuItems();
+    } catch (e) {
+      console.error("Failed to toggle item:", e);
+      showToast("Failed to toggle availability", "error");
+    }
+  }
+
+  async function deleteMenuItem(menuId: string, itemId: string) {
+    if (!confirm("Are you sure you want to delete this item?")) return;
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showToast("Item deleted successfully");
+      fetchMenuItems();
+    } catch (e) {
+      console.error("Failed to delete item:", e);
+      showToast("Failed to delete item", "error");
+    }
+  }
+
+  async function submitDish(isAvailable: boolean = true) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    if (!dishForm.name || !dishForm.price) {
+      showToast("Please fill in dish name and price", "error");
+      return;
+    }
+    setDishSubmitting(true);
+    try {
+      let menuId = chefMenuId;
+      // Create menu if none exists
+      if (!menuId) {
+        const menuRes = await fetch(`${ADMIN_API_URL}/api/v1/menus`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Menu", date: new Date().toISOString().split('T')[0] }),
+        });
+        const menuData = await menuRes.json();
+        if (menuData.success && menuData.data?.id) {
+          menuId = menuData.data.id;
+          setChefMenuId(menuId);
+        } else {
+          showToast("Failed to create menu", "error");
+          return;
+        }
+      }
+
+      const payload: any = {
+        name: dishForm.name,
+        description: dishForm.description || undefined,
+        price: parseFloat(dishForm.price),
+        isVeg: dishForm.isVeg,
+        prepTime: dishForm.prepTime ? parseInt(dishForm.prepTime) : undefined,
+        servingSize: dishForm.servingSize || undefined,
+        allergens: dishForm.allergens || undefined,
+        categoryId: dishForm.categoryId || undefined,
+        image: dishForm.image || undefined,
+        isAvailable,
+        stockCount: dishForm.stockCount ? parseInt(dishForm.stockCount) : undefined,
+        offerPrice: dishForm.offerPrice ? parseFloat(dishForm.offerPrice) : undefined,
+      };
+
+      let res;
+      if (editingItem) {
+        res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${editingItem.menuId}/items/${editingItem.id}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(editingItem ? "Dish updated successfully!" : "Dish published successfully!");
+        resetDishForm();
+        await fetchMenuItems();
+        setActivePage("menu");
+      } else {
+        showToast(data.error || "Failed to save dish", "error");
+      }
+    } catch (e) {
+      console.error("Failed to submit dish:", e);
+      showToast("Failed to save dish", "error");
+    } finally {
+      setDishSubmitting(false);
+    }
+  }
+
+  function resetDishForm() {
+    setEditingItem(null);
+    setDishForm({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '' });
+  }
+
+  function startEditItem(item: any) {
+    setEditingItem(item);
+    setDishForm({
+      name: item.name || '',
+      categoryId: item.categoryId || '',
+      description: item.description || '',
+      isVeg: item.isVeg ?? true,
+      price: item.price?.toString() || '',
+      prepTime: item.prepTime?.toString() || '',
+      servingSize: item.servingSize || '',
+      allergens: item.allergens || '',
+      stockCount: item.stockCount?.toString() || '',
+      offerPrice: item.offerPrice?.toString() || '',
+      image: item.image || '',
+    });
+    setActivePage("add-dish");
+  }
+
+  async function updateChefProfile(updates: Record<string, any>) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Settings saved successfully!");
+      } else {
+        showToast(data.error || "Failed to save settings", "error");
+      }
+    } catch (e) {
+      console.error("Failed to update chef profile:", e);
+      showToast("Failed to save settings", "error");
+    }
+  }
+
+  async function replyToReview(reviewId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    const reply = replyTexts[reviewId];
+    if (!reply?.trim()) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/reviews/${reviewId}/reply`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reply }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Reply posted successfully!");
+        setReplyTexts(prev => ({ ...prev, [reviewId]: '' }));
+        fetchReviews();
+      } else {
+        showToast("Failed to post reply", "error");
+      }
+    } catch (e) {
+      console.error("Failed to reply to review:", e);
+      showToast("Failed to post reply", "error");
+    }
+  }
+
+  // Fetch menu items and categories on mount
+  useEffect(() => {
+    fetchMenuItems();
+    fetchCategories();
+    fetchChefProfile();
+  }, []);
+
+  // Fetch earnings when on dashboard or earnings page
+  useEffect(() => {
+    if (activePage === "dashboard" || activePage === "earnings") {
+      fetchEarnings();
+    }
+    if (activePage === "reviews") {
+      fetchReviews();
+    }
+  }, [activePage]);
+
+  // Helper to find category name by id
+  function getCategoryName(categoryId: string) {
+    const cat = categories.find(c => c.id === categoryId);
+    return cat?.name || "Uncategorised";
+  }
 
   // Auto-disable excess categories when plan changes
   useEffect(() => {
@@ -394,6 +868,23 @@ export default function DashboardPage() {
 
   return (
     <div className="flex w-full overflow-x-hidden app-height">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-[100] animate-fade-in-up" style={{ animationDuration: '0.3s' }}>
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl border" style={{
+            background: toast.type === 'success' ? 'rgba(16,185,129,0.95)' : 'rgba(239,68,68,0.95)',
+            borderColor: toast.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
+            backdropFilter: 'blur(12px)',
+          }}>
+            {toast.type === 'success' ? <Check size={16} color="white" /> : <AlertCircle size={16} color="white" />}
+            <span className="text-sm font-medium text-white">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="ml-2 text-white/70 hover:text-white">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
@@ -416,7 +907,7 @@ export default function DashboardPage() {
           </div>
           <div className="px-2.5 py-2">
             <p className="text-xs text-[var(--sidebar-muted)]">Welcome back</p>
-            <p className="text-sm font-semibold text-[var(--sidebar-text)]">Chef Dashboard</p>
+            <p className="text-sm font-semibold text-[var(--sidebar-text)]">{chefName || "Chef Dashboard"}</p>
           </div>
         </div>
 
@@ -437,7 +928,7 @@ export default function DashboardPage() {
                   <button
                     key={item.id}
                     onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
-                    className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-[14px] font-medium transition-all mb-0.5"
+                    className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-[14px] font-medium transition-all mb-0.5 active:scale-[0.98]"
                     style={{
                       background: isActive ? "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(139,92,246,0.15))" : "transparent",
                       color: isActive ? "var(--sidebar-active-text)" : "var(--sidebar-text)",
@@ -487,7 +978,7 @@ export default function DashboardPage() {
           <button className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition mr-3" onClick={() => setSidebarOpen(true)}>
             <Menu size={20} className="text-[var(--text)]" />
           </button>
-          <h1 className="text-lg font-semibold text-[var(--text)] flex-1 min-w-0 truncate">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
+          <h1 className="text-lg gradient-text font-bold flex-1 min-w-0 truncate">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
           <div className="flex items-center gap-1.5 sm:gap-2 ml-3">
             <button onClick={() => setActivePage("notifications")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
               <Bell size={18} className="text-[var(--text-muted)]" />
@@ -495,7 +986,9 @@ export default function DashboardPage() {
             <button onClick={() => setActivePage("settings")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
               <Settings size={18} className="text-[var(--text-muted)]" />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>AK</div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5 badge-gradient">
+              {chefName ? chefName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) : "CH"}
+            </div>
           </div>
         </header>
 
@@ -528,13 +1021,11 @@ export default function DashboardPage() {
             <>
               {/* Kitchen Info Banner */}
               <div
-                className="rounded-2xl border border-[var(--border)] px-4 sm:px-6 py-4 sm:py-5 mb-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3"
-                style={{ background: "var(--header-bg)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-6 py-4 sm:py-5 mb-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4">
                   <div
-                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient"
                   >
                     <ChefHat size={28} color="white" strokeWidth={2} />
                   </div>
@@ -571,8 +1062,7 @@ export default function DashboardPage() {
 
               {/* Chef Badges & Trust Indicators */}
               <div
-                className="rounded-2xl border border-[var(--border)] px-5 py-4 mb-5"
-                style={{ background: "var(--header-bg)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-5 py-4 mb-5"
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-semibold text-[var(--text)] flex items-center gap-2">
@@ -636,13 +1126,11 @@ export default function DashboardPage() {
 
               {/* Dashboard Welcome Bar */}
               <div
-                className="rounded-2xl border border-[var(--border)] px-5 py-4 mb-5 flex items-center justify-between"
-                style={{ background: "var(--header-bg)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-5 py-4 mb-5 flex items-center justify-between"
               >
                 <div className="flex items-center gap-4">
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient"
                   >
                     <LayoutDashboard size={24} color="white" strokeWidth={2} />
                   </div>
@@ -661,17 +1149,22 @@ export default function DashboardPage() {
 
               {/* Stats Row 1 - Today */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
-                {STATS_ROW1.map((s, i) => {
+                {[
+                  { label: "Today's Revenue", value: `\u00A3${earnings?.today?.amount?.toFixed(2) || '0.00'}`, sub: "Today's earnings", icon: TrendingUp, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                  { label: "Today's Expenses", value: "\u00A30.00", sub: "Today's costs", icon: TrendingDown, color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+                  { label: "Today's Orders", value: `${earnings?.today?.orders || 0}`, sub: "Orders today", icon: Clock, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                  { label: "Total Dishes", value: `${menuItems.length}`, sub: "Listed items", icon: UtensilsCrossed, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+                ].map((s, i) => {
                   const StatIcon = s.icon;
                   return (
-                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all hover:scale-[1.02]" style={{ background: "var(--header-bg)" }}>
+                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all duration-300 hover:scale-[1.02] hover:shadow-xl" style={{ background: "var(--header-bg)" }}>
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-xs font-medium text-[var(--text-muted)]">{s.label}</span>
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
                           <StatIcon size={18} style={{ color: s.color }} />
                         </div>
                       </div>
-                      <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
                       <div className="text-[10px] text-[var(--text-muted)] mt-1">{s.sub}</div>
                     </div>
                   );
@@ -680,17 +1173,22 @@ export default function DashboardPage() {
 
               {/* Stats Row 2 - Weekly/Monthly */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
-                {STATS_ROW2.map((s, i) => {
+                {[
+                  { label: "Weekly Revenue", value: `\u00A3${earnings?.week?.amount?.toFixed(2) || '0.00'}`, sub: `${earnings?.week?.orders || 0} orders this week`, icon: TrendingUp, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                  { label: "Weekly Expenses", value: "\u00A30.00", sub: "This week's costs", icon: TrendingDown, color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+                  { label: "Monthly Earnings", value: `\u00A3${earnings?.month?.amount?.toFixed(2) || '0.00'}`, sub: `${earnings?.month?.orders || 0} orders this month`, icon: Wallet, color: "#14B8A6", bg: "rgba(20,184,166,0.12)" },
+                  { label: "Pending Reviews", value: `${reviews.filter(r => !r.reply).length}`, sub: "Awaiting response", icon: AlertCircle, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+                ].map((s, i) => {
                   const StatIcon = s.icon;
                   return (
-                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all hover:scale-[1.02]" style={{ background: "var(--header-bg)" }}>
+                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all duration-300 hover:scale-[1.02] hover:shadow-xl" style={{ background: "var(--header-bg)" }}>
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-xs font-medium text-[var(--text-muted)]">{s.label}</span>
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
                           <StatIcon size={18} style={{ color: s.color }} />
                         </div>
                       </div>
-                      <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
                       <div className="text-[10px] text-[var(--text-muted)] mt-1">{s.sub}</div>
                     </div>
                   );
@@ -698,12 +1196,14 @@ export default function DashboardPage() {
               </div>
 
               {/* Active Orders Panel */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
+              <div className="rounded-2xl glass-card p-6">
                 <h2 className="text-sm font-semibold text-[var(--text)] mb-4">Active Orders</h2>
-                <div className="text-center py-12 text-[var(--text-muted)]">
-                  <ClipboardList size={48} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">No active orders yet</p>
-                  <p className="text-xs mt-1">New orders will appear here with sound alerts</p>
+                <div className="text-center py-16 animate-fade-in-up">
+                  <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                    <ClipboardList size={36} className="text-white" />
+                  </div>
+                  <h3 className="text-base font-bold text-[var(--text)] mb-1">No active orders yet</h3>
+                  <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">New orders will appear here with sound alerts</p>
                 </div>
               </div>
             </>
@@ -714,11 +1214,10 @@ export default function DashboardPage() {
             <>
               {/* Services Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Grip size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -810,11 +1309,10 @@ export default function DashboardPage() {
             <>
               {/* Products Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Store size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -833,10 +1331,10 @@ export default function DashboardPage() {
               </div>
 
               {/* Category Tabs */}
-              <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 sm:flex-wrap sm:overflow-x-visible mb-6">
                 <button
                   onClick={() => setActiveProductTab("all")}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex-shrink-0"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap shrink-0"
                   style={{
                     background: activeProductTab === "all" ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
                     color: activeProductTab === "all" ? "#FFFFFF" : "var(--text-muted)",
@@ -849,7 +1347,7 @@ export default function DashboardPage() {
                   <button
                     key={cat.name}
                     onClick={() => setActiveProductTab(cat.name)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 flex-shrink-0"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
                     style={{
                       background: activeProductTab === cat.name ? `${cat.color}15` : "var(--header-bg)",
                       color: activeProductTab === cat.name ? cat.color : "var(--text-muted)",
@@ -907,7 +1405,7 @@ export default function DashboardPage() {
                       <div
                         key={cat.name}
                         onClick={() => setActiveProductTab(cat.name)}
-                        className="rounded-2xl border border-[var(--border)] p-4 flex items-center gap-3 transition-all hover:scale-[1.02] cursor-pointer"
+                        className="rounded-2xl border border-[var(--border)] p-4 flex items-center gap-3 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
                         style={{ background: "var(--header-bg)" }}
                       >
                         <span className="text-3xl">{cat.icon}</span>
@@ -920,13 +1418,17 @@ export default function DashboardPage() {
                     ))}
                   </div>
                   {enabledCount === 0 && (
-                    <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-8 text-center">
-                      <Store size={40} className="mx-auto mb-3 text-[var(--text-muted)] opacity-20" />
-                      <p className="text-sm font-medium text-[var(--text)]">No product categories enabled</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">Go to Settings to enable product categories</p>
-                      <button onClick={() => setActivePage("settings")} className="mt-4 px-5 py-2 rounded-xl text-white text-xs font-medium inline-flex items-center gap-2" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
-                        <Settings size={14} /> Open Settings
-                      </button>
+                    <div className="rounded-2xl glass-card p-8">
+                      <div className="text-center py-16 animate-fade-in-up">
+                        <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                          <Store size={36} className="text-white" />
+                        </div>
+                        <h3 className="text-base font-bold text-[var(--text)] mb-1">No product categories enabled</h3>
+                        <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Go to Settings to enable product categories</p>
+                        <button onClick={() => setActivePage("settings")} className="mt-4 px-5 py-2 rounded-xl text-white text-xs font-medium inline-flex items-center gap-2 btn-premium">
+                          <Settings size={14} /> Open Settings
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>
@@ -939,8 +1441,7 @@ export default function DashboardPage() {
                     </h3>
                     <button
                       onClick={() => setActivePage(activeProductTab === "Cakes" ? "add-cake" : "add-product")}
-                      className="px-4 py-2 rounded-xl text-white text-xs font-medium flex items-center gap-2 transition hover:opacity-90"
-                      style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                      className="px-4 py-2 rounded-xl text-white text-xs font-medium flex items-center gap-2 transition hover:opacity-90 btn-premium"
                     >
                       <PlusCircle size={14} />
                       Add {activeProductTab === "Cakes" ? "Cake" : activeProductTab.endsWith("s") ? activeProductTab.slice(0, -1) : activeProductTab}
@@ -951,7 +1452,7 @@ export default function DashboardPage() {
                   {activeProductTab === "Cakes" && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
                       {CAKE_CATEGORIES.map((cat, i) => (
-                        <div key={i} className="rounded-xl border border-[var(--border)] p-3 text-center transition-all hover:scale-[1.02] cursor-pointer" style={{ background: "var(--header-bg)" }}>
+                        <div key={i} className="rounded-xl border border-[var(--border)] p-3 text-center transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer" style={{ background: "var(--header-bg)" }}>
                           <div className="text-2xl mb-1">{cat.icon}</div>
                           <p className="text-[11px] font-semibold text-[var(--text)]">{cat.name}</p>
                           <p className="text-[10px] text-[var(--text-muted)]">{cat.count} items</p>
@@ -961,8 +1462,8 @@ export default function DashboardPage() {
                   )}
 
                   {/* Products table for this category */}
-                  <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
-                    <table className="w-full text-xs">
+                  <div className="rounded-2xl glass-card overflow-hidden">
+                    <table className="w-full text-xs hidden md:table">
                       <thead>
                         <tr style={{ background: "var(--input)" }}>
                           <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">
@@ -988,6 +1489,16 @@ export default function DashboardPage() {
                         </tr>
                       </tbody>
                     </table>
+                    {/* Mobile Cards */}
+                    <div className="md:hidden p-4">
+                      <div className="text-center py-16 animate-fade-in-up">
+                        <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                          {activeProductTab === "Cakes" ? <Cake size={36} className="text-white" /> : <Store size={36} className="text-white" />}
+                        </div>
+                        <h3 className="text-base font-bold text-[var(--text)] mb-1">No {activeProductTab.toLowerCase()} added yet</h3>
+                        <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Click the button above to add your first item</p>
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
@@ -998,11 +1509,10 @@ export default function DashboardPage() {
           {activePage === "add-product" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Store size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -1019,30 +1529,30 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
+              <div className="rounded-2xl glass-card p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Left Column */}
                   <div className="space-y-5">
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Product Name *</label>
-                      <input type="text" placeholder="e.g. Mango Pickle, Masoor Papad" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <input type="text" placeholder="e.g. Mango Pickle, Masoor Papad" value={dishForm.name} onChange={e => setDishForm(f => ({...f, name: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Category *</label>
-                      <select className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
+                      <select value={dishForm.categoryId} onChange={e => setDishForm(f => ({...f, categoryId: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
                         <option value="">Select a category</option>
-                        {PRODUCT_CATEGORIES.map((cat, i) => (
-                          <option key={i} value={cat.name}>{cat.icon} {cat.name}</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
-                      <textarea rows={3} placeholder="Describe your product, ingredients, taste..." className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
+                      <textarea rows={3} placeholder="Describe your product, ingredients, taste..." value={dishForm.description} onChange={e => setDishForm(f => ({...f, description: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Ingredients</label>
-                      <textarea rows={2} placeholder="List main ingredients..." className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Allergen Info</label>
+                      <input type="text" placeholder="e.g. Contains mustard, nuts" value={dishForm.allergens} onChange={e => setDishForm(f => ({...f, allergens: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                   </div>
 
@@ -1051,48 +1561,40 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Price (&pound;) *</label>
-                        <input type="number" placeholder="0.00" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <input type="number" placeholder="0.00" value={dishForm.price} onChange={e => setDishForm(f => ({...f, price: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Weight / Qty *</label>
-                        <input type="text" placeholder="e.g. 250g, 500ml, 12pcs" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Serving Size</label>
+                        <input type="text" placeholder="e.g. 250g, 500ml" value={dishForm.servingSize} onChange={e => setDishForm(f => ({...f, servingSize: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Shelf Life</label>
-                        <input type="text" placeholder="e.g. 6 months, 1 year" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Stock Count</label>
+                        <input type="number" placeholder="Leave empty for unlimited" value={dishForm.stockCount} onChange={e => setDishForm(f => ({...f, stockCount: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Stock Quantity</label>
-                        <input type="number" placeholder="0" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Offer Price (&pound;)</label>
+                        <input type="number" placeholder="Special offer price" value={dishForm.offerPrice} onChange={e => setDishForm(f => ({...f, offerPrice: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Allergen Info</label>
-                      <input type="text" placeholder="e.g. Contains mustard, nuts" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Product Image</label>
-                      <div className="border-2 border-dashed border-[var(--border)] rounded-xl p-6 text-center cursor-pointer hover:border-[var(--primary)] transition">
-                        <Package size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-40" />
-                        <p className="text-xs text-[var(--text-muted)]">Click to upload or drag & drop</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mt-1">PNG, JPG up to 5MB</p>
-                      </div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Image URL</label>
+                      <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                   </div>
                 </div>
 
                 {/* Submit */}
-                <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
-                  <button onClick={() => setActivePage("products")} className="px-5 py-2.5 rounded-xl text-sm font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
+                  <button onClick={() => { resetDishForm(); setActivePage("products"); }} className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
                     Cancel
                   </button>
-                  <button className="px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80">
+                  <button disabled={dishSubmitting} onClick={() => submitDish(false)} className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80 disabled:opacity-50">
                     Save as Draft
                   </button>
-                  <button className="px-6 py-2.5 rounded-xl text-white text-sm font-medium transition hover:opacity-90" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
-                    Publish Product
+                  <button disabled={dishSubmitting} onClick={() => submitDish(true)} className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-white text-sm font-medium transition hover:opacity-90 btn-premium disabled:opacity-50">
+                    {dishSubmitting ? "Saving..." : "Publish Product"}
                   </button>
                 </div>
               </div>
@@ -1103,20 +1605,19 @@ export default function DashboardPage() {
           {activePage === "add-dish" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <UtensilsCrossed size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
-                    <h2 className="text-[15px] font-semibold text-[var(--text)]">Add New Dish</h2>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Add a dish to your daily menu</p>
+                    <h2 className="text-[15px] font-semibold text-[var(--text)]">{editingItem ? "Edit Dish" : "Add New Dish"}</h2>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{editingItem ? "Update your dish details" : "Add a dish to your daily menu"}</p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setActivePage("menu")}
+                  onClick={() => { resetDishForm(); setActivePage("menu"); }}
                   className="px-4 py-2 rounded-xl text-sm font-medium transition hover:opacity-80"
                   style={{ background: "var(--input)", color: "var(--text)" }}
                 >
@@ -1124,37 +1625,34 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
+              <div className="rounded-2xl glass-card p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Left Column */}
                   <div className="space-y-5">
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Dish Name *</label>
-                      <input type="text" placeholder="e.g. Chicken Biryani, Dal Tadka" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <input type="text" placeholder="e.g. Chicken Biryani, Dal Tadka" value={dishForm.name} onChange={e => setDishForm(f => ({...f, name: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Category *</label>
-                      <select className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
+                      <select value={dishForm.categoryId} onChange={e => setDishForm(f => ({...f, categoryId: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
                         <option value="">Select a category</option>
-                        <option value="breakfast">Breakfast</option>
-                        <option value="lunch">Lunch</option>
-                        <option value="dinner">Dinner</option>
-                        <option value="snacks">Snacks</option>
-                        <option value="dessert">Dessert</option>
-                        <option value="beverages">Beverages</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
-                      <textarea rows={3} placeholder="Describe your dish..." className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
+                      <textarea rows={3} placeholder="Describe your dish..." value={dishForm.description} onChange={e => setDishForm(f => ({...f, description: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Diet Type *</label>
                       <div className="flex gap-3">
-                        {["Veg", "Non-Veg", "Vegan"].map((diet) => (
-                          <label key={diet} className="flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--border)] cursor-pointer hover:border-[var(--primary)] transition">
-                            <input type="radio" name="diet" value={diet} className="accent-[var(--primary)]" />
-                            <span className="text-sm text-[var(--text)]">{diet}</span>
+                        {[{ label: "Veg", val: true }, { label: "Non-Veg", val: false }].map((diet) => (
+                          <label key={diet.label} className={`flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl border cursor-pointer hover:border-[var(--primary)] transition ${dishForm.isVeg === diet.val ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
+                            <input type="radio" name="diet" checked={dishForm.isVeg === diet.val} onChange={() => setDishForm(f => ({...f, isVeg: diet.val}))} className="accent-[var(--primary)]" />
+                            <span className="text-sm text-[var(--text)]">{diet.label}</span>
                           </label>
                         ))}
                       </div>
@@ -1166,53 +1664,50 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Price (&pound;) *</label>
-                        <input type="number" placeholder="0.00" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <input type="number" placeholder="0.00" value={dishForm.price} onChange={e => setDishForm(f => ({...f, price: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Prep Time</label>
-                        <input type="text" placeholder="e.g. 30 mins" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Prep Time (mins)</label>
+                        <input type="number" placeholder="e.g. 30" value={dishForm.prepTime} onChange={e => setDishForm(f => ({...f, prepTime: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Serves</label>
-                        <input type="text" placeholder="e.g. 1-2 persons" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Serving Size</label>
+                        <input type="text" placeholder="e.g. 1-2 persons" value={dishForm.servingSize} onChange={e => setDishForm(f => ({...f, servingSize: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Spice Level</label>
-                        <select className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
-                          <option value="mild">Mild</option>
-                          <option value="medium">Medium</option>
-                          <option value="hot">Hot</option>
-                          <option value="extra-hot">Extra Hot</option>
-                        </select>
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Offer Price (&pound;)</label>
+                        <input type="number" placeholder="Special offer price" value={dishForm.offerPrice} onChange={e => setDishForm(f => ({...f, offerPrice: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Stock Count</label>
+                        <input type="number" placeholder="Leave empty for unlimited" value={dishForm.stockCount} onChange={e => setDishForm(f => ({...f, stockCount: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Allergen Info</label>
+                        <input type="text" placeholder="e.g. Contains dairy, gluten" value={dishForm.allergens} onChange={e => setDishForm(f => ({...f, allergens: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Allergen Info</label>
-                      <input type="text" placeholder="e.g. Contains dairy, gluten" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Dish Image</label>
-                      <div className="border-2 border-dashed border-[var(--border)] rounded-xl p-6 text-center cursor-pointer hover:border-[var(--primary)] transition">
-                        <UtensilsCrossed size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-40" />
-                        <p className="text-xs text-[var(--text-muted)]">Click to upload or drag & drop</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mt-1">PNG, JPG up to 5MB</p>
-                      </div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Image URL</label>
+                      <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                   </div>
                 </div>
 
                 {/* Submit */}
-                <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
-                  <button onClick={() => setActivePage("menu")} className="px-5 py-2.5 rounded-xl text-sm font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
+                  <button onClick={() => { resetDishForm(); setActivePage("menu"); }} className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
                     Cancel
                   </button>
-                  <button className="px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80">
+                  <button disabled={dishSubmitting} onClick={() => submitDish(false)} className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80 disabled:opacity-50">
                     Save as Draft
                   </button>
-                  <button className="px-6 py-2.5 rounded-xl text-white text-sm font-medium transition hover:opacity-90" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
-                    Publish Dish
+                  <button disabled={dishSubmitting} onClick={() => submitDish(true)} className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-white text-sm font-medium transition hover:opacity-90 btn-premium disabled:opacity-50">
+                    {dishSubmitting ? "Saving..." : editingItem ? "Update Dish" : "Publish Dish"}
                   </button>
                 </div>
               </div>
@@ -1223,11 +1718,10 @@ export default function DashboardPage() {
           {activePage === "add-cake" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Cake size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -1244,54 +1738,46 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
+              <div className="rounded-2xl glass-card p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Left Column */}
                   <div className="space-y-5">
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Cake Name *</label>
-                      <input type="text" placeholder="e.g. Chocolate Truffle, Red Velvet" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <input type="text" placeholder="e.g. Chocolate Truffle, Red Velvet" value={dishForm.name} onChange={e => setDishForm(f => ({...f, name: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Cake Category *</label>
-                      <select className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Category *</label>
+                      <select value={dishForm.categoryId} onChange={e => setDishForm(f => ({...f, categoryId: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
                         <option value="">Select a category</option>
-                        {CAKE_CATEGORIES.map((cat, i) => (
-                          <option key={i} value={cat.name}>{cat.icon} {cat.name}</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
-                      <textarea rows={3} placeholder="Describe flavour, layers, frosting..." className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
+                      <textarea rows={3} placeholder="Describe flavour, layers, frosting..." value={dishForm.description} onChange={e => setDishForm(f => ({...f, description: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
                     </div>
 
                     {/* Egg / Eggless Selection */}
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-2">Egg / Eggless *</label>
                       <div className="flex gap-3">
-                        <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border)] cursor-pointer hover:border-[#F59E0B] transition has-[:checked]:border-[#F59E0B] has-[:checked]:bg-[rgba(245,158,11,0.06)]">
-                          <input type="radio" name="eggType" value="egg" className="accent-[#F59E0B]" />
+                        <label className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition ${!dishForm.isVeg ? 'border-[#F59E0B] bg-[rgba(245,158,11,0.06)]' : 'border-[var(--border)]'}`}>
+                          <input type="radio" name="eggType" value="egg" checked={!dishForm.isVeg} onChange={() => setDishForm(f => ({...f, isVeg: false}))} className="accent-[#F59E0B]" />
                           <span className="text-xl">🥚</span>
                           <div>
                             <p className="text-sm font-semibold text-[var(--text)]">Egg</p>
                             <p className="text-[10px] text-[var(--text-muted)]">Contains egg</p>
                           </div>
                         </label>
-                        <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border)] cursor-pointer hover:border-[#10B981] transition has-[:checked]:border-[#10B981] has-[:checked]:bg-[rgba(16,185,129,0.06)]">
-                          <input type="radio" name="eggType" value="eggless" className="accent-[#10B981]" />
+                        <label className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition ${dishForm.isVeg ? 'border-[#10B981] bg-[rgba(16,185,129,0.06)]' : 'border-[var(--border)]'}`}>
+                          <input type="radio" name="eggType" value="eggless" checked={dishForm.isVeg} onChange={() => setDishForm(f => ({...f, isVeg: true}))} className="accent-[#10B981]" />
                           <span className="text-xl">🌱</span>
                           <div>
                             <p className="text-sm font-semibold text-[var(--text)]">Eggless</p>
                             <p className="text-[10px] text-[var(--text-muted)]">100% eggless</p>
-                          </div>
-                        </label>
-                        <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border)] cursor-pointer hover:border-[#8B5CF6] transition has-[:checked]:border-[#8B5CF6] has-[:checked]:bg-[rgba(139,92,246,0.06)]">
-                          <input type="radio" name="eggType" value="both" className="accent-[#8B5CF6]" />
-                          <span className="text-xl">🎂</span>
-                          <div>
-                            <p className="text-sm font-semibold text-[var(--text)]">Both</p>
-                            <p className="text-[10px] text-[var(--text-muted)]">Offer both variants</p>
                           </div>
                         </label>
                       </div>
@@ -1303,61 +1789,44 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Price (&pound;) *</label>
-                        <input type="number" placeholder="0.00" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <input type="number" placeholder="0.00" value={dishForm.price} onChange={e => setDishForm(f => ({...f, price: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Weight *</label>
-                        <select className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition">
-                          <option value="">Select weight</option>
-                          <option value="0.5">0.5 kg (500g)</option>
-                          <option value="1">1 kg</option>
-                          <option value="1.5">1.5 kg</option>
-                          <option value="2">2 kg</option>
-                          <option value="3">3 kg</option>
-                          <option value="5">5 kg</option>
-                          <option value="custom">Custom</option>
-                        </select>
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Serving Size</label>
+                        <input type="text" placeholder="e.g. 1 kg, 8-10 persons" value={dishForm.servingSize} onChange={e => setDishForm(f => ({...f, servingSize: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Serves</label>
-                        <input type="text" placeholder="e.g. 8-10 persons" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Prep Time (mins)</label>
+                        <input type="number" placeholder="e.g. 240" value={dishForm.prepTime} onChange={e => setDishForm(f => ({...f, prepTime: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Prep Time</label>
-                        <input type="text" placeholder="e.g. 4-6 hours" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                        <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Offer Price (&pound;)</label>
+                        <input type="number" placeholder="Special offer price" value={dishForm.offerPrice} onChange={e => setDishForm(f => ({...f, offerPrice: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Flavour / Frosting</label>
-                      <input type="text" placeholder="e.g. Buttercream, Fondant, Whipped cream" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Allergen Info</label>
-                      <input type="text" placeholder="e.g. Contains dairy, gluten, nuts" className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+                      <input type="text" placeholder="e.g. Contains dairy, gluten, nuts" value={dishForm.allergens} onChange={e => setDishForm(f => ({...f, allergens: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Cake Image</label>
-                      <div className="border-2 border-dashed border-[var(--border)] rounded-xl p-6 text-center cursor-pointer hover:border-[#EC4899] transition">
-                        <Cake size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-40" />
-                        <p className="text-xs text-[var(--text-muted)]">Click to upload or drag & drop</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mt-1">PNG, JPG up to 5MB</p>
-                      </div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Image URL</label>
+                      <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
                     </div>
                   </div>
                 </div>
 
                 {/* Submit */}
-                <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
-                  <button onClick={() => { setActivePage("products"); setActiveProductTab("Cakes"); }} className="px-5 py-2.5 rounded-xl text-sm font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--border)]">
+                  <button onClick={() => { resetDishForm(); setActivePage("products"); setActiveProductTab("Cakes"); }} className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
                     Cancel
                   </button>
-                  <button className="px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80">
+                  <button disabled={dishSubmitting} onClick={() => submitDish(false)} className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text)] border border-[var(--border)] transition hover:opacity-80 disabled:opacity-50">
                     Save as Draft
                   </button>
-                  <button className="px-6 py-2.5 rounded-xl text-white text-sm font-medium transition hover:opacity-90" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
-                    Publish Cake
+                  <button disabled={dishSubmitting} onClick={() => submitDish(true)} className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-white text-sm font-medium transition hover:opacity-90 btn-premium disabled:opacity-50">
+                    {dishSubmitting ? "Saving..." : "Publish Cake"}
                   </button>
                 </div>
               </div>
@@ -1369,13 +1838,11 @@ export default function DashboardPage() {
             <>
               {/* Settings Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-4">
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient"
                   >
                     <Settings size={24} color="white" strokeWidth={2} />
                   </div>
@@ -1414,14 +1881,14 @@ export default function DashboardPage() {
 
               {/* Subscription Plans */}
               <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Choose Your Plan</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 mb-6">
+              <div className="flex gap-4 sm:gap-5 overflow-x-auto scrollbar-hide pb-2 sm:grid sm:grid-cols-2 md:grid-cols-3 sm:overflow-visible mb-6">
                 {PLANS.map((plan, i) => {
                   const PlanIcon = plan.icon;
                   const isCurrent = plan.name === currentPlan;
                   return (
                     <div
                       key={i}
-                      className="relative rounded-2xl border p-5 transition-all hover:scale-[1.02]"
+                      className="relative rounded-2xl border p-5 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl min-w-[280px] sm:min-w-0 flex-shrink-0 sm:flex-shrink"
                       style={{
                         background: "var(--header-bg)",
                         borderColor: isCurrent ? plan.color : "var(--border)",
@@ -1473,11 +1940,48 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              {/* Plan Comparison */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
+              {/* Plan Comparison - Mobile Stacked Cards */}
+              <div className="sm:hidden mb-6 space-y-4">
+                <h3 className="text-sm font-semibold text-[var(--text)] mb-2">Plan Comparison</h3>
+                {[
+                  { feature: "Monthly Orders", starter: "30", growth: "150", unlimited: "Unlimited" },
+                  { feature: "Menu Listing", starter: "Basic", growth: "Featured", unlimited: "Premium" },
+                  { feature: "Homemade Store", starter: "1 item", growth: "4 items", unlimited: "All" },
+                  { feature: "Product Categories", starter: "1 category", growth: "4 categories", unlimited: "All 9" },
+                  { feature: "Analytics", starter: "Basic", growth: "Advanced", unlimited: "Full Suite" },
+                  { feature: "Notifications", starter: "Email", growth: "Priority", unlimited: "Real-time Push" },
+                  { feature: "Tiffin Subscriptions", starter: "\u2014", growth: "Yes", unlimited: "Yes" },
+                  { feature: "Catering Orders", starter: "\u2014", growth: "\u2014", unlimited: "Yes" },
+                  { feature: "Promotional Tools", starter: "\u2014", growth: "Yes", unlimited: "Yes" },
+                  { feature: "Account Manager", starter: "\u2014", growth: "\u2014", unlimited: "Dedicated" },
+                  { feature: "Support", starter: "Email", growth: "Priority Email", unlimited: "24/7 Priority" },
+                  { feature: "Price", starter: "Free", growth: "\u00a330/mo", unlimited: "\u00a345/mo" },
+                ].map((row, ri) => (
+                  <div key={ri} className="rounded-xl border border-[var(--border)] p-3" style={{ background: "var(--header-bg)" }}>
+                    <p className="text-xs font-semibold text-[var(--text)] mb-2">{row.feature}</p>
+                    <div className="grid grid-cols-3 gap-2 text-[11px]">
+                      <div className="text-center">
+                        <span className="block text-[9px] font-bold mb-0.5" style={{ color: "#10B981" }}>Starter</span>
+                        <span className="text-[var(--text-muted)]">{row.starter}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="block text-[9px] font-bold mb-0.5" style={{ color: "#3B82F6" }}>Growth</span>
+                        <span className="text-[var(--text-muted)]">{row.growth}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="block text-[9px] font-bold mb-0.5" style={{ color: "#8B5CF6" }}>Unlimited</span>
+                        <span className="text-[var(--text-muted)]">{row.unlimited}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Plan Comparison - Desktop Table */}
+              <div className="hidden sm:block rounded-2xl glass-card p-6">
                 <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Plan Comparison</h3>
-                <div className="overflow-hidden rounded-xl border border-[var(--border)]">
-                  <table className="w-full text-xs">
+                <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+                  <table className="w-full text-xs min-w-[520px]">
                     <thead>
                       <tr style={{ background: "var(--input)" }}>
                         <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Feature</th>
@@ -1784,7 +2288,7 @@ export default function DashboardPage() {
                   </h4>
                   <div className="rounded-xl border border-[var(--border)] p-4" style={{ background: "var(--bg)" }}>
                     <div className="flex items-start gap-3">
-                      <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                         <ChefHat size={24} color="white" />
                       </div>
                       <div className="flex-1">
@@ -1832,6 +2336,147 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Kitchen Operations */}
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-[var(--text)] mb-4 flex items-center gap-2">
+                  <ChefHat size={16} style={{ color: "#FF5A1F" }} /> Kitchen Operations
+                </h3>
+
+                {/* Kitchen Status Toggle */}
+                <div
+                  className="rounded-2xl border p-5 mb-5 transition-all"
+                  style={{
+                    background: kitchenOnline ? "rgba(16,185,129,0.05)" : "rgba(239,68,68,0.05)",
+                    borderColor: kitchenOnline ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)",
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: kitchenOnline ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)" }}>
+                        <Power size={24} style={{ color: kitchenOnline ? "#10B981" : "#EF4444" }} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold" style={{ color: kitchenOnline ? "#10B981" : "#EF4444" }}>
+                          {kitchenOnline ? "Kitchen Open" : "Kitchen Closed"}
+                        </h4>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                          {kitchenOnline ? "Customers can see and order from your menu" : "Your kitchen is hidden from customers"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const newVal = !kitchenOnline;
+                        setKitchenOnline(newVal);
+                        await updateChefProfile({ isOnline: newVal });
+                      }}
+                      className="relative w-14 h-8 rounded-full transition-all flex-shrink-0"
+                      style={{ background: kitchenOnline ? "#10B981" : "#EF4444" }}
+                    >
+                      <div className="absolute top-1 w-6 h-6 rounded-full bg-white shadow-sm transition-all" style={{ left: kitchenOnline ? "30px" : "4px" }} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Operating Hours */}
+                <div className="rounded-2xl border border-[var(--border)] p-5 mb-5" style={{ background: "var(--header-bg)" }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                      <Clock size={14} style={{ color: "#3B82F6" }} /> Operating Hours
+                    </h4>
+                    <button
+                      onClick={() => updateChefProfile({ operatingHours: JSON.stringify(operatingHours) })}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 btn-premium flex items-center gap-1.5"
+                    >
+                      <Save size={12} /> Save Hours
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
+                      <div key={day} className="flex items-center gap-3 flex-wrap">
+                        <div className="w-24 flex items-center gap-2">
+                          <button
+                            onClick={() => setOperatingHours(prev => ({ ...prev, [day]: { ...prev[day], enabled: !prev[day].enabled } }))}
+                            className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
+                            style={{ background: operatingHours[day]?.enabled ? "#10B981" : "var(--border)" }}
+                          >
+                            <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all" style={{ left: operatingHours[day]?.enabled ? "18px" : "2px" }} />
+                          </button>
+                          <span className="text-xs font-medium text-[var(--text)] w-12">{day.slice(0, 3)}</span>
+                        </div>
+                        {operatingHours[day]?.enabled ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              value={operatingHours[day]?.open || "09:00"}
+                              onChange={e => setOperatingHours(prev => ({ ...prev, [day]: { ...prev[day], open: e.target.value } }))}
+                              className="px-2 py-1.5 rounded-lg text-xs border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[#3B82F6] transition"
+                            />
+                            <span className="text-xs text-[var(--text-muted)]">to</span>
+                            <input
+                              type="time"
+                              value={operatingHours[day]?.close || "21:00"}
+                              onChange={e => setOperatingHours(prev => ({ ...prev, [day]: { ...prev[day], close: e.target.value } }))}
+                              className="px-2 py-1.5 rounded-lg text-xs border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[#3B82F6] transition"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)]">Closed</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bank Details */}
+                <div className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                      <Wallet size={14} style={{ color: "#8B5CF6" }} /> Bank Details
+                    </h4>
+                    <button
+                      onClick={() => updateChefProfile({ bankDetails: JSON.stringify(bankDetails) })}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 btn-premium flex items-center gap-1.5"
+                    >
+                      <Save size={12} /> Save
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mb-4">Your earnings will be paid to this account</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Bank Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Barclays"
+                        value={bankDetails.bankName}
+                        onChange={e => setBankDetails(prev => ({ ...prev, bankName: e.target.value }))}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Account Number</label>
+                      <input
+                        type="text"
+                        placeholder="12345678"
+                        value={bankDetails.accountNumber}
+                        onChange={e => setBankDetails(prev => ({ ...prev, accountNumber: e.target.value }))}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Sort Code</label>
+                      <input
+                        type="text"
+                        placeholder="12-34-56"
+                        value={bankDetails.sortCode}
+                        onChange={e => setBankDetails(prev => ({ ...prev, sortCode: e.target.value }))}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </>
           )}
 
@@ -1840,28 +2485,26 @@ export default function DashboardPage() {
             <>
               {/* Menu Header */}
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <UtensilsCrossed size={22} color="white" strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Menu Management</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active Items</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Draft</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{menuItems.filter(i => i.isAvailable).length} Active Items</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />{menuItems.filter(i => !i.isAvailable).length} Unavailable</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <button className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
-                      <RefreshCw size={16} className="text-[var(--text-muted)]" />
+                    <button onClick={() => fetchMenuItems()} className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                      <RefreshCw size={16} className={`text-[var(--text-muted)] ${menuLoading ? "animate-spin" : ""}`} />
                     </button>
                     <button
                       onClick={() => setActivePage("add-dish")}
-                      className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 transition hover:opacity-90"
-                      style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                      className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 transition hover:opacity-90 btn-premium"
                     >
                       <PlusCircle size={14} />
                       <span>Add Dish</span>
@@ -1871,88 +2514,267 @@ export default function DashboardPage() {
               </div>
 
               {/* Menu Table */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
+              <div className="rounded-2xl glass-card overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs hidden md:table">
                     <thead>
                       <tr style={{ background: "var(--input)" }}>
                         <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Dish Name</th>
                         <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Category</th>
                         <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Price</th>
                         <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Prep Time</th>
-                        <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
+                        <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Stock</th>
+                        <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Available</th>
                         <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
+                      {menuItems.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-5 py-16 text-center text-[var(--text-muted)]">
+                        <td colSpan={7} className="px-5 py-16 text-center text-[var(--text-muted)]">
                           <UtensilsCrossed size={40} className="mx-auto mb-3 opacity-20" />
-                          <p className="text-sm font-medium">No dishes added yet</p>
+                          <p className="text-sm font-medium">{menuLoading ? "Loading menu items..." : "No dishes added yet"}</p>
                           <p className="text-[11px] mt-1">Click &quot;Add Dish&quot; to create your first menu item</p>
                         </td>
                       </tr>
+                      ) : menuItems.map((item: any) => (
+                      <tr key={item.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            {item.image ? (
+                              <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "var(--input)" }}>
+                                <UtensilsCrossed size={16} className="text-[var(--text-muted)]" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-semibold text-[var(--text)]">{item.name}</p>
+                              <p className="text-[10px] text-[var(--text-muted)]">{item.isVeg ? "Veg" : "Non-Veg"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-muted)]">{getCategoryName(item.categoryId)}</td>
+                        <td className="px-4 py-3 text-center">
+                          {item.offerPrice ? (
+                            <div>
+                              <span className="line-through text-[var(--text-muted)]">&pound;{Number(item.price).toFixed(2)}</span>
+                              <span className="ml-1 font-semibold" style={{ color: "#10B981" }}>&pound;{Number(item.offerPrice).toFixed(2)}</span>
+                            </div>
+                          ) : (
+                            <span className="font-semibold text-[var(--text)]">&pound;{Number(item.price).toFixed(2)}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center text-[var(--text-muted)]">{item.prepTime ? `${item.prepTime} min` : "-"}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{
+                            color: item.stockCount == null ? "#8B5CF6" : item.stockCount > 5 ? "#10B981" : item.stockCount > 0 ? "#F59E0B" : "#EF4444",
+                            background: item.stockCount == null ? "rgba(139,92,246,0.1)" : item.stockCount > 5 ? "rgba(16,185,129,0.1)" : item.stockCount > 0 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)",
+                          }}>
+                            {item.stockCount == null ? "Unlimited" : item.stockCount}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => toggleItemAvailability(item.menuId, item.id)}
+                            className="relative w-11 h-6 rounded-full transition-all"
+                            style={{ background: item.isAvailable ? "#10B981" : "var(--border)" }}
+                          >
+                            <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all" style={{ left: item.isAvailable ? "22px" : "2px" }} />
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button onClick={() => startEditItem(item)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--input)] transition" title="Edit">
+                              <Pencil size={14} style={{ color: "#3B82F6" }} />
+                            </button>
+                            <button onClick={() => deleteMenuItem(item.menuId, item.id)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--input)] transition" title="Delete">
+                              <Trash2 size={14} style={{ color: "#EF4444" }} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      ))}
                     </tbody>
                   </table>
+                  {/* Mobile Cards */}
+                  <div className="md:hidden p-4">
+                    {menuItems.length === 0 ? (
+                    <div className="text-center py-16 animate-fade-in-up">
+                      <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                        <UtensilsCrossed size={36} className="text-white" />
+                      </div>
+                      <h3 className="text-base font-bold text-[var(--text)] mb-1">{menuLoading ? "Loading..." : "No dishes added yet"}</h3>
+                      <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Click &quot;Add Dish&quot; to create your first menu item</p>
+                    </div>
+                    ) : (
+                    <div className="space-y-3">
+                      {menuItems.map((item: any) => (
+                      <div key={item.id} className="rounded-xl border border-[var(--border)] p-4 animate-fade-in-up" style={{ background: "var(--header-bg)" }}>
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            {item.image ? (
+                              <img src={item.image} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: "var(--input)" }}>
+                                <UtensilsCrossed size={18} className="text-[var(--text-muted)]" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-sm font-semibold text-[var(--text)]">{item.name}</p>
+                              <p className="text-[11px] text-[var(--text-muted)]">{getCategoryName(item.categoryId)} {item.isVeg ? "- Veg" : "- Non-Veg"}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => toggleItemAvailability(item.menuId, item.id)}
+                            className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
+                            style={{ background: item.isAvailable ? "#10B981" : "var(--border)" }}
+                          >
+                            <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all" style={{ left: item.isAvailable ? "22px" : "2px" }} />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            {item.offerPrice ? (
+                              <>
+                                <span className="line-through text-[var(--text-muted)] text-xs">&pound;{Number(item.price).toFixed(2)}</span>
+                                <span className="ml-1 text-sm font-bold" style={{ color: "#10B981" }}>&pound;{Number(item.offerPrice).toFixed(2)}</span>
+                              </>
+                            ) : (
+                              <span className="text-sm font-bold text-[var(--text)]">&pound;{Number(item.price).toFixed(2)}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {item.prepTime && <span className="text-[11px] text-[var(--text-muted)]">{item.prepTime} min</span>}
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{
+                              color: item.stockCount == null ? "#8B5CF6" : item.stockCount > 0 ? "#10B981" : "#EF4444",
+                              background: item.stockCount == null ? "rgba(139,92,246,0.1)" : item.stockCount > 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+                            }}>
+                              {item.stockCount == null ? "Unlimited" : `${item.stockCount} left`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
+                          <button onClick={() => startEditItem(item)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition hover:opacity-80" style={{ color: "#3B82F6", background: "rgba(59,130,246,0.1)" }}>
+                            <Pencil size={12} /> Edit
+                          </button>
+                          <button onClick={() => deleteMenuItem(item.menuId, item.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition hover:opacity-80" style={{ color: "#EF4444", background: "rgba(239,68,68,0.1)" }}>
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      </div>
+                      ))}
+                    </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </>
           )}
 
           {/* Active Orders Page */}
-          {activePage === "active-orders" && (
+          {activePage === "active-orders" && (() => {
+            const activeOrders = orders.filter(o => !["DELIVERED","CANCELLED","REJECTED"].includes(o.status));
+            const activeCount = activeOrders.length;
+            const preparingCount = activeOrders.filter(o => o.status === "PREPARING").length;
+            const newCount = activeOrders.filter(o => o.status === "PLACED").length;
+            const readyCount = activeOrders.filter(o => o.status === "READY").length;
+            const outCount = activeOrders.filter(o => o.status === "OUT_FOR_DELIVERY").length;
+            const acceptedCount = activeOrders.filter(o => o.status === "ACCEPTED").length;
+
+            const filterTabs = [
+              { label: "All Orders", count: activeCount, color: "#8B5CF6", statusFilter: null as string | null },
+              { label: "New", count: newCount, color: "#3B82F6", statusFilter: "PLACED" },
+              { label: "Accepted", count: acceptedCount, color: "#6366F1", statusFilter: "ACCEPTED" },
+              { label: "Preparing", count: preparingCount, color: "#F59E0B", statusFilter: "PREPARING" },
+              { label: "Ready", count: readyCount, color: "#10B981", statusFilter: "READY" },
+              { label: "Out for Delivery", count: outCount, color: "#8B5CF6", statusFilter: "OUT_FOR_DELIVERY" },
+            ];
+
+            const filteredOrders = activeOrderFilter === "All Orders"
+              ? activeOrders
+              : activeOrders.filter(o => {
+                  const tab = filterTabs.find(t => t.label === activeOrderFilter);
+                  return tab?.statusFilter ? o.status === tab.statusFilter : true;
+                });
+
+            function renderActionButtons(order: any) {
+              const btnBase = "px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition-all hover:opacity-90 active:scale-95";
+              switch (order.status) {
+                case "PLACED":
+                  return (
+                    <div className="flex gap-1.5">
+                      <button className={btnBase} style={{ background: "#10B981" }} onClick={() => updateOrderStatus(order.id, "ACCEPTED")}>Accept</button>
+                      <button className={btnBase} style={{ background: "#EF4444" }} onClick={() => updateOrderStatus(order.id, "REJECTED")}>Reject</button>
+                    </div>
+                  );
+                case "ACCEPTED":
+                  return <button className={btnBase} style={{ background: "#F59E0B" }} onClick={() => updateOrderStatus(order.id, "PREPARING")}>Start Cooking</button>;
+                case "PREPARING":
+                  return <button className={btnBase} style={{ background: "#10B981" }} onClick={() => updateOrderStatus(order.id, "READY")}>Mark Ready</button>;
+                case "READY":
+                  return <button className={btnBase} style={{ background: "#3B82F6" }} onClick={() => updateOrderStatus(order.id, "OUT_FOR_DELIVERY")}>Out for Delivery</button>;
+                case "OUT_FOR_DELIVERY":
+                  return <button className={btnBase} style={{ background: "#059669" }} onClick={() => updateOrderStatus(order.id, "DELIVERED")}>Delivered</button>;
+                default:
+                  return null;
+              }
+            }
+
+            return (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <ClipboardList size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Active Orders</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />0 Preparing</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{activeCount} Active</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />{preparingCount} Preparing</span>
                     </div>
                   </div>
                 </div>
-                <button className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
-                  <RefreshCw size={18} className="text-[var(--text-muted)]" />
+                <button
+                  className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80"
+                  style={{ background: "var(--input)" }}
+                  onClick={() => fetchOrders()}
+                >
+                  <RefreshCw size={18} className={`text-[var(--text-muted)] ${orderLoading ? "animate-spin" : ""}`} />
                 </button>
               </div>
 
               {/* Order Status Tabs */}
-              <div className="flex gap-2 mb-6">
-                {[
-                  { label: "All Orders", count: 0, color: "#8B5CF6" },
-                  { label: "New", count: 0, color: "#3B82F6" },
-                  { label: "Preparing", count: 0, color: "#F59E0B" },
-                  { label: "Ready", count: 0, color: "#10B981" },
-                  { label: "Out for Delivery", count: 0, color: "#EC4899" },
-                ].map((tab, i) => (
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 sm:flex-wrap sm:overflow-x-visible mb-6">
+                {filterTabs.map((tab) => {
+                  const isActive = activeOrderFilter === tab.label;
+                  return (
                   <button
-                    key={i}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
+                    key={tab.label}
+                    onClick={() => setActiveOrderFilter(tab.label)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
                     style={{
-                      background: i === 0 ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
-                      color: i === 0 ? "#FFFFFF" : "var(--text-muted)",
-                      border: i === 0 ? "none" : "1px solid var(--border)",
+                      background: isActive ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
+                      color: isActive ? "#FFFFFF" : "var(--text-muted)",
+                      border: isActive ? "none" : "1px solid var(--border)",
                     }}
                   >
                     {tab.label}
                     <span className="px-1.5 py-0.5 rounded-full text-[10px]" style={{
-                      background: i === 0 ? "rgba(255,255,255,0.2)" : `${tab.color}15`,
-                      color: i === 0 ? "#FFFFFF" : tab.color,
+                      background: isActive ? "rgba(255,255,255,0.2)" : `${tab.color}15`,
+                      color: isActive ? "#FFFFFF" : tab.color,
                     }}>{tab.count}</span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Orders Table */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
-                <table className="w-full text-xs">
+              <div className="rounded-2xl glass-card overflow-hidden">
+                <table className="w-full text-xs hidden md:table">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
@@ -1965,6 +2787,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    {filteredOrders.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-5 py-16 text-center text-[var(--text-muted)]">
                         <ClipboardList size={40} className="mx-auto mb-3 opacity-20" />
@@ -1972,65 +2795,143 @@ export default function DashboardPage() {
                         <p className="text-[11px] mt-1">New orders will appear here with real-time notifications</p>
                       </td>
                     </tr>
+                    ) : filteredOrders.map((order: any) => {
+                      const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      return (
+                      <tr key={order.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                        <td className="px-5 py-3 font-mono font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-[var(--text)]">{order.user?.name || "Customer"}</div>
+                          <div className="text-[10px] text-[var(--text-muted)]">{order.user?.email || ""}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-muted)] max-w-[200px] truncate">{getOrderItemsSummary(order.items)}</td>
+                        <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-[var(--text-muted)]">{formatRelativeTime(order.createdAt)}</td>
+                        <td className="px-4 py-3 text-center">{renderActionButtons(order)}</td>
+                      </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                {/* Mobile Cards */}
+                <div className="md:hidden p-4">
+                  {filteredOrders.length === 0 ? (
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <ClipboardList size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No active orders</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">New orders will appear here with real-time notifications</p>
+                  </div>
+                  ) : (
+                  <div className="space-y-3">
+                    {filteredOrders.map((order: any) => {
+                      const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      return (
+                      <div key={order.id} className="rounded-xl border border-[var(--border)] p-4 animate-fade-in-up" style={{ background: "var(--header-bg)" }}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <span className="font-mono text-xs font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</span>
+                            <p className="text-sm font-medium text-[var(--text)] mt-0.5">{order.user?.name || "Customer"}</p>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-2">{getOrderItemsSummary(order.items)}</p>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-bold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">{formatRelativeTime(order.createdAt)}</span>
+                        </div>
+                        <div className="flex justify-end">{renderActionButtons(order)}</div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                  )}
+                </div>
               </div>
             </>
-          )}
+            );
+          })()}
 
           {/* Order History Page */}
-          {activePage === "order-history" && (
+          {activePage === "order-history" && (() => {
+            const historyOrders = orders.filter(o => ["DELIVERED","CANCELLED","REJECTED"].includes(o.status));
+            const completedCount = historyOrders.filter(o => o.status === "DELIVERED").length;
+            const cancelledCount = historyOrders.filter(o => o.status === "CANCELLED" || o.status === "REJECTED").length;
+            const totalHistoryCount = historyOrders.length;
+            const avgOrderValue = totalHistoryCount > 0
+              ? (historyOrders.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0) / totalHistoryCount)
+              : 0;
+
+            const filteredHistory = historyFilter === "All"
+              ? historyOrders
+              : historyFilter === "Completed"
+              ? historyOrders.filter(o => o.status === "DELIVERED")
+              : historyFilter === "Cancelled"
+              ? historyOrders.filter(o => o.status === "CANCELLED" || o.status === "REJECTED")
+              : historyOrders;
+
+            return (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Package size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Order History</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Completed</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />0 Cancelled</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{completedCount} Completed</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />{cancelledCount} Cancelled</span>
                     </div>
                   </div>
                 </div>
-                <button className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
-                  <RefreshCw size={18} className="text-[var(--text-muted)]" />
+                <button
+                  className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80"
+                  style={{ background: "var(--input)" }}
+                  onClick={() => fetchOrders()}
+                >
+                  <RefreshCw size={18} className={`text-[var(--text-muted)] ${orderLoading ? "animate-spin" : ""}`} />
                 </button>
               </div>
 
               {/* History Filters */}
-              <div className="flex gap-2 mb-6">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 sm:flex-wrap sm:overflow-x-visible mb-6">
                 {[
                   { label: "All", color: "#8B5CF6" },
                   { label: "Completed", color: "#10B981" },
                   { label: "Cancelled", color: "#EF4444" },
-                  { label: "Refunded", color: "#F59E0B" },
-                ].map((tab, i) => (
+                ].map((tab) => {
+                  const isActive = historyFilter === tab.label;
+                  return (
                   <button
-                    key={i}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+                    key={tab.label}
+                    onClick={() => setHistoryFilter(tab.label)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap shrink-0"
                     style={{
-                      background: i === 0 ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
-                      color: i === 0 ? "#FFFFFF" : "var(--text-muted)",
-                      border: i === 0 ? "none" : "1px solid var(--border)",
+                      background: isActive ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
+                      color: isActive ? "#FFFFFF" : "var(--text-muted)",
+                      border: isActive ? "none" : "1px solid var(--border)",
                     }}
                   >
                     {tab.label}
                   </button>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Summary Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
-                  { label: "Total Orders", value: "0", icon: Package, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
-                  { label: "Completed", value: "0", icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-                  { label: "Cancelled", value: "0", icon: AlertCircle, color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
-                  { label: "Avg. Order Value", value: "£0.00", icon: PoundSterling, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                  { label: "Total Orders", value: String(totalHistoryCount), icon: Package, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+                  { label: "Completed", value: String(completedCount), icon: Check, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                  { label: "Cancelled", value: String(cancelledCount), icon: AlertCircle, color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+                  { label: "Avg. Order Value", value: `\u00A3${avgOrderValue.toFixed(2)}`, icon: PoundSterling, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
                 ].map((s, i) => {
                   const SI = s.icon;
                   return (
@@ -2041,15 +2942,15 @@ export default function DashboardPage() {
                           <SI size={18} style={{ color: s.color }} />
                         </div>
                       </div>
-                      <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
                     </div>
                   );
                 })}
               </div>
 
               {/* History Table */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
-                <table className="w-full text-xs">
+              <div className="rounded-2xl glass-card overflow-hidden">
+                <table className="w-full text-xs hidden md:table">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
@@ -2061,6 +2962,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    {filteredHistory.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-5 py-16 text-center text-[var(--text-muted)]">
                         <Package size={40} className="mx-auto mb-3 opacity-20" />
@@ -2068,21 +2970,73 @@ export default function DashboardPage() {
                         <p className="text-[11px] mt-1">Completed and cancelled orders will appear here</p>
                       </td>
                     </tr>
+                    ) : filteredHistory.map((order: any) => {
+                      const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      return (
+                      <tr key={order.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                        <td className="px-5 py-3 font-mono font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-[var(--text)]">{order.user?.name || "Customer"}</div>
+                          <div className="text-[10px] text-[var(--text-muted)]">{order.user?.email || ""}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-muted)] max-w-[200px] truncate">{getOrderItemsSummary(order.items)}</td>
+                        <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+                      </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                {/* Mobile Cards */}
+                <div className="md:hidden p-4">
+                  {filteredHistory.length === 0 ? (
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <Package size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No order history yet</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Completed and cancelled orders will appear here</p>
+                  </div>
+                  ) : (
+                  <div className="space-y-3">
+                    {filteredHistory.map((order: any) => {
+                      const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      return (
+                      <div key={order.id} className="rounded-xl border border-[var(--border)] p-4 animate-fade-in-up" style={{ background: "var(--header-bg)" }}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <span className="font-mono text-xs font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</span>
+                            <p className="text-sm font-medium text-[var(--text)] mt-0.5">{order.user?.name || "Customer"}</p>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-2">{getOrderItemsSummary(order.items)}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                  )}
+                </div>
               </div>
             </>
-          )}
+            );
+          })()}
 
           {/* Notifications Page */}
           {activePage === "notifications" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Bell size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -2099,7 +3053,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Notification Filters */}
-              <div className="flex gap-2 mb-6">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 sm:flex-wrap sm:overflow-x-visible mb-6">
                 {[
                   { label: "All", icon: Bell },
                   { label: "Orders", icon: ClipboardList },
@@ -2110,7 +3064,7 @@ export default function DashboardPage() {
                   return (
                     <button
                       key={i}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
                       style={{
                         background: i === 0 ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
                         color: i === 0 ? "#FFFFFF" : "var(--text-muted)",
@@ -2139,10 +3093,14 @@ export default function DashboardPage() {
               </div>
 
               {/* Empty Notification List */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-8 text-center">
-                <Bell size={40} className="mx-auto mb-3 text-[var(--text-muted)] opacity-20" />
-                <p className="text-sm font-medium text-[var(--text)]">No notifications yet</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">You&apos;ll be notified about new orders, reviews and system updates</p>
+              <div className="rounded-2xl glass-card p-8">
+                <div className="text-center py-16 animate-fade-in-up">
+                  <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                    <Bell size={36} className="text-white" />
+                  </div>
+                  <h3 className="text-base font-bold text-[var(--text)] mb-1">No notifications yet</h3>
+                  <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">You&apos;ll be notified about new orders, reviews and system updates</p>
+                </div>
               </div>
             </>
           )}
@@ -2151,11 +3109,10 @@ export default function DashboardPage() {
           {activePage === "subscriptions" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Calendar size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -2167,8 +3124,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <button
-                  className="px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                  className="px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90 btn-premium"
                 >
                   <PlusCircle size={16} />
                   <span>Create Plan</span>
@@ -2205,11 +3161,11 @@ export default function DashboardPage() {
               </div>
 
               {/* Subscribers Table */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
+              <div className="rounded-2xl glass-card overflow-hidden">
                 <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-[var(--text)]">Active Subscribers</h3>
                 </div>
-                <table className="w-full text-xs">
+                <table className="w-full text-xs hidden md:table">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Customer</th>
@@ -2230,6 +3186,16 @@ export default function DashboardPage() {
                     </tr>
                   </tbody>
                 </table>
+                {/* Mobile Cards */}
+                <div className="md:hidden p-4">
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <Calendar size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No subscribers yet</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Customers who subscribe to your tiffin plans will appear here</p>
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -2238,44 +3204,43 @@ export default function DashboardPage() {
           {activePage === "earnings" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <PoundSterling size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Earnings</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />£0 Today</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />£0 Pending</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />&pound;{earnings?.today?.amount?.toFixed(2) || '0.00'} Today</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />{earnings?.today?.orders || 0} orders</span>
                     </div>
                   </div>
                 </div>
-                <button className="px-4 py-2 rounded-xl text-xs font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text)" }}>
-                  Download Report
+                <button onClick={() => fetchEarnings()} className="px-4 py-2 rounded-xl text-xs font-medium transition hover:opacity-80 flex items-center gap-1.5" style={{ background: "var(--input)", color: "var(--text)" }}>
+                  <RefreshCw size={12} className={earningsLoading ? "animate-spin" : ""} /> Refresh
                 </button>
               </div>
 
               {/* Earnings Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {[
-                  { label: "Today's Earnings", value: "£0.00", sub: "0 orders", icon: TrendingUp, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-                  { label: "This Week", value: "£0.00", sub: "0 orders", icon: Wallet, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-                  { label: "This Month", value: "£0.00", sub: "0 orders", icon: PoundSterling, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
-                  { label: "Total Earnings", value: "£0.00", sub: "All time", icon: Crown, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+                  { label: "Today's Earnings", value: `\u00A3${earnings?.today?.amount?.toFixed(2) || '0.00'}`, sub: `${earnings?.today?.orders || 0} orders`, icon: TrendingUp, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                  { label: "This Week", value: `\u00A3${earnings?.week?.amount?.toFixed(2) || '0.00'}`, sub: `${earnings?.week?.orders || 0} orders`, icon: Wallet, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                  { label: "This Month", value: `\u00A3${earnings?.month?.amount?.toFixed(2) || '0.00'}`, sub: `${earnings?.month?.orders || 0} orders`, icon: PoundSterling, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+                  { label: "Total Earnings", value: `\u00A3${earnings?.total?.amount?.toFixed(2) || '0.00'}`, sub: `${earnings?.total?.orders || 0} all time`, icon: Crown, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
                 ].map((s, i) => {
                   const SI = s.icon;
                   return (
-                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all hover:scale-[1.02]" style={{ background: "var(--header-bg)" }}>
+                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all duration-300 hover:scale-[1.02] hover:shadow-xl" style={{ background: "var(--header-bg)" }}>
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-xs font-medium text-[var(--text-muted)]">{s.label}</span>
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
                           <SI size={18} style={{ color: s.color }} />
                         </div>
                       </div>
-                      <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
                       <div className="text-[10px] text-[var(--text-muted)] mt-1">{s.sub}</div>
                     </div>
                   );
@@ -2285,9 +3250,9 @@ export default function DashboardPage() {
               {/* Revenue Breakdown */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {[
-                  { label: "Meals & Tiffin", value: "£0.00", icon: UtensilsCrossed, color: "#FF5A1F", pct: "0%" },
-                  { label: "Homemade Products", value: "£0.00", icon: Store, color: "#8B5CF6", pct: "0%" },
-                  { label: "Subscriptions", value: "£0.00", icon: Repeat, color: "#10B981", pct: "0%" },
+                  { label: "Meals & Tiffin", value: `\u00A3${earnings?.total?.amount?.toFixed(2) || '0.00'}`, icon: UtensilsCrossed, color: "#FF5A1F", pct: "100%" },
+                  { label: "Homemade Products", value: "\u00A30.00", icon: Store, color: "#8B5CF6", pct: "0%" },
+                  { label: "Subscriptions", value: "\u00A30.00", icon: Repeat, color: "#10B981", pct: "0%" },
                 ].map((item, i) => {
                   const II = item.icon;
                   return (
@@ -2303,7 +3268,7 @@ export default function DashboardPage() {
                         <span className="text-[10px] text-[var(--text-muted)]">{item.pct}</span>
                       </div>
                       <div className="mt-2 h-1.5 rounded-full bg-[var(--input)]">
-                        <div className="h-full rounded-full" style={{ background: item.color, width: "0%" }} />
+                        <div className="h-full rounded-full transition-all" style={{ background: item.color, width: item.pct === "100%" && earnings?.total?.amount > 0 ? "100%" : "0%" }} />
                       </div>
                     </div>
                   );
@@ -2311,123 +3276,219 @@ export default function DashboardPage() {
               </div>
 
               {/* Transactions Table */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] overflow-hidden">
+              <div className="rounded-2xl glass-card overflow-hidden">
                 <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-[var(--text)]">Recent Transactions</h3>
                 </div>
-                <table className="w-full text-xs">
+                <table className="w-full text-xs hidden md:table">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
-                      <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Transaction ID</th>
+                      <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
                       <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Customer</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Type</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Amount</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Chef Payout</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Date</th>
                     </tr>
                   </thead>
                   <tbody>
+                    {(!earnings?.transactions || earnings.transactions.length === 0) ? (
                     <tr>
                       <td colSpan={6} className="px-5 py-16 text-center text-[var(--text-muted)]">
                         <PoundSterling size={40} className="mx-auto mb-3 opacity-20" />
-                        <p className="text-sm font-medium">No transactions yet</p>
+                        <p className="text-sm font-medium">{earningsLoading ? "Loading transactions..." : "No transactions yet"}</p>
                         <p className="text-[11px] mt-1">Your earnings and payouts will be listed here</p>
                       </td>
                     </tr>
+                    ) : earnings.transactions.map((txn: any) => (
+                    <tr key={txn.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                      <td className="px-5 py-3 font-mono font-semibold text-[var(--text)]">#{(txn.orderId || txn.id || '').slice(0, 8)}</td>
+                      <td className="px-4 py-3 text-[var(--text-muted)]">{txn.order?.user?.name || "Customer"}</td>
+                      <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">&pound;{Number(txn.amount || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center font-semibold" style={{ color: "#10B981" }}>&pound;{Number(txn.chefPayout || txn.amount || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{
+                          color: txn.status === "COMPLETED" ? "#10B981" : txn.status === "PENDING" ? "#F59E0B" : "#3B82F6",
+                          background: txn.status === "COMPLETED" ? "rgba(16,185,129,0.12)" : txn.status === "PENDING" ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)",
+                        }}>{txn.status || "Completed"}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-[var(--text-muted)]">{txn.createdAt ? new Date(txn.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "-"}</td>
+                    </tr>
+                    ))}
                   </tbody>
                 </table>
+                {/* Mobile Cards */}
+                <div className="md:hidden p-4">
+                  {(!earnings?.transactions || earnings.transactions.length === 0) ? (
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <PoundSterling size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">{earningsLoading ? "Loading..." : "No transactions yet"}</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Your earnings and payouts will be listed here</p>
+                  </div>
+                  ) : (
+                  <div className="space-y-3">
+                    {earnings.transactions.map((txn: any) => (
+                    <div key={txn.id} className="rounded-xl border border-[var(--border)] p-4" style={{ background: "var(--header-bg)" }}>
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <span className="font-mono text-xs font-semibold text-[var(--text)]">#{(txn.orderId || txn.id || '').slice(0, 8)}</span>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{txn.order?.user?.name || "Customer"}</p>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{
+                          color: txn.status === "COMPLETED" ? "#10B981" : "#F59E0B",
+                          background: txn.status === "COMPLETED" ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)",
+                        }}>{txn.status || "Completed"}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold" style={{ color: "#10B981" }}>&pound;{Number(txn.chefPayout || txn.amount || 0).toFixed(2)}</span>
+                        <span className="text-[11px] text-[var(--text-muted)]">{txn.createdAt ? new Date(txn.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "-"}</span>
+                      </div>
+                    </div>
+                    ))}
+                  </div>
+                  )}
+                </div>
               </div>
             </>
           )}
 
           {/* Reviews Page */}
-          {activePage === "reviews" && (
+          {activePage === "reviews" && (() => {
+            const avgRating = reviews.length > 0 ? (reviews.reduce((sum: number, r: any) => sum + (r.rating || 0), 0) / reviews.length) : 0;
+            const ratingCounts = [5,4,3,2,1].map(r => reviews.filter((rv: any) => rv.rating === r).length);
+            const needsReplyCount = reviews.filter((r: any) => !r.reply).length;
+
+            return (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Star size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Reviews</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 New</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />0 Total</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{needsReplyCount} Needs Reply</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />{reviews.length} Total</span>
                     </div>
                   </div>
                 </div>
+                <button onClick={() => fetchReviews()} className="px-4 py-2 rounded-xl text-xs font-medium transition hover:opacity-80 flex items-center gap-1.5" style={{ background: "var(--input)", color: "var(--text)" }}>
+                  <RefreshCw size={12} className={reviewsLoading ? "animate-spin" : ""} /> Refresh
+                </button>
               </div>
 
               {/* Rating Overview */}
               <div className="rounded-2xl border border-[var(--border)] p-5 mb-6" style={{ background: "var(--header-bg)" }}>
                 <div className="flex items-center gap-8">
                   <div className="text-center">
-                    <div className="text-4xl font-bold" style={{ color: "#F59E0B" }}>0.0</div>
+                    <div className="text-4xl font-bold" style={{ color: "#F59E0B" }}>{avgRating.toFixed(1)}</div>
                     <div className="flex items-center gap-0.5 mt-1 justify-center">
                       {[1, 2, 3, 4, 5].map((s) => (
-                        <Star key={s} size={14} className="text-[var(--border)]" fill="var(--border)" />
+                        <Star key={s} size={14} style={{ color: s <= Math.round(avgRating) ? "#F59E0B" : "var(--border)" }} fill={s <= Math.round(avgRating) ? "#F59E0B" : "var(--border)"} />
                       ))}
                     </div>
-                    <p className="text-[10px] text-[var(--text-muted)] mt-1">0 reviews</p>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">{reviews.length} reviews</p>
                   </div>
                   <div className="flex-1 space-y-2">
-                    {[5, 4, 3, 2, 1].map((rating) => (
+                    {[5, 4, 3, 2, 1].map((rating, idx) => (
                       <div key={rating} className="flex items-center gap-3">
                         <span className="text-[11px] font-medium text-[var(--text-muted)] w-4">{rating}</span>
                         <Star size={12} style={{ color: "#F59E0B" }} />
                         <div className="flex-1 h-2 rounded-full bg-[var(--input)]">
-                          <div className="h-full rounded-full" style={{ background: "#F59E0B", width: "0%" }} />
+                          <div className="h-full rounded-full transition-all" style={{ background: "#F59E0B", width: reviews.length > 0 ? `${(ratingCounts[idx] / reviews.length) * 100}%` : "0%" }} />
                         </div>
-                        <span className="text-[10px] text-[var(--text-muted)] w-6">0</span>
+                        <span className="text-[10px] text-[var(--text-muted)] w-6">{ratingCounts[idx]}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* Review Filters */}
-              <div className="flex gap-2 mb-6">
-                {[
-                  { label: "All Reviews", active: true },
-                  { label: "Needs Reply", active: false },
-                  { label: "5 Stars", active: false },
-                  { label: "1-3 Stars", active: false },
-                ].map((tab, i) => (
-                  <button
-                    key={i}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all"
-                    style={{
-                      background: tab.active ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
-                      color: tab.active ? "#FFFFFF" : "var(--text-muted)",
-                      border: tab.active ? "none" : "1px solid var(--border)",
-                    }}
-                  >
-                    {tab.label}
-                  </button>
+              {/* Reviews List */}
+              {reviews.length === 0 ? (
+              <div className="rounded-2xl glass-card p-8">
+                <div className="text-center py-16 animate-fade-in-up">
+                  <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                    <Star size={36} className="text-white" />
+                  </div>
+                  <h3 className="text-base font-bold text-[var(--text)] mb-1">{reviewsLoading ? "Loading reviews..." : "No reviews yet"}</h3>
+                  <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Customer reviews and ratings will appear here once you start receiving orders</p>
+                </div>
+              </div>
+              ) : (
+              <div className="space-y-4">
+                {reviews.map((review: any) => (
+                <div key={review.id} className="rounded-2xl border border-[var(--border)] p-5 transition-all" style={{ background: "var(--header-bg)" }}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold badge-gradient">
+                        {(review.user?.name || "C").charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text)]">{review.user?.name || "Customer"}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">
+                          {review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      {[1,2,3,4,5].map(s => (
+                        <Star key={s} size={12} style={{ color: s <= (review.rating || 0) ? "#F59E0B" : "var(--border)" }} fill={s <= (review.rating || 0) ? "#F59E0B" : "var(--border)"} />
+                      ))}
+                    </div>
+                  </div>
+                  {review.comment && (
+                    <p className="text-sm text-[var(--text-soft)] mb-3 leading-relaxed">{review.comment}</p>
+                  )}
+                  {review.reply ? (
+                    <div className="rounded-xl p-3 mt-2" style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.15)" }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <MessageSquare size={12} style={{ color: "#8B5CF6" }} />
+                        <span className="text-[11px] font-semibold" style={{ color: "#8B5CF6" }}>Your Reply</span>
+                      </div>
+                      <p className="text-xs text-[var(--text-soft)]">{review.reply}</p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Write a reply..."
+                          value={replyTexts[review.id] || ''}
+                          onChange={e => setReplyTexts(prev => ({ ...prev, [review.id]: e.target.value }))}
+                          className="flex-1 px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                        />
+                        <button
+                          onClick={() => replyToReview(review.id)}
+                          disabled={!replyTexts[review.id]?.trim()}
+                          className="px-3 py-2 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 btn-premium disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <Send size={12} /> Reply
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 ))}
               </div>
-
-              {/* Empty Reviews */}
-              <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-8 text-center">
-                <Star size={40} className="mx-auto mb-3 text-[var(--text-muted)] opacity-20" />
-                <p className="text-sm font-medium text-[var(--text)]">No reviews yet</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Customer reviews and ratings will appear here once you start receiving orders</p>
-              </div>
+              )}
             </>
-          )}
+            );
+          })()}
 
           {/* Analytics Page */}
           {activePage === "analytics" && (
             <>
               <div
-                className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}>
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <BarChart3 size={24} color="white" strokeWidth={2} />
                   </div>
                   <div>
@@ -2464,14 +3525,14 @@ export default function DashboardPage() {
                 ].map((s, i) => {
                   const SI = s.icon;
                   return (
-                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all hover:scale-[1.02]" style={{ background: "var(--header-bg)" }}>
+                    <div key={i} className="p-4 rounded-2xl border border-[var(--border)] transition-all duration-300 hover:scale-[1.02] hover:shadow-xl" style={{ background: "var(--header-bg)" }}>
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-xs font-medium text-[var(--text-muted)]">{s.label}</span>
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
                           <SI size={18} style={{ color: s.color }} />
                         </div>
                       </div>
-                      <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
                     </div>
                   );
                 })}
@@ -2506,7 +3567,7 @@ export default function DashboardPage() {
               {/* Popular Items */}
               <div className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
                 <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Top Performing Items</h3>
-                <table className="w-full text-xs">
+                <table className="w-full text-xs hidden md:table">
                   <thead>
                     <tr style={{ background: "var(--input)" }}>
                       <th className="text-left px-4 py-2.5 font-semibold text-[var(--text)] rounded-l-lg">#</th>
@@ -2526,6 +3587,16 @@ export default function DashboardPage() {
                     </tr>
                   </tbody>
                 </table>
+                {/* Mobile Cards */}
+                <div className="md:hidden">
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <BarChart3 size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No data yet</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Analytics data will populate once you start receiving orders</p>
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -2539,13 +3610,11 @@ export default function DashboardPage() {
               <>
                 {/* Module Header Bar */}
                 <div
-                  className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+                  className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                      className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient"
                     >
                       <PageIcon size={24} color="white" strokeWidth={2} />
                     </div>
@@ -2575,8 +3644,7 @@ export default function DashboardPage() {
                         onClick={() => {
                           if (meta.cta === "Add Product") setActivePage("add-product");
                         }}
-                        className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 transition hover:opacity-90 shrink-0"
-                        style={{ background: "linear-gradient(135deg, var(--badge-from), var(--badge-to))" }}
+                        className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 transition hover:opacity-90 shrink-0 btn-premium"
                       >
                         <PlusCircle size={16} />
                         <span>{meta.cta}</span>
@@ -2586,12 +3654,14 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Content Panel */}
-                <div className="rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] p-6">
+                <div className="rounded-2xl glass-card p-6">
                   <h2 className="text-sm font-semibold text-[var(--text)] mb-4">{PAGE_TITLES[activePage]}</h2>
-                  <div className="text-center py-12 text-[var(--text-muted)]">
-                    <PageIcon size={48} className="mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Coming soon</p>
-                    <p className="text-xs mt-1">This section is under development</p>
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <PageIcon size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">Coming soon</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">This section is under development</p>
                   </div>
                 </div>
               </>
@@ -2615,7 +3685,7 @@ export default function DashboardPage() {
               <button
                 key={item.id}
                 onClick={() => setActivePage(item.id)}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[60px]"
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[60px] active:scale-95"
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? "badge-gradient" : ""}`}>
                   <BIcon size={18} style={{ color: isActive ? "#FFFFFF" : "var(--text-muted)" }} />

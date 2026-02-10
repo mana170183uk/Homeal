@@ -1,14 +1,40 @@
-import { MapPin, Star, UtensilsCrossed } from "lucide-react";
+import { MapPin, Star, UtensilsCrossed, Tag } from "lucide-react";
 import { Chef } from "../lib/types";
 import { parseCuisineTypes } from "../lib/utils";
 
+const CARD_COLORS = [
+  "from-orange-400 to-rose-500",      // warm coral
+  "from-violet-500 to-purple-600",     // rich purple
+  "from-emerald-400 to-teal-500",      // fresh teal
+  "from-blue-400 to-indigo-500",       // ocean blue
+  "from-pink-400 to-fuchsia-500",      // vibrant pink
+  "from-amber-400 to-orange-500",      // golden amber
+  "from-cyan-400 to-blue-500",         // sky cyan
+  "from-rose-400 to-red-500",          // ruby rose
+];
+
+function getCardColor(id: string): string {
+  const hash = id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return CARD_COLORS[hash % CARD_COLORS.length];
+}
+
 function getMinPrice(chef: Chef): number | null {
-  const prices = chef.menus.flatMap((m) => m.items.map((i) => i.price));
+  const allItems = chef.menus.flatMap((m) => m.items);
+  const prices = allItems.map((i) => {
+    if (i.offerPrice != null && i.offerPrice < i.price) return i.offerPrice;
+    return i.price;
+  });
   return prices.length > 0 ? Math.min(...prices) : null;
 }
 
 function getTotalDishes(chef: Chef): number {
   return chef.menus.reduce((sum, m) => sum + m.items.length, 0);
+}
+
+function hasOffers(chef: Chef): boolean {
+  return chef.menus.some((m) =>
+    m.items.some((i) => i.offerPrice != null && i.offerPrice < i.price)
+  );
 }
 
 interface ChefCardProps {
@@ -26,6 +52,8 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
     .flatMap((m) => m.items)
     .slice(0, 2)
     .map((i) => i.name);
+  const isOnline = chef.isOnline !== false;
+  const chefHasOffers = hasOffers(chef);
 
   return (
     <a
@@ -41,23 +69,53 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="w-full h-full badge-gradient opacity-80" />
-        )}
-
-        {/* Distance badge */}
-        {showDistance && chef.distance != null && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/90 dark:bg-black/60 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-            <MapPin className="w-3 h-3 text-primary" />
-            <span className="text-[var(--text)]">{chef.distance} mi</span>
+          <div className={`w-full h-full bg-gradient-to-br ${getCardColor(chef.id)} flex items-center justify-center`}>
+            <span className="text-white/30 text-7xl font-bold select-none">
+              {chef.kitchenName?.charAt(0)?.toUpperCase() || "?"}
+            </span>
           </div>
         )}
 
-        {/* Price badge */}
-        {minPrice != null && (
-          <div className="absolute bottom-3 left-3 badge-gradient text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-            from &pound;{minPrice.toFixed(2)}
-          </div>
-        )}
+        {/* Open/Closed badge - top right */}
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+          {isOnline ? (
+            <span className="flex items-center gap-1 bg-white/90 dark:bg-black/60 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-emerald-600 dark:text-emerald-400">Open</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 bg-white/90 dark:bg-black/60 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+              <span className="text-red-500 dark:text-red-400">Closed</span>
+            </span>
+          )}
+
+          {/* Distance badge */}
+          {showDistance && chef.distance != null && (
+            <span className="flex items-center gap-1 bg-white/90 dark:bg-black/60 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+              <MapPin className="w-3 h-3 text-primary" />
+              <span className="text-[var(--text)]">{chef.distance} mi</span>
+            </span>
+          )}
+        </div>
+
+        {/* Bottom badges row */}
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
+          {/* Price badge */}
+          {minPrice != null && (
+            <span className="badge-gradient text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+              from &pound;{minPrice.toFixed(2)}
+            </span>
+          )}
+
+          {/* Offers badge */}
+          {chefHasOffers && (
+            <span className="flex items-center gap-1 bg-amber-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+              <Tag className="w-3 h-3" />
+              Offers
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -99,7 +157,7 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
           </div>
         )}
 
-        {/* Popular dishes preview */}
+        {/* Popular items preview */}
         {popularDishes.length > 0 && (
           <div className="flex items-center gap-1.5 mb-3 text-xs text-[var(--text-muted)]">
             <UtensilsCrossed className="w-3 h-3 shrink-0" />
@@ -107,9 +165,9 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
           </div>
         )}
 
-        {/* Dish count */}
+        {/* Item count */}
         <p className="text-xs text-[var(--text-muted)]">
-          {totalDishes} {totalDishes === 1 ? "dish" : "dishes"} available
+          {totalDishes} {totalDishes === 1 ? "item" : "items"} available
         </p>
       </div>
     </a>

@@ -10,7 +10,9 @@ import menuRoutes from "./routes/menus";
 import orderRoutes from "./routes/orders";
 import uploadRoutes from "./routes/upload";
 import adminRoutes from "./routes/admin";
+import productRoutes from "./routes/products";
 import approveActionRoutes from "./routes/approveAction";
+import reviewRoutes from "./routes/reviews";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -56,7 +58,14 @@ app.use(`${API_PREFIX}/menus`, menuRoutes);
 app.use(`${API_PREFIX}/orders`, orderRoutes);
 app.use(`${API_PREFIX}/upload`, uploadRoutes);
 app.use(`${API_PREFIX}/admin`, adminRoutes);
+app.use(`${API_PREFIX}/products`, productRoutes);
 app.use(`${API_PREFIX}/approve-action`, approveActionRoutes);
+app.use(`${API_PREFIX}/reviews`, reviewRoutes);
+
+// 404 catch-all (return JSON, not Express default HTML)
+app.use((_req, res) => {
+  res.status(404).json({ success: false, error: "Not found" });
+});
 
 // Error handler
 app.use(errorHandler);

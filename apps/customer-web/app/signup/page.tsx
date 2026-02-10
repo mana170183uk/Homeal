@@ -19,7 +19,7 @@ import {
   Cherry,
   Sparkles,
 } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -80,7 +80,10 @@ function SignupContent() {
         form.password
       );
 
-      const res = await api<{ user: { id: string; role: string }; token: string; refreshToken: string }>(
+      // Set Firebase displayName so the Header can show initials
+      await updateProfile(credential.user, { displayName: form.name });
+
+      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
         "/auth/register",
         {
           method: "POST",
@@ -103,6 +106,8 @@ function SignupContent() {
       if (res.data?.token) {
         localStorage.setItem("homeal_token", res.data.token);
         localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+        localStorage.setItem("homeal_user_name", res.data.user?.name || form.name);
+        localStorage.setItem("homeal_user_role", res.data.user?.role || role);
       }
 
       if (role === "CHEF") {
@@ -130,12 +135,13 @@ function SignupContent() {
       const credential = await signInWithPopup(getFirebaseAuth(), googleProvider);
       const user = credential.user;
 
-      const res = await api<{ user: { id: string; role: string }; token: string; refreshToken: string }>(
+      const googleName = user.displayName || "Google User";
+      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
         "/auth/register",
         {
           method: "POST",
           body: JSON.stringify({
-            name: user.displayName || "Google User",
+            name: googleName,
             email: user.email,
             phone: user.phoneNumber || "",
             firebaseUid: user.uid,
@@ -145,7 +151,7 @@ function SignupContent() {
       );
 
       if (!res.success) {
-        const loginRes = await api<{ user: { id: string; role: string }; token: string; refreshToken: string }>(
+        const loginRes = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
           "/auth/login",
           {
             method: "POST",
@@ -155,6 +161,8 @@ function SignupContent() {
         if (loginRes.success && loginRes.data) {
           localStorage.setItem("homeal_token", loginRes.data.token);
           localStorage.setItem("homeal_refresh_token", loginRes.data.refreshToken);
+          if (loginRes.data.user.name) localStorage.setItem("homeal_user_name", loginRes.data.user.name);
+          localStorage.setItem("homeal_user_role", loginRes.data.user.role);
           if (loginRes.data.user.role === "CHEF") {
             window.location.href = "https://admin.homeal.uk";
           } else {
@@ -169,6 +177,8 @@ function SignupContent() {
       if (res.data?.token) {
         localStorage.setItem("homeal_token", res.data.token);
         localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+        localStorage.setItem("homeal_user_name", res.data.user?.name || googleName);
+        localStorage.setItem("homeal_user_role", res.data.user?.role || role || "CUSTOMER");
       }
 
       if (role === "CHEF" || res.data?.user.role === "CHEF") {
@@ -207,7 +217,7 @@ function SignupContent() {
                 Application Submitted!
               </h1>
               <p className="text-[var(--text-soft)] mb-6">
-                Thank you for applying to join Homeal as a chef. Our team will
+                Thank you for applying to join Homeal as a seller. Our team will
                 review your application and get back to you soon.
               </p>
               <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 mb-8 text-left">
@@ -217,14 +227,14 @@ function SignupContent() {
                 </div>
                 <p className="text-sm text-[var(--text-soft)]">
                   Once approved, you&apos;ll receive an email with access to your
-                  chef dashboard at{" "}
+                  seller dashboard at{" "}
                   <a
                     href="https://admin.homeal.uk"
                     className="gradient-text font-semibold hover:opacity-80 transition"
                   >
                     admin.homeal.uk
                   </a>
-                  , where you can set up your kitchen, create menus, and start
+                  , where you can set up your store, list products, and start
                   receiving orders.
                 </p>
               </div>
@@ -267,7 +277,7 @@ function SignupContent() {
           <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
             <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
           </div>
-          <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-10 w-auto shrink-0" />
+          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-10 w-auto shrink-0" />
         </a>
         <div className="flex-1" />
         <ThemeToggle />
@@ -305,10 +315,10 @@ function SignupContent() {
                   </div>
                   <div>
                     <h3 className="font-bold text-[var(--text)] text-lg">
-                      I want to order food
+                      I want to order
                     </h3>
                     <p className="text-sm text-[var(--text-soft)]">
-                      Browse local chefs and order homemade meals
+                      Browse local sellers and order homemade products
                     </p>
                   </div>
                 </button>
@@ -321,10 +331,10 @@ function SignupContent() {
                   </div>
                   <div>
                     <h3 className="font-bold text-[var(--text)] text-lg">
-                      I want to cook &amp; sell
+                      I want to make &amp; sell
                     </h3>
                     <p className="text-sm text-[var(--text-soft)]">
-                      Register your kitchen and start serving customers
+                      Sell homemade food, cakes, pickles, masalas &amp; more
                     </p>
                   </div>
                 </button>
@@ -445,7 +455,7 @@ function SignupContent() {
                       type="text"
                       value={form.kitchenName}
                       onChange={(e) => updateField("kitchenName", e.target.value)}
-                      placeholder="Kitchen name (e.g. Priya's Home Kitchen)"
+                      placeholder="Store name (e.g. Priya's Home Kitchen)"
                       className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
                     />
                   </div>

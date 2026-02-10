@@ -3,6 +3,17 @@
 import { Star, MapPin } from "lucide-react";
 import { Chef } from "../lib/types";
 
+const CARD_COLORS = [
+  "from-orange-400 to-rose-500",      // warm coral
+  "from-violet-500 to-purple-600",     // rich purple
+  "from-emerald-400 to-teal-500",      // fresh teal
+  "from-blue-400 to-indigo-500",       // ocean blue
+  "from-pink-400 to-fuchsia-500",      // vibrant pink
+  "from-amber-400 to-orange-500",      // golden amber
+  "from-cyan-400 to-blue-500",         // sky cyan
+  "from-rose-400 to-red-500",          // ruby rose
+];
+
 interface FeaturedChefsProps {
   chefs: Chef[];
   hasLocation: boolean;
@@ -21,11 +32,11 @@ export default function FeaturedChefs({ chefs, hasLocation }: FeaturedChefsProps
         {hasLocation ? (
           <>Featured <span className="gradient-text">near you</span></>
         ) : (
-          <>Popular <span className="gradient-text">chefs</span></>
+          <>Popular <span className="gradient-text">sellers</span></>
         )}
       </h2>
       <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
-        {featured.map((chef) => (
+        {featured.map((chef, index) => (
           <a
             key={chef.id}
             href={`/chef/${chef.id}`}
@@ -35,7 +46,11 @@ export default function FeaturedChefs({ chefs, hasLocation }: FeaturedChefsProps
               {chef.bannerImage ? (
                 <img src={chef.bannerImage} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full badge-gradient opacity-80" />
+                <div className={`w-full h-full bg-gradient-to-br ${CARD_COLORS[index % CARD_COLORS.length]} flex items-center justify-center`}>
+                  <span className="text-white/30 text-6xl font-bold select-none">
+                    {chef.kitchenName?.charAt(0)?.toUpperCase() || "?"}
+                  </span>
+                </div>
               )}
               {chef.avgRating > 0 && (
                 <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-semibold px-2 py-0.5 rounded-full">

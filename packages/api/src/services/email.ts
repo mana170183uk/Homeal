@@ -3,6 +3,9 @@ import {
   newChefNotificationHtml,
   chefApprovedHtml,
   chefRejectedHtml,
+  adminAccessRequestHtml,
+  adminAccessApprovedHtml,
+  adminAccessRejectedHtml,
 } from "./emailTemplates";
 
 const RESEND_API = "https://api.resend.com/emails";
@@ -101,6 +104,68 @@ export async function sendChefApprovalEmail(params: {
         year: "numeric",
       }),
       dashboardUrl,
+    }),
+  });
+}
+
+function generateAdminActionToken(requestId: string, action: string): string {
+  const secret = process.env.JWT_SECRET || "dev-secret";
+  return jwt.sign({ requestId, action, type: "admin_access" }, secret, { expiresIn: "7d" });
+}
+
+export async function notifySuperAdminAccessRequest(params: {
+  requestId: string;
+  requesterName: string;
+  requesterEmail: string;
+}): Promise<boolean> {
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "homealforuk@gmail.com";
+  const apiBase = process.env.API_URL || "https://homeal-api.azurewebsites.net";
+  const superAdminPanelUrl = process.env.SUPER_ADMIN_URL || "https://homeal-superadmin.azurewebsites.net";
+
+  const approveToken = generateAdminActionToken(params.requestId, "approve_admin");
+  const rejectToken = generateAdminActionToken(params.requestId, "reject_admin");
+
+  const approveUrl = `${apiBase}/api/v1/approve-action?action=approve_admin&requestId=${params.requestId}&token=${approveToken}`;
+  const rejectUrl = `${apiBase}/api/v1/approve-action?action=reject_admin&requestId=${params.requestId}&token=${rejectToken}`;
+
+  return sendEmail({
+    to: superAdminEmail,
+    subject: `Super Admin Access Request: ${params.requesterName}`,
+    html: adminAccessRequestHtml({
+      requesterName: params.requesterName,
+      requesterEmail: params.requesterEmail,
+      approveUrl,
+      rejectUrl,
+      superAdminPanelUrl,
+    }),
+  });
+}
+
+export async function sendAdminAccessApprovedEmail(params: {
+  email: string;
+  name: string;
+}): Promise<boolean> {
+  const loginUrl = process.env.SUPER_ADMIN_URL || "https://homeal-superadmin.azurewebsites.net";
+
+  return sendEmail({
+    to: params.email,
+    subject: "Homeal Super Admin Access Approved!",
+    html: adminAccessApprovedHtml({
+      name: params.name,
+      loginUrl,
+    }),
+  });
+}
+
+export async function sendAdminAccessRejectedEmail(params: {
+  email: string;
+  name: string;
+}): Promise<boolean> {
+  return sendEmail({
+    to: params.email,
+    subject: "Homeal Super Admin Access Request Update",
+    html: adminAccessRejectedHtml({
+      name: params.name,
     }),
   });
 }

@@ -1,5 +1,26 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200";
 
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem("homeal_refresh_token");
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const data = await res.json();
+    if (data.success && data.data?.token) {
+      localStorage.setItem("homeal_token", data.data.token);
+      return data.data.token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function api<T>(
   path: string,
   options?: RequestInit & { token?: string }
@@ -15,5 +36,19 @@ export async function api<T>(
     headers: { ...headers, ...(fetchOptions.headers as Record<string, string>) },
   });
 
-  return res.json();
+  const body = await res.json();
+
+  // Auto-refresh on 401 if we had a token (meaning it expired)
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryRes = await fetch(`${API_URL}/api/v1${path}`, {
+        ...fetchOptions,
+        headers: { ...headers, Authorization: `Bearer ${newToken}` },
+      });
+      return retryRes.json();
+    }
+  }
+
+  return body;
 }

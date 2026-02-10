@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -22,6 +22,14 @@ export default function HomePage() {
   const [postcode, setPostcode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // If already logged in, redirect to Discover page
+  useEffect(() => {
+    const token = localStorage.getItem("homeal_token");
+    if (token) {
+      router.push("/search");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -71,16 +79,16 @@ export default function HomePage() {
         <div className="relative z-[1]">
           <div className="inline-flex items-center gap-2 badge-gradient text-white font-medium text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full mb-6 shadow-lg">
             <Sparkles className="w-4 h-4" />
-            Trusted by 500+ home chefs across the UK
+            Trusted by 500+ home makers across the UK
           </div>
           <h1 className="font-display text-3xl sm:text-5xl md:text-7xl font-bold text-[var(--text)] leading-tight mb-4 sm:mb-6">
-            Homemade food,
+            Homemade goodness,
             <br />
             <span className="gradient-text">delivered to your door</span>
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-[var(--text-soft)] max-w-2xl mx-auto mb-8 sm:mb-10">
-            Discover authentic home-cooked meals from talented local chefs in your
-            area. Fresh, healthy, and made with love.
+            Discover authentic homemade food, cakes, pickles, masalas &amp; more from
+            talented local home makers. Fresh, healthy, and made with love.
           </p>
 
           {/* Search Bar */}
@@ -111,14 +119,14 @@ export default function HomePage() {
               ) : (
                 <Search className="w-5 h-5" />
               )}
-              <span className="hidden sm:inline">Find Chefs</span>
+              <span className="hidden sm:inline">Search</span>
             </button>
           </form>
           {error && <p className="text-alert text-sm mt-3">{error}</p>}
           <p className="text-sm text-[var(--text-muted)] mt-4">
             or{" "}
             <a href="/search" className="gradient-text font-semibold hover:opacity-80 transition">
-              browse all chefs
+              browse all products
             </a>
           </p>
         </div>
@@ -128,7 +136,7 @@ export default function HomePage() {
       <section className="px-4 sm:px-6 pb-12 sm:pb-16">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="font-display text-xl sm:text-2xl font-bold text-[var(--text)] mb-5">
-            Popular Cuisines
+            Popular Categories
           </h2>
           <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
             {POPULAR_CUISINES.map((cuisine) => (
@@ -152,7 +160,7 @@ export default function HomePage() {
             How it works
           </h2>
           <p className="text-center text-[var(--text-soft)] text-sm sm:text-base mb-10 sm:mb-14 max-w-lg mx-auto">
-            Getting delicious homemade food is as easy as 1-2-3
+            Getting delicious homemade products is as easy as 1-2-3
           </p>
           <div className="grid md:grid-cols-3 gap-8">
             {[
@@ -160,7 +168,7 @@ export default function HomePage() {
                 icon: MapPin,
                 title: "Search",
                 description:
-                  "Enter your postcode to find home chefs cooking within 15 miles of you.",
+                  "Enter your postcode to find home makers within 15 miles of you.",
                 gradient: "from-orange-400 to-pink-500",
                 step: "1",
               },
@@ -168,7 +176,7 @@ export default function HomePage() {
                 icon: UtensilsCrossed,
                 title: "Order",
                 description:
-                  "Browse menus, pick your favourite dishes, and place your order in seconds.",
+                  "Browse products, pick your favourites, and place your order in seconds.",
                 gradient: "from-[var(--badge-from)] to-[var(--badge-to)]",
                 step: "2",
               },
@@ -176,7 +184,7 @@ export default function HomePage() {
                 icon: Truck,
                 title: "Enjoy",
                 description:
-                  "Get fresh, homemade food delivered straight to your door. Bon appetit!",
+                  "Get fresh, homemade products delivered straight to your door. Enjoy!",
                 gradient: "from-emerald-400 to-teal-500",
                 step: "3",
               },
@@ -210,17 +218,17 @@ export default function HomePage() {
           <div className="relative z-[1]">
             <ChefHat className="w-12 sm:w-14 h-12 sm:h-14 mx-auto mb-4 sm:mb-5 opacity-90" />
             <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
-              Are you a home chef?
+              Are you a home maker?
             </h2>
             <p className="text-white/80 text-base sm:text-lg mb-6 sm:mb-8 max-w-lg mx-auto">
-              Turn your passion for cooking into a business. Join Homeal and start
-              serving customers in your area today.
+              Turn your passion into a business. Sell homemade food, cakes, pickles,
+              masalas &amp; more to customers in your area.
             </p>
             <a
               href="/signup?role=chef"
               className="inline-flex items-center gap-2 bg-white text-[var(--badge-from)] font-bold px-8 py-4 rounded-xl hover:bg-white/90 transition text-lg shadow-lg"
             >
-              Join as a Chef
+              Start Selling
               <ArrowRight className="w-5 h-5" />
             </a>
           </div>
@@ -235,7 +243,7 @@ export default function HomePage() {
               <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
                 <img src="/favicon-final-2.png" alt="" className="w-6 h-6 rounded-lg" />
               </div>
-              <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-9 w-auto shrink-0" />
+              <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-9 w-auto shrink-0" />
             </a>
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-sm">
               <a href="https://admin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-accent transition">
@@ -248,7 +256,7 @@ export default function HomePage() {
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 border-t border-[var(--border)]">
             <p className="text-sm text-[var(--text-muted)]">
-              &copy; {new Date().getFullYear()} Homeal. Healthy Food, From Home.
+              &copy; {new Date().getFullYear()} Homeal. Homemade Products, From Home.
             </p>
             <p className="text-xs text-[var(--text-muted)]">
               Product owned &amp; designed by TotalCloudAI Limited

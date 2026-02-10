@@ -20,7 +20,18 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-poppins)", "Poppins", "system-ui", "sans-serif"],
+        display: ["var(--font-fredoka)", "Fredoka", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        glow: "0 0 20px rgba(177, 108, 255, 0.15)",
+        "glow-lg": "0 0 40px rgba(177, 108, 255, 0.2)",
+      },
+      animation: {
+        "bounce-in": "bounceIn 0.4s ease-out",
+        float: "float 3s ease-in-out infinite",
+        shimmer: "shimmer 3s linear infinite",
+        "fade-in-up": "fadeInUp 0.5s ease-out forwards",
       },
     },
   },

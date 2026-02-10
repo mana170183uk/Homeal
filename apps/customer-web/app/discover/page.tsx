@@ -31,7 +31,7 @@ function getMinPrice(chef: Chef): number | null {
   return prices.length > 0 ? Math.min(...prices) : null;
 }
 
-function SearchContent() {
+function DiscoverContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [authChecked, setAuthChecked] = useState(false);
@@ -40,7 +40,7 @@ function SearchContent() {
   useEffect(() => {
     const token = localStorage.getItem("homeal_token");
     if (!token) {
-      router.push("/login?redirect=/search");
+      router.push("/login?redirect=/discover");
       return;
     }
     setAuthChecked(true);
@@ -154,7 +154,7 @@ function SearchContent() {
       setArea(newArea);
       setSortBy("nearest");
       router.replace(
-        `/search?lat=${newLat}&lng=${newLng}&postcode=${encodeURIComponent(pc)}&area=${encodeURIComponent(newArea)}&radius=${radius}`,
+        `/discover?lat=${newLat}&lng=${newLng}&postcode=${encodeURIComponent(pc)}&area=${encodeURIComponent(newArea)}&radius=${radius}`,
         { scroll: false }
       );
     } finally {
@@ -168,7 +168,7 @@ function SearchContent() {
     saveRadius(newRadius);
     if (lat && lng) {
       router.replace(
-        `/search?lat=${lat}&lng=${lng}&postcode=${encodeURIComponent(postcode)}&area=${encodeURIComponent(area)}&radius=${newRadius}`,
+        `/discover?lat=${lat}&lng=${lng}&postcode=${encodeURIComponent(postcode)}&area=${encodeURIComponent(area)}&radius=${newRadius}`,
         { scroll: false }
       );
     }
@@ -182,7 +182,7 @@ function SearchContent() {
     setPostcode("");
     setArea("");
     setSortBy("recommended");
-    router.replace("/search", { scroll: false });
+    router.replace("/discover", { scroll: false });
   }
 
   // Client-side filter + sort
@@ -372,7 +372,7 @@ function SearchContent() {
   );
 }
 
-export default function SearchPage() {
+export default function DiscoverPage() {
   return (
     <Suspense
       fallback={
@@ -389,7 +389,7 @@ export default function SearchPage() {
         </div>
       }
     >
-      <SearchContent />
+      <DiscoverContent />
     </Suspense>
   );
 }

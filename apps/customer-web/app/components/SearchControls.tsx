@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { MapPin, Search, Navigation, X } from "lucide-react";
 import { RADIUS_OPTIONS, SORT_OPTIONS, SortOption } from "../lib/constants";
 
@@ -31,6 +31,8 @@ export default function SearchControls({
 }: SearchControlsProps) {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  const [locationHint, setLocationHint] = useState(false);
+  const postcodeRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,6 +42,7 @@ export default function SearchControls({
     try {
       await onSearch(trimmed);
       setInput("");
+      setLocationHint(false);
     } catch {
       setError("Invalid postcode. Please try a valid UK postcode.");
     }
@@ -68,7 +71,7 @@ export default function SearchControls({
             </div>
           ) : (
             <span className="text-sm text-[var(--text-muted)]">
-              Showing all chefs &middot; enter a postcode to find nearby
+              Showing all sellers &middot; enter a postcode to find nearby
             </span>
           )}
         </div>
@@ -78,11 +81,12 @@ export default function SearchControls({
           <div className="relative">
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
             <input
+              ref={postcodeRef}
               type="text"
               value={input}
-              onChange={(e) => { setInput(e.target.value); setError(""); }}
+              onChange={(e) => { setInput(e.target.value); setError(""); setLocationHint(false); }}
               placeholder="Enter postcode"
-              className="pl-9 pr-3 py-2 w-40 sm:w-44 text-sm bg-[var(--card)] border border-[var(--border)] rounded-xl outline-none focus:border-primary transition text-[var(--text)] placeholder:text-[var(--text-muted)]"
+              className={`pl-9 pr-3 py-2 w-40 sm:w-44 text-sm bg-[var(--card)] border rounded-xl outline-none focus:border-primary transition text-[var(--text)] placeholder:text-[var(--text-muted)] ${locationHint ? "border-primary animate-pulse" : "border-[var(--border)]"}`}
             />
           </div>
           <button
@@ -102,23 +106,38 @@ export default function SearchControls({
       {error && (
         <p className="text-alert text-xs">{error}</p>
       )}
+      {locationHint && !error && (
+        <p className="text-primary text-xs animate-fade-in-up">Enter your postcode above to filter by distance</p>
+      )}
 
       {/* Radius + Sort controls */}
       <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide pb-1">
-        {/* Radius dropdown */}
-        {hasLocation && (
-          <select
-            value={radius}
-            onChange={(e) => onRadiusChange(Number(e.target.value))}
-            className="text-xs font-medium bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-full px-3 py-1.5 outline-none focus:border-primary transition cursor-pointer shrink-0"
-          >
-            {RADIUS_OPTIONS.map((r) => (
-              <option key={r} value={r}>
-                {r} miles
-              </option>
-            ))}
-          </select>
-        )}
+        {/* Radius / distance dropdown — always visible */}
+        <select
+          value={hasLocation ? radius : 0}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            if (val === 0) {
+              onClearLocation();
+              setLocationHint(false);
+            } else if (!hasLocation) {
+              // User picked a radius but has no location — prompt for postcode
+              setLocationHint(true);
+              postcodeRef.current?.focus();
+            } else {
+              onRadiusChange(val);
+              setLocationHint(false);
+            }
+          }}
+          className="text-xs font-medium bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-full px-3 py-1.5 outline-none focus:border-primary transition cursor-pointer shrink-0"
+        >
+          <option value={0}>All UK</option>
+          {RADIUS_OPTIONS.map((r) => (
+            <option key={r} value={r}>
+              Within {r} miles
+            </option>
+          ))}
+        </select>
 
         {/* Sort pills */}
         {SORT_OPTIONS.filter((opt) => !opt.requiresLocation || hasLocation).map((opt) => (

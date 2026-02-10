@@ -2,14 +2,19 @@ import { Router, Request, Response } from "express";
 import prisma from "@homeal/db";
 import { authenticate, authorize } from "../middleware/auth";
 import { notifyChefNewOrder, notifyOrderUpdate } from "../services/socket";
-import { ORDER_AUTO_REJECT_MINUTES } from "@homeal/shared";
+import { ORDER_AUTO_REJECT_MINUTES, COMMISSION_RATE_DEFAULT } from "@homeal/shared";
 
 const router = Router();
 
 // POST /api/v1/orders - place order
 router.post("/", authenticate, async (req: Request, res: Response) => {
   try {
-    const { chefId, addressId, items, specialInstructions, promoCode } = req.body;
+    const { chefId, addressId, items, specialInstructions, paymentMethod } = req.body;
+
+    if (!chefId || !addressId || !items?.length) {
+      res.status(400).json({ success: false, error: "chefId, addressId, and items are required" });
+      return;
+    }
 
     // Calculate totals
     const menuItems = await prisma.menuItem.findMany({
@@ -24,8 +29,14 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       return { menuItemId: item.menuItemId, quantity: item.quantity, price, notes: item.notes };
     });
 
-    const deliveryFee = 30;
+    const deliveryFee = 0.30;
     const total = subtotal + deliveryFee;
+
+    // Get chef commission rate
+    const chef = await prisma.chef.findUnique({ where: { id: chefId }, select: { commissionRate: true } });
+    const commissionRate = (chef?.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
+    const platformFee = Math.round(total * commissionRate * 100) / 100;
+    const chefPayout = Math.round((total - platformFee) * 100) / 100;
 
     const order = await prisma.order.create({
       data: {
@@ -37,8 +48,23 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         total,
         specialInstructions,
         items: { create: orderItems },
+        payment: {
+          create: {
+            chefId,
+            amount: total,
+            platformFee,
+            chefPayout,
+            method: paymentMethod === "COD" ? "COD" : "CARD",
+            status: paymentMethod === "COD" ? "PENDING" : "PENDING",
+          },
+        },
       },
-      include: { items: { include: { menuItem: true } }, address: true },
+      include: {
+        items: { include: { menuItem: true } },
+        address: true,
+        payment: true,
+        chef: { include: { user: { select: { name: true } } } },
+      },
     });
 
     // Notify chef via Socket.IO
@@ -80,10 +106,12 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
       include: {
         items: { include: { menuItem: true } },
         chef: { include: { user: { select: { name: true } } } },
+        user: { select: { name: true, email: true } },
         address: true,
+        payment: true,
       },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 50,
     });
     res.json({ success: true, data: orders });
   } catch (error: unknown) {
@@ -91,6 +119,150 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: message });
   }
 });
+
+// GET /api/v1/orders/:id - single order detail
+router.get("/:id", authenticate, async (req: Request, res: Response) => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id as string },
+      include: {
+        items: { include: { menuItem: true } },
+        chef: { include: { user: { select: { name: true, avatar: true } } } },
+        user: { select: { name: true, email: true } },
+        address: true,
+        payment: true,
+      },
+    });
+
+    if (!order) {
+      res.status(404).json({ success: false, error: "Order not found" });
+      return;
+    }
+
+    // Only allow the customer, the chef, or a super-admin to view
+    const isCustomer = order.userId === req.user!.userId;
+    const isChef = await prisma.chef.findFirst({
+      where: { id: order.chefId, userId: req.user!.userId },
+    });
+    const isAdmin = req.user!.role === "SUPER_ADMIN" || req.user!.role === "ADMIN";
+
+    if (!isCustomer && !isChef && !isAdmin) {
+      res.status(403).json({ success: false, error: "Not authorized to view this order" });
+      return;
+    }
+
+    res.json({ success: true, data: order });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch order";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// POST /api/v1/orders/:id/cancel - customer cancellation
+router.post("/:id/cancel", authenticate, async (req: Request, res: Response) => {
+  try {
+    const order = await prisma.order.findUnique({ where: { id: req.params.id as string } });
+
+    if (!order) {
+      res.status(404).json({ success: false, error: "Order not found" });
+      return;
+    }
+
+    if (order.userId !== req.user!.userId) {
+      res.status(403).json({ success: false, error: "Not authorized" });
+      return;
+    }
+
+    if (order.status !== "PLACED") {
+      res.status(400).json({ success: false, error: "Can only cancel orders that have not been accepted yet" });
+      return;
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "CANCELLED" },
+    });
+
+    notifyChefNewOrder(order.chefId, {
+      orderId: order.id,
+      status: "CANCELLED",
+      reason: "Cancelled by customer",
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to cancel order";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// GET /api/v1/orders/earnings — chef earnings breakdown
+router.get(
+  "/earnings",
+  authenticate,
+  authorize("CHEF"),
+  async (req: Request, res: Response) => {
+    try {
+      const chef = await prisma.chef.findUnique({ where: { userId: req.user!.userId } });
+      if (!chef) { res.status(404).json({ success: false, error: "Chef not found" }); return; }
+
+      const now = new Date();
+      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+      const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 7); weekStart.setHours(0, 0, 0, 0);
+      const monthStart = new Date(now); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+
+      const [todayEarnings, weekEarnings, monthEarnings, totalEarnings, recentPayments] = await Promise.all([
+        prisma.payment.aggregate({
+          where: { chefId: chef.id, status: "COMPLETED", createdAt: { gte: todayStart } },
+          _sum: { chefPayout: true },
+          _count: true,
+        }),
+        prisma.payment.aggregate({
+          where: { chefId: chef.id, status: "COMPLETED", createdAt: { gte: weekStart } },
+          _sum: { chefPayout: true },
+          _count: true,
+        }),
+        prisma.payment.aggregate({
+          where: { chefId: chef.id, status: "COMPLETED", createdAt: { gte: monthStart } },
+          _sum: { chefPayout: true },
+          _count: true,
+        }),
+        prisma.payment.aggregate({
+          where: { chefId: chef.id, status: "COMPLETED" },
+          _sum: { chefPayout: true },
+          _count: true,
+        }),
+        prisma.payment.findMany({
+          where: { chefId: chef.id },
+          include: {
+            order: {
+              include: {
+                user: { select: { name: true } },
+                items: { include: { menuItem: { select: { name: true } } } },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        }),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          today: { amount: todayEarnings._sum.chefPayout || 0, orders: todayEarnings._count },
+          week: { amount: weekEarnings._sum.chefPayout || 0, orders: weekEarnings._count },
+          month: { amount: monthEarnings._sum.chefPayout || 0, orders: monthEarnings._count },
+          total: { amount: totalEarnings._sum.chefPayout || 0, orders: totalEarnings._count },
+          transactions: recentPayments,
+        },
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to fetch earnings";
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
 
 // PATCH /api/v1/orders/:id/status - update order status (chef only)
 router.patch(
@@ -103,8 +275,19 @@ router.patch(
       const orderId = req.params.id as string;
       const order = await prisma.order.update({
         where: { id: orderId },
-        data: { status },
+        data: {
+          status,
+          ...(status === "DELIVERED" ? { actualDelivery: new Date() } : {}),
+        },
       });
+
+      // Mark payment as completed when order is delivered (COD)
+      if (status === "DELIVERED") {
+        await prisma.payment.updateMany({
+          where: { orderId, status: "PENDING" },
+          data: { status: "COMPLETED" },
+        });
+      }
 
       notifyOrderUpdate(order.userId, { orderId: order.id, status: order.status });
 

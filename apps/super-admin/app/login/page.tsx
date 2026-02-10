@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Lock, Shield, User } from "lucide-react";
+import { Mail, Lock, Shield, User, Clock, CheckCircle, XCircle } from "lucide-react";
 import { signInWithEmailAndPassword, signInWithPopup, createUserWithEmailAndPassword } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 
-type Mode = "login" | "signup";
+type Mode = "login" | "request";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [requestStatus, setRequestStatus] = useState<"" | "PENDING" | "APPROVED" | "REJECTED">("");
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -66,7 +66,7 @@ export default function LoginPage() {
     }
   }
 
-  async function handleSignup(e: React.FormEvent) {
+  async function handleRequestAccess(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !email || !password) {
       setError("Please fill in all fields.");
@@ -81,36 +81,54 @@ export default function LoginPage() {
     setError("");
 
     try {
+      // Create Firebase account first
       const credential = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
 
+      // Submit access request (does NOT create the DB user)
       const res = await api<{
-        user: { id: string; role: string };
-        token: string;
-        refreshToken: string;
-      }>("/auth/register", {
+        status: string;
+        message: string;
+      }>("/auth/request-admin-access", {
         method: "POST",
         body: JSON.stringify({
           name,
           email,
-          phone: "",
           firebaseUid: credential.user.uid,
-          role: "SUPER_ADMIN",
         }),
       });
 
-      if (!res.success || !res.data) {
-        setError(res.error || "Registration failed. A Super Admin may already exist.");
+      if (!res.success) {
+        setError(res.error || "Failed to submit request.");
         return;
       }
 
-      localStorage.setItem("homeal_token", res.data.token);
-      localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
-      setSuccess("Super Admin account created! Redirecting...");
-      setTimeout(() => { window.location.href = "/"; }, 1500);
+      setRequestStatus((res.data?.status as "PENDING" | "APPROVED") || "PENDING");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Registration failed";
+      const message = err instanceof Error ? err.message : "Request failed";
       if (message.includes("email-already-in-use")) {
-        setError("This email is already registered. Please log in instead.");
+        // Firebase account exists — try to sign in and check request status
+        try {
+          const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+          const checkRes = await api<{ status: string }>(`/auth/check-admin-request?firebaseUid=${credential.user.uid}`);
+          if (checkRes.success && checkRes.data) {
+            if (checkRes.data.status === "APPROVED") {
+              setRequestStatus("APPROVED");
+            } else if (checkRes.data.status === "REJECTED") {
+              setRequestStatus("REJECTED");
+            } else if (checkRes.data.status === "PENDING") {
+              setRequestStatus("PENDING");
+            } else {
+              // No request found — submit one
+              const reqRes = await api<{ status: string }>("/auth/request-admin-access", {
+                method: "POST",
+                body: JSON.stringify({ name, email, firebaseUid: credential.user.uid }),
+              });
+              setRequestStatus((reqRes.data?.status as "PENDING") || "PENDING");
+            }
+          }
+        } catch {
+          setError("This email is already registered. Try logging in instead, or check your password.");
+        }
       } else {
         setError(message);
       }
@@ -147,31 +165,32 @@ export default function LoginPage() {
         return;
       }
 
-      // Not found — try to register as Super Admin (first-time setup)
-      const regRes = await api<{
-        user: { id: string; role: string };
-        token: string;
-        refreshToken: string;
-      }>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({
-          name: user.displayName || "Super Admin",
-          email: user.email,
-          phone: user.phoneNumber || "",
-          firebaseUid: user.uid,
-          role: "SUPER_ADMIN",
-        }),
-      });
-
-      if (!regRes.success) {
-        setError(regRes.error || "Registration failed. A Super Admin may already exist.");
+      // Not a registered user — check for existing request or submit new one
+      const checkRes = await api<{ status: string }>(`/auth/check-admin-request?firebaseUid=${user.uid}`);
+      if (checkRes.success && checkRes.data && checkRes.data.status !== "NONE") {
+        setRequestStatus(checkRes.data.status as "PENDING" | "APPROVED" | "REJECTED");
         return;
       }
 
-      localStorage.setItem("homeal_token", regRes.data!.token);
-      localStorage.setItem("homeal_refresh_token", regRes.data!.refreshToken);
-      setSuccess("Super Admin account created! Redirecting...");
-      setTimeout(() => { window.location.href = "/"; }, 1500);
+      // Submit access request
+      if (mode === "request") {
+        const reqRes = await api<{ status: string; message: string }>("/auth/request-admin-access", {
+          method: "POST",
+          body: JSON.stringify({
+            name: user.displayName || "Unknown",
+            email: user.email,
+            firebaseUid: user.uid,
+          }),
+        });
+
+        if (reqRes.success) {
+          setRequestStatus("PENDING");
+        } else {
+          setError(reqRes.error || "Failed to submit request.");
+        }
+      } else {
+        setError("No Super Admin account found for this Google account. Switch to 'Request Access' to apply.");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Google sign-in failed";
       if (!message.includes("popup-closed-by-user")) {
@@ -180,6 +199,74 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Show status page after request submission
+  if (requestStatus) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}>
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold" style={{ color: "var(--text)", fontFamily: "var(--font-fredoka)" }}>
+              Super Admin
+            </h1>
+          </div>
+
+          <div className="rounded-2xl p-6 border text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            {requestStatus === "PENDING" && (
+              <>
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: "rgba(245,158,11,0.1)" }}>
+                  <Clock className="w-8 h-8" style={{ color: "#F59E0B" }} />
+                </div>
+                <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>Request Submitted</h2>
+                <p className="text-sm mb-4" style={{ color: "var(--text-soft)" }}>
+                  Your Super Admin access request has been sent to the platform owner at <strong>homealforuk@gmail.com</strong>. You&apos;ll receive an email once it&apos;s approved.
+                </p>
+                <div className="rounded-xl p-3 text-xs" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", color: "#F59E0B" }}>
+                  Status: Awaiting Approval
+                </div>
+              </>
+            )}
+            {requestStatus === "APPROVED" && (
+              <>
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: "rgba(16,185,129,0.1)" }}>
+                  <CheckCircle className="w-8 h-8" style={{ color: "#10B981" }} />
+                </div>
+                <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>Access Approved!</h2>
+                <p className="text-sm mb-4" style={{ color: "var(--text-soft)" }}>
+                  Your Super Admin access has been approved. You can now log in.
+                </p>
+                <button
+                  onClick={() => { setRequestStatus(""); setMode("login"); setError(""); }}
+                  className="w-full font-semibold py-3 rounded-xl text-white transition"
+                  style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+                >
+                  Go to Login
+                </button>
+              </>
+            )}
+            {requestStatus === "REJECTED" && (
+              <>
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: "rgba(239,68,68,0.1)" }}>
+                  <XCircle className="w-8 h-8" style={{ color: "#EF4444" }} />
+                </div>
+                <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>Request Rejected</h2>
+                <p className="text-sm mb-4" style={{ color: "var(--text-soft)" }}>
+                  Your access request was not approved. Please contact <strong>homealforuk@gmail.com</strong> for more information.
+                </p>
+              </>
+            )}
+          </div>
+
+          <p className="text-center text-xs mt-6" style={{ color: "var(--text-muted)" }}>
+            &copy; 2026 Homeal. Product owned &amp; designed by TotalCloudAI Limited
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -201,7 +288,7 @@ export default function LoginPage() {
           {/* Mode toggle */}
           <div className="flex rounded-xl p-1 mb-5" style={{ background: "var(--input)" }}>
             <button
-              onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
+              onClick={() => { setMode("login"); setError(""); }}
               className="flex-1 py-2 rounded-lg text-xs font-semibold transition"
               style={{
                 background: mode === "login" ? "var(--card)" : "transparent",
@@ -212,20 +299,20 @@ export default function LoginPage() {
               Log in
             </button>
             <button
-              onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
+              onClick={() => { setMode("request"); setError(""); }}
               className="flex-1 py-2 rounded-lg text-xs font-semibold transition"
               style={{
-                background: mode === "signup" ? "var(--card)" : "transparent",
-                color: mode === "signup" ? "var(--text)" : "var(--text-muted)",
-                boxShadow: mode === "signup" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                background: mode === "request" ? "var(--card)" : "transparent",
+                color: mode === "request" ? "var(--text)" : "var(--text-muted)",
+                boxShadow: mode === "request" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
               }}
             >
-              First-time Setup
+              Request Access
             </button>
           </div>
 
-          <form onSubmit={mode === "login" ? handleLogin : handleSignup} className="space-y-4">
-            {mode === "signup" && (
+          <form onSubmit={mode === "login" ? handleLogin : handleRequestAccess} className="space-y-4">
+            {mode === "request" && (
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: "var(--text-muted)" }} />
                 <input
@@ -257,7 +344,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(""); }}
-                placeholder={mode === "signup" ? "Password (min 6 characters)" : "Password"}
+                placeholder={mode === "request" ? "Password (min 6 characters)" : "Password"}
                 className="w-full pl-11 pr-4 py-3 rounded-xl outline-none transition text-sm"
                 style={{ background: "var(--input)", border: "1px solid var(--border)", color: "var(--text)" }}
               />
@@ -269,19 +356,16 @@ export default function LoginPage() {
               </p>
             )}
 
-            {success && (
-              <p className="text-sm px-4 py-2 rounded-xl" style={{ color: "#10B981", background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                {success}
-              </p>
-            )}
-
             <button
               type="submit"
               disabled={loading}
               className="w-full font-semibold py-3 rounded-xl text-white transition disabled:opacity-50"
               style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
             >
-              {loading ? (mode === "login" ? "Logging in..." : "Creating account...") : (mode === "login" ? "Log in as Super Admin" : "Create Super Admin Account")}
+              {loading
+                ? (mode === "login" ? "Logging in..." : "Submitting request...")
+                : (mode === "login" ? "Log in as Super Admin" : "Request Super Admin Access")
+              }
             </button>
           </form>
 
@@ -307,9 +391,9 @@ export default function LoginPage() {
             <span className="font-medium text-sm" style={{ color: "var(--text)" }}>Continue with Google</span>
           </button>
 
-          {mode === "signup" && (
+          {mode === "request" && (
             <p className="text-center text-[10px] mt-3 px-4" style={{ color: "var(--text-muted)" }}>
-              First-time setup creates the initial Super Admin account. Only one Super Admin can be created this way.
+              Your request will be sent to the platform owner for approval. You&apos;ll receive an email once reviewed.
             </p>
           )}
         </div>

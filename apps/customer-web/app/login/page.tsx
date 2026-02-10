@@ -30,7 +30,7 @@ export default function LoginPage() {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 
       const res = await api<{
-        user: { id: string; role: string };
+        user: { id: string; role: string; name: string };
         token: string;
         refreshToken: string;
       }>("/auth/login", {
@@ -45,6 +45,8 @@ export default function LoginPage() {
 
       localStorage.setItem("homeal_token", res.data.token);
       localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+      if (res.data.user.name) localStorage.setItem("homeal_user_name", res.data.user.name);
+      localStorage.setItem("homeal_user_role", res.data.user.role);
 
       if (res.data.user.role === "CHEF") {
         window.location.href = "https://admin.homeal.uk";
@@ -74,7 +76,7 @@ export default function LoginPage() {
       const credential = await signInWithPopup(getFirebaseAuth(), googleProvider);
       const user = credential.user;
 
-      const res = await api<{ user: { id: string; role: string }; token: string; refreshToken: string }>(
+      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
         "/auth/login",
         {
           method: "POST",
@@ -85,6 +87,8 @@ export default function LoginPage() {
       if (res.success && res.data) {
         localStorage.setItem("homeal_token", res.data.token);
         localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+        if (res.data.user.name) localStorage.setItem("homeal_user_name", res.data.user.name);
+        localStorage.setItem("homeal_user_role", res.data.user.role);
         if (res.data.user.role === "CHEF") {
           window.location.href = "https://admin.homeal.uk";
         } else if (res.data.user.role === "SUPER_ADMIN" || res.data.user.role === "ADMIN") {
@@ -95,12 +99,13 @@ export default function LoginPage() {
         return;
       }
 
-      const regRes = await api<{ user: { id: string; role: string }; token: string; refreshToken: string }>(
+      const googleName = user.displayName || "Google User";
+      const regRes = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
         "/auth/register",
         {
           method: "POST",
           body: JSON.stringify({
-            name: user.displayName || "Google User",
+            name: googleName,
             email: user.email,
             phone: user.phoneNumber || "",
             firebaseUid: user.uid,
@@ -117,6 +122,8 @@ export default function LoginPage() {
       if (regRes.data?.token) {
         localStorage.setItem("homeal_token", regRes.data.token);
         localStorage.setItem("homeal_refresh_token", regRes.data.refreshToken);
+        localStorage.setItem("homeal_user_name", regRes.data.user?.name || googleName);
+        localStorage.setItem("homeal_user_role", regRes.data.user?.role || "CUSTOMER");
       }
       router.push("/search");
     } catch (err: unknown) {
@@ -154,7 +161,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
             <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
           </div>
-          <img src="/logo-full.png" alt="Homeal - Healthy food, from home" className="hidden lg:block h-10 w-auto shrink-0" />
+          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-10 w-auto shrink-0" />
         </a>
         <div className="flex-1" />
         <ThemeToggle />
@@ -174,7 +181,7 @@ export default function LoginPage() {
                 Welcome back
               </h1>
               <p className="text-[var(--text-soft)] text-sm">
-                Home-cooked meals await. Sign in to continue.
+                Homemade goodness awaits. Sign in to continue.
               </p>
             </div>
 

@@ -23,20 +23,46 @@ export default function HomePage() {
   const [error, setError] = useState("");
 
   const heroVideos = useRef(["/hero-cooking.mp4", "/hero-vegetables.mp4", "/hero-breakfast.mp4", "/hero-fruits.mp4", "/hero-apple.mp4", "/hero-buffet.mp4"]);
-  const [currentVideo, setCurrentVideo] = useState(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
+  const vidA = useRef<HTMLVideoElement>(null);
+  const vidB = useRef<HTMLVideoElement>(null);
+  const currentIdx = useRef(0);
 
-  const advanceVideo = useCallback(() => {
-    setCurrentVideo((prev) => (prev + 1) % heroVideos.current.length);
+  // On mount: start first video in slot A, preload second in slot B
+  useEffect(() => {
+    const a = vidA.current;
+    const b = vidB.current;
+    if (!a || !b) return;
+    a.src = heroVideos.current[0];
+    a.load();
+    a.play().catch(() => {});
+    b.src = heroVideos.current[1 % heroVideos.current.length];
+    b.load();
   }, []);
 
-  useEffect(() => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    vid.src = heroVideos.current[currentVideo];
-    vid.load();
-    vid.play().catch(() => advanceVideo());
-  }, [currentVideo, advanceVideo]);
+  const handleEnded = useCallback(() => {
+    const vids = heroVideos.current;
+    const next = (currentIdx.current + 1) % vids.length;
+    const preloadIdx = (next + 1) % vids.length;
+    currentIdx.current = next;
+
+    setActiveSlot((slot) => {
+      const newSlot = slot === 0 ? 1 : 0;
+      // Play the preloaded video (now becoming active)
+      const playVid = newSlot === 0 ? vidA.current : vidB.current;
+      if (playVid) {
+        playVid.currentTime = 0;
+        playVid.play().catch(() => {});
+      }
+      // Preload the next-next video in the old slot
+      const preloadVid = slot === 0 ? vidA.current : vidB.current;
+      if (preloadVid) {
+        preloadVid.src = vids[preloadIdx];
+        preloadVid.load();
+      }
+      return newSlot as 0 | 1;
+    });
+  }, []);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -78,14 +104,22 @@ export default function HomePage() {
 
       {/* Hero Section with Video Background */}
       <section className="relative px-4 sm:px-6 pt-10 sm:pt-16 pb-14 sm:pb-20 text-center overflow-hidden">
-        {/* Background Video — cycles through 3 clips */}
+        {/* Background Video — double-buffered for seamless transitions */}
         <video
-          ref={videoRef}
+          ref={vidA}
           muted
           playsInline
-          onEnded={advanceVideo}
-          onError={advanceVideo}
-          className="absolute inset-0 w-full h-full object-cover z-0"
+          onEnded={handleEnded}
+          onError={handleEnded}
+          className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${activeSlot === 0 ? "opacity-100" : "opacity-0"}`}
+        />
+        <video
+          ref={vidB}
+          muted
+          playsInline
+          onEnded={handleEnded}
+          onError={handleEnded}
+          className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${activeSlot === 1 ? "opacity-100" : "opacity-0"}`}
         />
         {/* Dark overlay for text readability */}
         <div className="absolute inset-0 bg-black/60 z-0" />

@@ -22,7 +22,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const heroVideos = useRef(["/hero-cooking.mp4", "/hero-vegetables.mp4", "/hero-breakfast.mp4", "/hero-fruits.mp4", "/hero-apple.mp4", "/hero-buffet.mp4"]);
+  const heroVideos = useRef(["/hero-cooking.mp4", "/hero-vegetables.mp4", "/hero-breakfast.mp4", "/hero-fruits.mp4", "/hero-apple.mp4"]);
   const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
   const vidA = useRef<HTMLVideoElement>(null);
   const vidB = useRef<HTMLVideoElement>(null);

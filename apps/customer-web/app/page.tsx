@@ -22,11 +22,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const heroVideos = useRef(["/hero-cooking.mp4", "/hero-vegetables.mp4", "/hero-breakfast.mp4", "/hero-fruits.mp4", "/hero-apple.mp4"]);
+  const heroVideos = useRef(["/hero-cooking.mp4", "/hero-vegetables.mp4", "/hero-breakfast.mp4", "/hero-fruits.mp4", "/hero-apple.mp4", "/hero-buffet.mp4"]);
   const [currentVideo, setCurrentVideo] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const handleVideoEnded = useCallback(() => {
+  const advanceVideo = useCallback(() => {
     setCurrentVideo((prev) => (prev + 1) % heroVideos.current.length);
   }, []);
 
@@ -35,8 +35,8 @@ export default function HomePage() {
     if (!vid) return;
     vid.src = heroVideos.current[currentVideo];
     vid.load();
-    vid.play().catch(() => {});
-  }, [currentVideo]);
+    vid.play().catch(() => advanceVideo());
+  }, [currentVideo, advanceVideo]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +83,8 @@ export default function HomePage() {
           ref={videoRef}
           muted
           playsInline
-          onEnded={handleVideoEnded}
+          onEnded={advanceVideo}
+          onError={advanceVideo}
           className="absolute inset-0 w-full h-full object-cover z-0"
         />
         {/* Dark overlay for text readability */}

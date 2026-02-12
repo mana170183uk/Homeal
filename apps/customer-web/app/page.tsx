@@ -27,6 +27,7 @@ export default function HomePage() {
   const vidA = useRef<HTMLVideoElement>(null);
   const vidB = useRef<HTMLVideoElement>(null);
   const currentIdx = useRef(0);
+  const swapping = useRef(false);
 
   // On mount: start first video in slot A, preload second in slot B
   useEffect(() => {
@@ -40,7 +41,42 @@ export default function HomePage() {
     b.load();
   }, []);
 
+  // Start the back video 0.4s before the front one ends so it's already playing when we swap
+  const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const vid = e.currentTarget;
+    if (swapping.current) return;
+    if (vid.duration && vid.currentTime >= vid.duration - 0.4) {
+      swapping.current = true;
+      const vids = heroVideos.current;
+      const next = (currentIdx.current + 1) % vids.length;
+      const preloadIdx = (next + 1) % vids.length;
+      currentIdx.current = next;
+
+      setActiveSlot((slot) => {
+        const newSlot = slot === 0 ? 1 : 0;
+        const playVid = newSlot === 0 ? vidA.current : vidB.current;
+        if (playVid) {
+          playVid.currentTime = 0;
+          playVid.play().catch(() => {});
+        }
+        // Small delay before loading next-next into the now-hidden slot
+        setTimeout(() => {
+          const preloadVid = slot === 0 ? vidA.current : vidB.current;
+          if (preloadVid) {
+            preloadVid.src = vids[preloadIdx];
+            preloadVid.load();
+          }
+          swapping.current = false;
+        }, 500);
+        return newSlot as 0 | 1;
+      });
+    }
+  }, []);
+
+  // Fallback: if timeupdate somehow misses, onEnded still swaps
   const handleEnded = useCallback(() => {
+    if (swapping.current) return;
+    swapping.current = true;
     const vids = heroVideos.current;
     const next = (currentIdx.current + 1) % vids.length;
     const preloadIdx = (next + 1) % vids.length;
@@ -48,18 +84,19 @@ export default function HomePage() {
 
     setActiveSlot((slot) => {
       const newSlot = slot === 0 ? 1 : 0;
-      // Play the preloaded video (now becoming active)
       const playVid = newSlot === 0 ? vidA.current : vidB.current;
       if (playVid) {
         playVid.currentTime = 0;
         playVid.play().catch(() => {});
       }
-      // Preload the next-next video in the old slot
-      const preloadVid = slot === 0 ? vidA.current : vidB.current;
-      if (preloadVid) {
-        preloadVid.src = vids[preloadIdx];
-        preloadVid.load();
-      }
+      setTimeout(() => {
+        const preloadVid = slot === 0 ? vidA.current : vidB.current;
+        if (preloadVid) {
+          preloadVid.src = vids[preloadIdx];
+          preloadVid.load();
+        }
+        swapping.current = false;
+      }, 500);
       return newSlot as 0 | 1;
     });
   }, []);
@@ -104,27 +141,29 @@ export default function HomePage() {
 
       {/* Hero Section with Video Background */}
       <section className="relative px-4 sm:px-6 pt-10 sm:pt-16 pb-14 sm:pb-20 text-center overflow-hidden">
-        {/* Background Video — double-buffered for seamless transitions */}
+        {/* Background Video — double-buffered, z-index swap, zero blink */}
         <video
           ref={vidA}
           muted
           playsInline
+          onTimeUpdate={handleTimeUpdate}
           onEnded={handleEnded}
           onError={handleEnded}
-          className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${activeSlot === 0 ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 w-full h-full object-cover ${activeSlot === 0 ? "z-[2]" : "z-[1]"}`}
         />
         <video
           ref={vidB}
           muted
           playsInline
+          onTimeUpdate={handleTimeUpdate}
           onEnded={handleEnded}
           onError={handleEnded}
-          className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${activeSlot === 1 ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 w-full h-full object-cover ${activeSlot === 1 ? "z-[2]" : "z-[1]"}`}
         />
         {/* Dark overlay for text readability */}
-        <div className="absolute inset-0 bg-black/60 z-0" />
+        <div className="absolute inset-0 bg-black/60 z-[3]" />
 
-        <div className="relative z-[1] max-w-7xl mx-auto">
+        <div className="relative z-[4] max-w-7xl mx-auto">
           <div className="inline-flex items-center gap-2 badge-gradient text-white font-medium text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full mb-6 shadow-lg">
             <Sparkles className="w-4 h-4" />
             Trusted by 500+ home makers across the UK

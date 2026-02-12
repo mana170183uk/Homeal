@@ -179,10 +179,10 @@ export default function LoginPage() {
                 <img src="/favicon-final-2.png" alt="" className="w-10 h-10 rounded-xl" />
               </div>
               <h1 className="font-display text-3xl font-bold text-[var(--text)] mb-2">
-                Welcome back
+                Customer Portal
               </h1>
               <p className="text-[var(--text-soft)] text-sm">
-                Homemade goodness awaits. Sign in to continue.
+                Log in to order homemade goodness from local sellers
               </p>
             </div>
 
@@ -238,7 +238,7 @@ export default function LoginPage() {
                     <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Signing in...
                   </span>
-                ) : "Sign in"}
+                ) : "Log in as Customer"}
               </button>
 
               {/* Divider */}
@@ -267,8 +267,14 @@ export default function LoginPage() {
               {/* Sign up link */}
               <p className="text-center text-sm text-[var(--text-muted)] pt-2">
                 Don&apos;t have an account?{" "}
-                <a href="/signup" className="font-semibold gradient-text hover:opacity-80 transition">
-                  Sign up
+                <a href="/signup?role=customer" className="font-semibold gradient-text hover:opacity-80 transition">
+                  Sign up as Customer
+                </a>
+              </p>
+              <p className="text-center text-xs text-[var(--text-muted)] pt-1">
+                Are you a Home Maker?{" "}
+                <a href="/signup?role=chef" className="font-medium text-accent hover:opacity-80 transition">
+                  Sign up to sell
                 </a>
               </p>
             </form>

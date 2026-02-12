@@ -72,6 +72,8 @@ async function main() {
       commissionRate: 15.0,
       latitude: 51.5074,
       longitude: -0.1278,
+      dailyOrderCap: 25,
+      orderCutoffTime: "14:00",
     },
   });
   console.log(`Chef Admin: ${chefUser.email} (Kitchen: ${chef.kitchenName}, Approved, Trial ends: ${trialEndsAt.toISOString().slice(0, 10)})`);
@@ -512,6 +514,91 @@ async function main() {
     });
   }
   console.log(`Created ${menuItems.length} menu items for Priya's Kitchen`);
+
+  // ==================== MULTI-DAY SCHEDULE (Priya's Kitchen) ====================
+  // Create menus for the next 6 days to test the scheduler
+  const scheduleDays = [
+    { offset: 1, name: "Tomorrow's Thali", closed: false, items: [
+      { name: "Veg Thali Deluxe", price: 7.99, isVeg: true, prepTime: 20, stockCount: 15 },
+      { name: "Paneer Butter Masala", price: 6.49, isVeg: true, prepTime: 15, stockCount: 20 },
+      { name: "Jeera Rice", price: 3.49, isVeg: true, prepTime: 10, stockCount: 30 },
+    ]},
+    { offset: 2, name: "Midweek Special", closed: false, items: [
+      { name: "Chole Bhature", price: 5.99, isVeg: true, prepTime: 20, stockCount: 12 },
+      { name: "Aloo Paratha", price: 4.49, isVeg: true, prepTime: 15, stockCount: 20 },
+      { name: "Raita", price: 1.99, isVeg: true, prepTime: 5, stockCount: 30 },
+    ]},
+    { offset: 3, name: "Biryani Day", closed: false, items: [
+      { name: "Veg Biryani", price: 7.49, isVeg: true, prepTime: 25, stockCount: 15 },
+      { name: "Chicken Biryani", price: 9.99, isVeg: false, prepTime: 30, stockCount: 10 },
+      { name: "Gulab Jamun (2 pcs)", price: 2.49, isVeg: true, prepTime: 5, stockCount: 25 },
+    ]},
+    { offset: 4, name: "Closed Day", closed: true, items: [] },
+    { offset: 5, name: "Weekend Feast", closed: false, items: [
+      { name: "Dosa Festival", price: 8.99, isVeg: true, prepTime: 20, stockCount: 10 },
+      { name: "Pongal with Chutney", price: 4.99, isVeg: true, prepTime: 15, stockCount: 20 },
+      { name: "Filter Coffee", price: 1.99, isVeg: true, prepTime: 5, stockCount: 40 },
+      { name: "Rava Kesari", price: 2.99, isVeg: true, prepTime: 10, stockCount: 15 },
+    ]},
+    { offset: 6, name: "Sunday Special", closed: false, items: [
+      { name: "Hyderabadi Biryani", price: 10.99, isVeg: false, prepTime: 35, stockCount: 8 },
+      { name: "Full South Indian Thali", price: 9.99, isVeg: true, prepTime: 25, stockCount: 10 },
+    ]},
+  ];
+
+  for (const sched of scheduleDays) {
+    const schedDate = new Date(today);
+    schedDate.setDate(schedDate.getDate() + sched.offset);
+    const schedDateOnly = new Date(schedDate.toISOString().split("T")[0] + "T00:00:00.000Z");
+    const menuId = `test-sched-${sched.offset}`;
+
+    await prisma.menu.upsert({
+      where: { id: menuId },
+      update: { isClosed: sched.closed, name: sched.name },
+      create: {
+        id: menuId,
+        chefId: chef.id,
+        name: sched.name,
+        date: schedDateOnly,
+        isActive: true,
+        isClosed: sched.closed,
+      },
+    });
+
+    for (let idx = 0; idx < sched.items.length; idx++) {
+      const item = sched.items[idx];
+      const itemId = `ti-sched-${sched.offset}-${idx}`;
+      await prisma.menuItem.upsert({
+        where: { id: itemId },
+        update: { ...item },
+        create: {
+          id: itemId,
+          menuId,
+          ...item,
+          sortOrder: idx,
+        },
+      });
+    }
+  }
+  console.log(`Created ${scheduleDays.length} scheduled day menus for Priya's Kitchen`);
+
+  // ==================== MENU TEMPLATE (Priya's Kitchen) ====================
+  await prisma.menuTemplate.upsert({
+    where: { id: "test-template-001" },
+    update: {},
+    create: {
+      id: "test-template-001",
+      chefId: chef.id,
+      name: "Standard South Indian Thali",
+      items: JSON.stringify([
+        { name: "Masala Dosa", price: 5.99, isVeg: true, prepTime: 15, stockCount: 20 },
+        { name: "Idli Sambar (4 pcs)", price: 4.49, isVeg: true, prepTime: 10, stockCount: 25 },
+        { name: "South Indian Thali", price: 8.99, isVeg: true, prepTime: 25, stockCount: 15 },
+        { name: "Mango Lassi", price: 2.99, isVeg: true, prepTime: 5, stockCount: 30 },
+      ]),
+    },
+  });
+  console.log("Created 1 menu template for Priya's Kitchen");
 
   // ==================== CREATE ALL TEST CHEFS WITH MENUS & CATEGORIES ====================
 

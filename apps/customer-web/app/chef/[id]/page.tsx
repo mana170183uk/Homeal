@@ -70,6 +70,10 @@ interface ChefDetail {
   deliveryRadius: number;
   isOnline?: boolean;
   operatingHours: string | null;
+  orderCutoffTime?: string | null;
+  vacationStart?: string | null;
+  vacationEnd?: string | null;
+  dailyOrderCap?: number | null;
   user: { name: string; avatar: string | null };
   menus: Menu[];
   reviews: Review[];
@@ -156,6 +160,12 @@ export default function ChefProfilePage({
   const [showAllHours, setShowAllHours] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [dateMenuItems, setDateMenuItems] = useState<MenuItem[] | null>(null);
+  const [dateMenuLoading, setDateMenuLoading] = useState(false);
+  const [dateMenuClosed, setDateMenuClosed] = useState(false);
+  const [isOnVacation, setIsOnVacation] = useState(false);
+  const [pastCutoff, setPastCutoff] = useState(false);
 
   // Auth gate
   useEffect(() => {
@@ -188,6 +198,63 @@ export default function ChefProfilePage({
     }
     fetchChef();
   }, [id]);
+
+  // Fetch date-specific menu when date changes
+  useEffect(() => {
+    if (!chef) return;
+    // Check vacation status
+    if (chef.vacationStart && chef.vacationEnd) {
+      const now = new Date().toISOString().split("T")[0];
+      const vs = new Date(chef.vacationStart).toISOString().split("T")[0];
+      const ve = new Date(chef.vacationEnd).toISOString().split("T")[0];
+      setIsOnVacation(now >= vs && now <= ve);
+    } else {
+      setIsOnVacation(false);
+    }
+
+    // Check cutoff time for today
+    const today = new Date().toISOString().split("T")[0];
+    if (selectedDate === today && chef.orderCutoffTime) {
+      const now = new Date();
+      const [h, m] = chef.orderCutoffTime.split(":").map(Number);
+      const cutoff = new Date();
+      cutoff.setHours(h, m, 0, 0);
+      setPastCutoff(now > cutoff);
+    } else {
+      setPastCutoff(false);
+    }
+
+    async function fetchDateMenu() {
+      setDateMenuLoading(true);
+      try {
+        const res = await api<any>(`/menus/${chef!.id}?date=${selectedDate}`) as any;
+        if (res.success) {
+          if (res.vacation) {
+            setIsOnVacation(true);
+            setDateMenuItems([]);
+            setDateMenuClosed(false);
+          } else if (res.isClosed) {
+            setDateMenuClosed(true);
+            setDateMenuItems([]);
+          } else {
+            setDateMenuClosed(false);
+            // data is an array of menus, flatten items
+            const menus = Array.isArray(res.data) ? res.data : [];
+            const items = menus.flatMap((m: any) => m.items || []);
+            setDateMenuItems(items);
+          }
+        } else {
+          setDateMenuItems([]);
+          setDateMenuClosed(false);
+        }
+      } catch {
+        setDateMenuItems(null);
+      } finally {
+        setDateMenuLoading(false);
+      }
+    }
+    fetchDateMenu();
+  }, [selectedDate, chef?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check follow status on mount
   useEffect(() => {
@@ -531,7 +598,7 @@ export default function ChefProfilePage({
 
         {/* Kitchen Closed Banner */}
         {!isKitchenOpen && (
-          <div className="flex items-start gap-3 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-3 mb-8">
+          <div className="flex items-start gap-3 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-3 mb-4">
             <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
             <p className="text-sm text-red-600 dark:text-red-400">
               This kitchen is currently closed. You can browse the menu but ordering is not available right now.
@@ -539,17 +606,97 @@ export default function ChefProfilePage({
           </div>
         )}
 
-        {/* Spacer when kitchen is open (replaces the closed banner) */}
-        {isKitchenOpen && <div className="mb-4" />}
+        {/* Vacation Banner */}
+        {isOnVacation && (
+          <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 mb-4">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">On Holiday</p>
+              <p className="text-xs text-amber-600/80 dark:text-amber-400/80 mt-0.5">
+                This kitchen is currently on vacation. Please check back later!
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Past Cutoff Banner */}
+        {pastCutoff && !isOnVacation && isKitchenOpen && (
+          <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 mb-4">
+            <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              Same-day ordering has closed (cutoff: {chef.orderCutoffTime ? formatTime(chef.orderCutoffTime) : ""}). You can still order for future dates.
+            </p>
+          </div>
+        )}
+
+        {/* Date Closed Banner */}
+        {dateMenuClosed && !isOnVacation && (
+          <div className="flex items-start gap-3 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-3 mb-4">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 dark:text-red-400">
+              Kitchen is closed on this date.
+            </p>
+          </div>
+        )}
+
+        {/* Spacer when no banners */}
+        {isKitchenOpen && !isOnVacation && !pastCutoff && !dateMenuClosed && <div className="mb-4" />}
 
         {/* Menu Items */}
-        {allItems.length > 0 && (
+        {(() => {
+          const displayItems = dateMenuItems !== null ? dateMenuItems : allItems;
+          const showDateSelector = true;
+          const datePills: { date: string; label: string; dayName: string; isToday: boolean }[] = [];
+          for (let i = 0; i < 7; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            const ds = d.toISOString().split("T")[0];
+            datePills.push({
+              date: ds,
+              label: d.getDate().toString(),
+              dayName: i === 0 ? "Today" : i === 1 ? "Tomorrow" : ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()],
+              isToday: i === 0,
+            });
+          }
+          return displayItems.length > 0 || showDateSelector ? (
           <section className="mb-10">
-            <h2 className="font-display text-2xl font-bold text-[var(--text)] mb-5">
+            <h2 className="font-display text-2xl font-bold text-[var(--text)] mb-4">
               Menu
             </h2>
+
+            {/* Date Selector Pills */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-3 mb-4">
+              {datePills.map((pill) => (
+                <button
+                  key={pill.date}
+                  onClick={() => setSelectedDate(pill.date)}
+                  className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-medium transition-all shrink-0 border ${
+                    selectedDate === pill.date
+                      ? "badge-gradient text-white border-transparent shadow-lg"
+                      : "bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:border-primary/30"
+                  }`}
+                >
+                  <span className={`text-[10px] ${selectedDate === pill.date ? "text-white/80" : "text-[var(--text-muted)]"}`}>
+                    {pill.dayName}
+                  </span>
+                  <span className="text-sm font-bold mt-0.5">{pill.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {dateMenuLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+              </div>
+            ) : displayItems.length === 0 ? (
+              <div className="text-center py-12 bg-[var(--card)] rounded-xl border border-[var(--border)]">
+                <UtensilsCrossed className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
+                <p className="text-sm text-[var(--text-muted)]">No menu items for this date</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Try selecting a different day</p>
+              </div>
+            ) : (
             <div className="grid sm:grid-cols-2 gap-4">
-              {allItems.map((item) => {
+              {displayItems.map((item) => {
                 const qty = getItemQty(item.id);
                 const isSoldOut = item.stockCount !== null && item.stockCount <= 0;
                 const hasOffer =
@@ -557,7 +704,7 @@ export default function ChefProfilePage({
                 const discountPct = hasOffer
                   ? Math.round((1 - item.offerPrice! / item.price) * 100)
                   : 0;
-                const isAddDisabled = !isKitchenOpen || isSoldOut;
+                const isAddDisabled = !isKitchenOpen || isSoldOut || isOnVacation || dateMenuClosed || (pastCutoff && selectedDate === new Date().toISOString().split("T")[0]);
 
                 return (
                   <div
@@ -711,8 +858,10 @@ export default function ChefProfilePage({
                 );
               })}
             </div>
+            )}
           </section>
-        )}
+          ) : null;
+        })()}
 
         {/* Services */}
         {chef.services.length > 0 && (

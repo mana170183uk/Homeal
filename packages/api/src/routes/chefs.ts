@@ -138,7 +138,7 @@ router.get("/:id", async (req: Request, res: Response) => {
 const ALLOWED_CHEF_FIELDS = [
   "kitchenName", "description", "cuisineTypes", "bannerImage", "latitude", "longitude",
   "deliveryRadius", "isOnline", "operatingHours", "bankDetails", "sellerType", "businessName",
-  "cakeEnabled", "bakeryEnabled",
+  "cakeEnabled", "bakeryEnabled", "dailyOrderCap", "orderCutoffTime", "vacationStart", "vacationEnd",
 ];
 
 router.patch(
@@ -149,7 +149,16 @@ router.patch(
     try {
       const data: Record<string, unknown> = {};
       for (const key of ALLOWED_CHEF_FIELDS) {
-        if (req.body[key] !== undefined) data[key] = req.body[key];
+        if (req.body[key] !== undefined) {
+          // Parse date fields
+          if ((key === "vacationStart" || key === "vacationEnd") && req.body[key]) {
+            data[key] = new Date(req.body[key] + "T00:00:00.000Z");
+          } else if ((key === "vacationStart" || key === "vacationEnd") && !req.body[key]) {
+            data[key] = null;
+          } else {
+            data[key] = req.body[key];
+          }
+        }
       }
       const chef = await prisma.chef.update({
         where: { userId: req.user!.userId },

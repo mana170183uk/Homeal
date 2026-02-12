@@ -9,7 +9,7 @@ import {
   Check, Crown, Zap, Edit3, Store, Truck, Repeat, UtensilsCrossed,
   Grip, Award, Sparkles, MapPin, Heart, Leaf, ShieldCheck, Cake,
   Navigation, Eye, Star, Search, Download, Filter, Clock, Calendar,
-  Menu, X, ChevronDown,
+  Menu, X, ChevronDown, LogOut, User, ExternalLink,
 } from "lucide-react";
 
 type IconComponent = typeof LayoutDashboard;
@@ -259,6 +259,8 @@ export default function SuperAdminPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
   const [expandedChefId, setExpandedChefId] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState("All");
   const [refreshingPage, setRefreshingPage] = useState(false);
@@ -325,6 +327,7 @@ export default function SuperAdminPage() {
         if (data.success && data.data && (data.data.role === "SUPER_ADMIN" || data.data.role === "ADMIN")) {
           setAuthToken(token);
           setAdminName(data.data.name || "Admin");
+          setAdminEmail(data.data.email || "");
         } else {
           localStorage.removeItem("homeal_token");
           localStorage.removeItem("homeal_refresh_token");
@@ -424,6 +427,32 @@ export default function SuperAdminPage() {
       console.error("Reject failed:", err);
     } finally {
       setChefActionLoading(null);
+    }
+  }
+
+  async function handleApproveAdmin(requestId: string) {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/access-requests/${requestId}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+      });
+      const data = await safeJson(res);
+      if (data.success) fetchNotifications();
+    } catch (err) {
+      console.error("Admin approve failed:", err);
+    }
+  }
+
+  async function handleRejectAdmin(requestId: string) {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/access-requests/${requestId}/reject`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+      });
+      const data = await safeJson(res);
+      if (data.success) fetchNotifications();
+    } catch (err) {
+      console.error("Admin reject failed:", err);
     }
   }
 
@@ -826,6 +855,16 @@ export default function SuperAdminPage() {
             {darkMode ? <Sun size={20} strokeWidth={1.8} /> : <Moon size={20} strokeWidth={1.8} />}
             <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
           </button>
+          <button
+            onClick={() => { localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all"
+            style={{ color: "#EF4444" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <LogOut size={20} strokeWidth={1.8} />
+            <span>Sign Out</span>
+          </button>
         </div>
       </aside>
 
@@ -905,7 +944,19 @@ export default function SuperAdminPage() {
                                     <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0 ml-2">{timeAgo}</span>
                                   </div>
                                   <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">{n.message}</p>
-                                  {isAction && (
+                                  {n.type === "chef_pending" && n.actionId && (
+                                    <div className="flex gap-2 mt-2">
+                                      <button onClick={(e) => { e.stopPropagation(); handleApproveChef(n.actionId!); setNotifOpen(false); }} className="px-3 py-1 rounded-lg text-[10px] font-semibold text-white hover:opacity-90 transition" style={{ background: "#10B981" }}>Approve</button>
+                                      <button onClick={(e) => { e.stopPropagation(); const chef = chefs.find(c => c.id === n.actionId); if (chef) { setRejectModalChef(chef); setRejectReason(""); } setNotifOpen(false); }} className="px-3 py-1 rounded-lg text-[10px] font-semibold text-white hover:opacity-90 transition" style={{ background: "#EF4444" }}>Reject</button>
+                                    </div>
+                                  )}
+                                  {n.type === "admin_request" && n.actionId && (
+                                    <div className="flex gap-2 mt-2">
+                                      <button onClick={(e) => { e.stopPropagation(); handleApproveAdmin(n.actionId!); setNotifOpen(false); }} className="px-3 py-1 rounded-lg text-[10px] font-semibold text-white hover:opacity-90 transition" style={{ background: "#10B981" }}>Grant Access</button>
+                                      <button onClick={(e) => { e.stopPropagation(); handleRejectAdmin(n.actionId!); setNotifOpen(false); }} className="px-3 py-1 rounded-lg text-[10px] font-semibold text-white hover:opacity-90 transition" style={{ background: "#EF4444" }}>Deny</button>
+                                    </div>
+                                  )}
+                                  {isAction && !n.actionId && (
                                     <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(245,158,11,0.1)", color: "#F59E0B" }}>
                                       Action required
                                     </span>
@@ -924,8 +975,31 @@ export default function SuperAdminPage() {
             <button onClick={() => setActivePage("settings")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
               <Settings size={18} className="text-[var(--text-muted)]" />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5 badge-gradient">
-              {adminName ? adminName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) : "SA"}
+            <div className="relative">
+              <button onClick={() => setProfileOpen(!profileOpen)} className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5 badge-gradient cursor-pointer hover:opacity-90 transition">
+                {adminName ? adminName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) : "SA"}
+              </button>
+              {profileOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                  <div className="absolute right-0 top-10 z-50 w-64 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg py-2">
+                    <div className="px-4 py-3 border-b border-[var(--border)]">
+                      <p className="text-sm font-semibold text-[var(--text)] truncate">{adminName || "Super Admin"}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate">{adminEmail}</p>
+                    </div>
+                    <button onClick={() => { setActivePage("settings"); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text)] hover:bg-[var(--input)] transition">
+                      <Settings size={16} className="text-[var(--text-muted)]" />
+                      Settings
+                    </button>
+                    <div className="border-t border-[var(--border)] mt-1 pt-1">
+                      <button onClick={() => { localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-[var(--input)] transition">
+                        <LogOut size={16} />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>

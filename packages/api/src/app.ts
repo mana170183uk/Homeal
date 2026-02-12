@@ -15,6 +15,7 @@ import approveActionRoutes from "./routes/approveAction";
 import reviewRoutes from "./routes/reviews";
 import followRoutes from "./routes/follows";
 import notificationRoutes from "./routes/notifications";
+import templateRoutes from "./routes/templates";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -65,6 +66,7 @@ app.use(`${API_PREFIX}/approve-action`, approveActionRoutes);
 app.use(`${API_PREFIX}/reviews`, reviewRoutes);
 app.use(`${API_PREFIX}/follows`, followRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
+app.use(`${API_PREFIX}/templates`, templateRoutes);
 
 // 404 catch-all (return JSON, not Express default HTML)
 app.use((_req, res) => {

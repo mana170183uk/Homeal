@@ -9,7 +9,7 @@ import {
   Infinity, Store, Leaf, Award, ShieldCheck, MapPin, Calendar,
   Repeat, Truck, Gift, Sparkles, Heart, Box, Timer, Grip, Cake,
   Navigation, Eye, Menu, X, Trash2, Pencil, Power, Save, MessageSquare, Send,
-  ExternalLink, CreditCard, Upload, Image,
+  ExternalLink, CreditCard, Upload, Image, LogOut, User,
 } from "lucide-react";
 
 type IconComponent = typeof LayoutDashboard;
@@ -26,6 +26,7 @@ const SIDEBAR_ITEMS: SidebarGroup[] = [
     { icon: Bell, label: "Notifications", id: "notifications" },
   ]},
   { section: "FOOD & MENU", items: [
+    { icon: Calendar, label: "Menu Scheduler", id: "scheduler" },
     { icon: UtensilsCrossed, label: "Menu Management", id: "menu" },
     { icon: PlusCircle, label: "Add Dish", id: "add-dish" },
   ]},
@@ -65,6 +66,7 @@ const PAGE_TITLES: Record<string, string> = {
   "active-orders": "Active Orders",
   "order-history": "Order History",
   "notifications": "Notifications",
+  "scheduler": "Menu Scheduler",
   "menu": "Menu Management",
   "add-dish": "Add New Dish",
   "products": "Homemade Products",
@@ -83,6 +85,7 @@ const PAGE_META: Record<string, { green: string; red: string; cta?: string }> = 
   "active-orders": { green: "0 Active", red: "0 Preparing" },
   "order-history": { green: "0 Completed", red: "0 Cancelled" },
   "notifications": { green: "0 Unread", red: "0 Read" },
+  "scheduler": { green: "This Week", red: "Next Week" },
   "menu": { green: "0 Active Items", red: "0 Draft", cta: "Add Dish" },
   "add-dish": { green: "0 Listed", red: "0 Draft" },
   "products": { green: "0 Listed", red: "0 Draft", cta: "Add Product" },
@@ -302,6 +305,8 @@ export default function DashboardPage() {
   const [approvalStatus, setApprovalStatus] = useState<"loading" | "approved" | "pending" | "rejected">("loading");
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [chefName, setChefName] = useState("");
+  const [chefEmail, setChefEmail] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Order state
   const [orders, setOrders] = useState<any[]>([]);
@@ -309,6 +314,29 @@ export default function DashboardPage() {
   const [activeOrderFilter, setActiveOrderFilter] = useState("All Orders");
   const [historyFilter, setHistoryFilter] = useState("All");
   const prevOrderCountRef = useRef<number>(0);
+
+  // Scheduler state
+  const [scheduleData, setScheduleData] = useState<any[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [schedulerDayItems, setSchedulerDayItems] = useState<any[]>([]);
+  const [schedulerDayMenu, setSchedulerDayMenu] = useState<any>(null);
+  const [schedulerDayNotes, setSchedulerDayNotes] = useState("");
+  const [schedulerNewItem, setSchedulerNewItem] = useState({ name: "", price: "", description: "", isVeg: true, stockCount: "", image: "", prepTime: "", servingSize: "", offerPrice: "", allergens: "", categoryId: "", eggOption: "" });
+  const [schedulerShowAddItem, setSchedulerShowAddItem] = useState(false);
+  const [schedulerAddMode, setSchedulerAddMode] = useState<"menu" | "new">("menu");
+  const [schedulerSaving, setSchedulerSaving] = useState(false);
+  const [schedulerCopyTarget, setSchedulerCopyTarget] = useState<string[]>([]);
+  const [schedulerShowCopy, setSchedulerShowCopy] = useState(false);
+  const [schedulerShowTemplate, setSchedulerShowTemplate] = useState(false);
+  const [schedulerTemplateName, setSchedulerTemplateName] = useState("");
+  const [schedulerApplyTemplateId, setSchedulerApplyTemplateId] = useState("");
+  const [schedulerEditItem, setSchedulerEditItem] = useState<string | null>(null);
+  const [schedulerEditForm, setSchedulerEditForm] = useState({ name: "", price: "", description: "", stockCount: "", image: "", isVeg: true });
+  const [schedulerShowBulkPrice, setSchedulerShowBulkPrice] = useState(false);
+  const [schedulerBulkType, setSchedulerBulkType] = useState<"percentage" | "fixed">("percentage");
+  const [schedulerBulkValue, setSchedulerBulkValue] = useState("");
 
   // Check auth + approval status on load
   useEffect(() => {
@@ -330,6 +358,7 @@ export default function DashboardPage() {
             return;
           }
           setChefName(data.data.name || "");
+          setChefEmail(data.data.email || "");
           setApprovalStatus(data.data.approvalStatus || "approved");
           setTrialEndsAt(data.data.trialEndsAt || null);
         } else {
@@ -883,6 +912,473 @@ export default function DashboardPage() {
     }
   }
 
+  // --- Scheduler functions ---
+  function getScheduleRange() {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(from.getDate() - from.getDay() + 1); // Monday this week
+    const to = new Date(from);
+    to.setDate(to.getDate() + 13); // 2 weeks
+    return {
+      from: from.toISOString().split("T")[0],
+      to: to.toISOString().split("T")[0],
+    };
+  }
+
+  async function fetchSchedule() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setScheduleLoading(true);
+    try {
+      const { from, to } = getScheduleRange();
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/my/schedule?from=${from}&to=${to}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        // Flatten schedule entries: API returns { date, menu: {...} | null, orderCount }
+        const schedule = (data.data.schedule || []).map((d: any) => ({
+          date: d.date,
+          items: d.menu?.items || [],
+          isClosed: d.menu?.isClosed || false,
+          notes: d.menu?.notes || "",
+          orderCount: d.orderCount || 0,
+          menuId: d.menu?.id || null,
+          menuName: d.menu?.name || "",
+        }));
+        setScheduleData(schedule);
+        // Also load templates if returned alongside schedule
+        if (data.data.templates) {
+          setTemplates(data.data.templates.map((t: any) => ({
+            ...t,
+            items: typeof t.items === "string" ? JSON.parse(t.items) : t.items,
+          })));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch schedule:", e);
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function fetchTemplates() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/templates`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setTemplates(data.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch templates:", e);
+    }
+  }
+
+  function selectScheduleDate(dateStr: string) {
+    setSelectedDate(dateStr);
+    const dayData = scheduleData.find((d: any) => d.date === dateStr);
+    if (dayData) {
+      setSchedulerDayMenu(dayData);
+      setSchedulerDayItems(dayData.items || []);
+      setSchedulerDayNotes(dayData.notes || "");
+    } else {
+      setSchedulerDayMenu(null);
+      setSchedulerDayItems([]);
+      setSchedulerDayNotes("");
+    }
+    setSchedulerShowAddItem(false);
+    setSchedulerShowCopy(false);
+    setSchedulerShowTemplate(false);
+  }
+
+  async function toggleDayClosed(dateStr: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${dateStr}/close`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await fetchSchedule();
+      // Re-select will happen via useEffect on scheduleData change
+    } catch (e) {
+      console.error("Failed to toggle day closed:", e);
+      showToast("Failed to update day status", "error");
+    }
+  }
+
+  async function addSchedulerItem() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token || !schedulerNewItem.name || !schedulerNewItem.price) return;
+    setSchedulerSaving(true);
+    try {
+      const body: any = {
+        name: schedulerNewItem.name,
+        price: parseFloat(schedulerNewItem.price),
+        isVeg: schedulerNewItem.isVeg,
+      };
+      if (schedulerNewItem.description) body.description = schedulerNewItem.description;
+      if (schedulerNewItem.stockCount) body.stockCount = parseInt(schedulerNewItem.stockCount);
+      if (schedulerNewItem.image) body.image = schedulerNewItem.image;
+      if (schedulerNewItem.prepTime) body.prepTime = parseInt(schedulerNewItem.prepTime);
+      if (schedulerNewItem.servingSize) body.servingSize = schedulerNewItem.servingSize;
+      if (schedulerNewItem.offerPrice) body.offerPrice = parseFloat(schedulerNewItem.offerPrice);
+      if (schedulerNewItem.allergens) body.allergens = schedulerNewItem.allergens;
+      if (schedulerNewItem.categoryId) body.categoryId = schedulerNewItem.categoryId;
+      if (schedulerNewItem.eggOption) body.eggOption = schedulerNewItem.eggOption;
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/items`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Item added!");
+        setSchedulerNewItem({ name: "", price: "", description: "", isVeg: true, stockCount: "", image: "", prepTime: "", servingSize: "", offerPrice: "", allergens: "", categoryId: "", eggOption: "" });
+        setSchedulerShowAddItem(false);
+        await fetchSchedule();
+      } else {
+        showToast(data.error || "Failed to add item", "error");
+      }
+    } catch (e) {
+      console.error("Failed to add scheduler item:", e);
+      showToast("Failed to add item", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function addExistingDishToSchedule(dish: any) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setSchedulerSaving(true);
+    try {
+      const body: any = {
+        name: dish.name,
+        price: dish.price,
+        isVeg: dish.isVeg,
+      };
+      if (dish.description) body.description = dish.description;
+      if (dish.image) body.image = dish.image;
+      if (dish.stockCount != null) body.stockCount = dish.stockCount;
+      if (dish.prepTime) body.prepTime = dish.prepTime;
+      if (dish.servingSize) body.servingSize = dish.servingSize;
+      if (dish.offerPrice) body.offerPrice = dish.offerPrice;
+      if (dish.allergens) body.allergens = dish.allergens;
+      if (dish.categoryId) body.categoryId = dish.categoryId;
+      if (dish.eggOption) body.eggOption = dish.eggOption;
+      if (dish.calories) body.calories = dish.calories;
+      if (dish.ingredients) body.ingredients = dish.ingredients;
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/items`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`"${dish.name}" added to schedule!`);
+        await fetchSchedule();
+      } else {
+        showToast(data.error || "Failed to add item", "error");
+      }
+    } catch (e) {
+      console.error("Failed to add existing dish:", e);
+      showToast("Failed to add item", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function copyDayTo() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token || schedulerCopyTarget.length === 0) return;
+    setSchedulerSaving(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/copy`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ targetDates: schedulerCopyTarget }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Copied to ${data.data?.created?.length || 0} day(s)!`);
+        setSchedulerShowCopy(false);
+        setSchedulerCopyTarget([]);
+        await fetchSchedule();
+      } else {
+        showToast(data.error || "Failed to copy", "error");
+      }
+    } catch (e) {
+      console.error("Failed to copy day:", e);
+      showToast("Failed to copy", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function copyWeek() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setSchedulerSaving(true);
+    try {
+      const { from } = getScheduleRange();
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/copy-week`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceWeekStart: from }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Copied week! ${data.data?.created || 0} menus created.`);
+        await fetchSchedule();
+      } else {
+        showToast(data.error || "Failed to copy week", "error");
+      }
+    } catch (e) {
+      console.error("Failed to copy week:", e);
+      showToast("Failed to copy week", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function saveAsTemplate() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token || !schedulerTemplateName.trim()) return;
+    setSchedulerSaving(true);
+    try {
+      const items = schedulerDayItems.map((item: any) => ({
+        name: item.name,
+        description: item.description,
+        price: item.price,
+        isVeg: item.isVeg,
+        image: item.image,
+        stockCount: item.stockCount,
+        allergens: item.allergens,
+        prepTime: item.prepTime,
+        servingSize: item.servingSize,
+        categoryId: item.categoryId,
+        offerPrice: item.offerPrice,
+        eggOption: item.eggOption,
+      }));
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/templates`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: schedulerTemplateName, items }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Template saved!");
+        setSchedulerTemplateName("");
+        setSchedulerShowTemplate(false);
+        fetchTemplates();
+      } else {
+        showToast(data.error || "Failed to save template", "error");
+      }
+    } catch (e) {
+      console.error("Failed to save template:", e);
+      showToast("Failed to save template", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function applyTemplate() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token || !schedulerApplyTemplateId) return;
+    setSchedulerSaving(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/templates/${schedulerApplyTemplateId}/apply`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ dates: [selectedDate] }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.data?.skipped?.length > 0) {
+          showToast("Menu already exists for this date — skipped", "error");
+        } else {
+          showToast("Template applied!");
+        }
+        setSchedulerApplyTemplateId("");
+        await fetchSchedule();
+        // Re-select happens via useEffect on scheduleData change
+      } else {
+        showToast(data.error || "Failed to apply template", "error");
+      }
+    } catch (e) {
+      console.error("Failed to apply template:", e);
+      showToast("Failed to apply template", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function deleteTemplate(templateId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await fetch(`${ADMIN_API_URL}/api/v1/templates/${templateId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showToast("Template deleted");
+      fetchTemplates();
+    } catch (e) {
+      console.error("Failed to delete template:", e);
+      showToast("Failed to delete template", "error");
+    }
+  }
+
+  async function updateDayNotes(dateStr: string, notes: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${dateStr}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      });
+      showToast("Notes saved!");
+    } catch (e) {
+      console.error("Failed to save notes:", e);
+      showToast("Failed to save notes", "error");
+    }
+  }
+
+  async function deleteSchedulerItem(menuId: string, itemId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showToast("Item removed");
+      await fetchSchedule();
+      // Re-select happens via useEffect on scheduleData change
+    } catch (e) {
+      console.error("Failed to delete item:", e);
+      showToast("Failed to delete item", "error");
+    }
+  }
+
+  async function handleSchedulerImageUpload(file: File, target: "new" | "edit") {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.data?.url) {
+        if (target === "new") {
+          setSchedulerNewItem(p => ({ ...p, image: data.data.url }));
+        } else {
+          setSchedulerEditForm(p => ({ ...p, image: data.data.url }));
+        }
+        showToast("Image uploaded!");
+      } else {
+        showToast(data.error || "Failed to upload image", "error");
+      }
+    } catch (e) {
+      console.error("Failed to upload image:", e);
+      showToast("Failed to upload image", "error");
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
+  async function editSchedulerItem(menuId: string, itemId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setSchedulerSaving(true);
+    try {
+      const body: any = {
+        name: schedulerEditForm.name,
+        price: parseFloat(schedulerEditForm.price),
+        isVeg: schedulerEditForm.isVeg,
+      };
+      if (schedulerEditForm.description) body.description = schedulerEditForm.description;
+      if (schedulerEditForm.stockCount) body.stockCount = parseInt(schedulerEditForm.stockCount);
+      if (schedulerEditForm.image) body.image = schedulerEditForm.image;
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Item updated!");
+        setSchedulerEditItem(null);
+        await fetchSchedule();
+      } else {
+        showToast(data.error || "Failed to update item", "error");
+      }
+    } catch (e) {
+      console.error("Failed to edit item:", e);
+      showToast("Failed to update item", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function toggleItemSoldOut(menuId: string, itemId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}/toggle`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.data?.isAvailable ? "Item back in stock" : "Item marked sold out");
+        await fetchSchedule();
+      } else {
+        showToast(data.error || "Failed to toggle", "error");
+      }
+    } catch (e) {
+      console.error("Failed to toggle sold out:", e);
+      showToast("Failed to toggle sold out", "error");
+    }
+  }
+
+  async function bulkUpdatePrices(type: "percentage" | "fixed", value: number) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setSchedulerSaving(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/bulk-price`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ type, value }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Updated ${data.data?.updated || 0} item prices!`);
+        await fetchSchedule();
+        // Re-select happens via useEffect on scheduleData change
+      } else {
+        showToast(data.error || "Failed to update prices", "error");
+      }
+    } catch (e) {
+      console.error("Failed to bulk update prices:", e);
+      showToast("Failed to update prices", "error");
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
   // Fetch menu items and categories on mount
   useEffect(() => {
     fetchMenuItems();
@@ -899,7 +1395,18 @@ export default function DashboardPage() {
     if (activePage === "reviews") {
       fetchReviews();
     }
+    if (activePage === "scheduler") {
+      fetchSchedule();
+      fetchTemplates();
+    }
   }, [activePage]);
+
+  // When schedule data changes, re-select the current date to refresh panel
+  useEffect(() => {
+    if (scheduleData.length > 0) {
+      selectScheduleDate(selectedDate);
+    }
+  }, [scheduleData]);
 
   // Helper to find category name by id
   function getCategoryName(categoryId: string) {
@@ -923,7 +1430,7 @@ export default function DashboardPage() {
     setServiceToggles((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const customPages = ["dashboard", "settings", "menu", "products", "my-services", "add-product", "add-dish", "add-cake", "active-orders", "order-history", "notifications", "subscriptions", "earnings", "reviews", "analytics"];
+  const customPages = ["dashboard", "settings", "menu", "products", "my-services", "add-product", "add-dish", "add-cake", "active-orders", "order-history", "notifications", "subscriptions", "earnings", "reviews", "analytics", "scheduler"];
 
   // Trial banner helpers
   const trialDate = trialEndsAt ? new Date(trialEndsAt) : null;
@@ -1091,7 +1598,7 @@ export default function DashboardPage() {
         {/* Customer view link + Theme toggle */}
         <div className="px-3 pb-4">
           <a
-            href="https://homeal.uk"
+            href={`https://homeal.uk${chefEmail ? `?email=${encodeURIComponent(chefEmail)}` : ""}`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all"
@@ -1112,6 +1619,16 @@ export default function DashboardPage() {
             {darkMode ? <Sun size={20} strokeWidth={1.8} /> : <Moon size={20} strokeWidth={1.8} />}
             <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
           </button>
+          <button
+            onClick={() => { localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all"
+            style={{ color: "#EF4444" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--sidebar-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <LogOut size={20} strokeWidth={1.8} />
+            <span>Sign Out</span>
+          </button>
         </div>
       </aside>
 
@@ -1130,8 +1647,35 @@ export default function DashboardPage() {
             <button onClick={() => setActivePage("settings")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
               <Settings size={18} className="text-[var(--text-muted)]" />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5 badge-gradient">
-              {chefName ? chefName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) : "CH"}
+            <div className="relative">
+              <button onClick={() => setProfileOpen(!profileOpen)} className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ml-0.5 badge-gradient cursor-pointer hover:opacity-90 transition">
+                {chefName ? chefName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) : "CH"}
+              </button>
+              {profileOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                  <div className="absolute right-0 top-10 z-50 w-64 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg py-2 animate-in fade-in-0 zoom-in-95">
+                    <div className="px-4 py-3 border-b border-[var(--border)]">
+                      <p className="text-sm font-semibold text-[var(--text)] truncate">{chefName || "Home Maker"}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate">{chefEmail}</p>
+                    </div>
+                    <button onClick={() => { setActivePage("settings"); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text)] hover:bg-[var(--input)] transition">
+                      <User size={16} className="text-[var(--text-muted)]" />
+                      Profile &amp; Settings
+                    </button>
+                    <a href={`https://homeal.uk?email=${encodeURIComponent(chefEmail)}`} target="_blank" rel="noopener noreferrer" onClick={() => setProfileOpen(false)} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text)] hover:bg-[var(--input)] transition">
+                      <ExternalLink size={16} className="text-[var(--text-muted)]" />
+                      Switch to Customer View
+                    </a>
+                    <div className="border-t border-[var(--border)] mt-1 pt-1">
+                      <button onClick={() => { localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-[var(--input)] transition">
+                        <LogOut size={16} />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -2714,6 +3258,98 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                {/* Kitchen Operations */}
+                <div className="rounded-2xl border border-[var(--border)] p-5 mb-5" style={{ background: "var(--header-bg)" }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                      <Timer size={14} style={{ color: "#F59E0B" }} /> Kitchen Operations
+                    </h4>
+                    <button
+                      onClick={() => updateChefProfile({
+                        dailyOrderCap: chefProfile?.dailyOrderCap ?? null,
+                        orderCutoffTime: chefProfile?.orderCutoffTime ?? null,
+                        vacationStart: chefProfile?.vacationStart ? new Date(chefProfile.vacationStart).toISOString().split("T")[0] : null,
+                        vacationEnd: chefProfile?.vacationEnd ? new Date(chefProfile.vacationEnd).toISOString().split("T")[0] : null,
+                      })}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 btn-premium flex items-center gap-1.5"
+                    >
+                      <Save size={12} /> Save
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Daily Order Cap</label>
+                      <p className="text-[10px] text-[var(--text-muted)] mb-2">Maximum orders per day (leave empty for unlimited)</p>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Unlimited"
+                        value={chefProfile?.dailyOrderCap ?? ""}
+                        onChange={e => setChefProfile((p: any) => ({ ...p, dailyOrderCap: e.target.value ? parseInt(e.target.value) : null }))}
+                        className="w-full px-3 py-2 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#F59E0B] transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Order Cutoff Time</label>
+                      <p className="text-[10px] text-[var(--text-muted)] mb-2">Customers cannot order same-day after this time</p>
+                      <input
+                        type="time"
+                        value={chefProfile?.orderCutoffTime || ""}
+                        onChange={e => setChefProfile((p: any) => ({ ...p, orderCutoffTime: e.target.value || null }))}
+                        className="w-full px-3 py-2 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[#F59E0B] transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Vacation Mode */}
+                  <div className="rounded-xl p-4 border" style={{
+                    background: (chefProfile?.vacationStart && chefProfile?.vacationEnd) ? "rgba(245,158,11,0.05)" : "var(--input)",
+                    borderColor: (chefProfile?.vacationStart && chefProfile?.vacationEnd) ? "rgba(245,158,11,0.3)" : "var(--border)",
+                  }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Calendar size={14} style={{ color: "#F59E0B" }} />
+                      <span className="text-xs font-semibold text-[var(--text)]">Vacation Mode</span>
+                      {chefProfile?.vacationStart && chefProfile?.vacationEnd && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ color: "#F59E0B", background: "rgba(245,158,11,0.12)" }}>Active</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-3">Your kitchen will be hidden from customers during these dates</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1">Start Date</label>
+                        <input
+                          type="date"
+                          value={chefProfile?.vacationStart ? new Date(chefProfile.vacationStart).toISOString().split("T")[0] : ""}
+                          onChange={e => setChefProfile((p: any) => ({ ...p, vacationStart: e.target.value || null }))}
+                          className="w-full px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#F59E0B] transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1">End Date</label>
+                        <input
+                          type="date"
+                          value={chefProfile?.vacationEnd ? new Date(chefProfile.vacationEnd).toISOString().split("T")[0] : ""}
+                          onChange={e => setChefProfile((p: any) => ({ ...p, vacationEnd: e.target.value || null }))}
+                          className="w-full px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#F59E0B] transition"
+                        />
+                      </div>
+                    </div>
+                    {chefProfile?.vacationStart && chefProfile?.vacationEnd && (
+                      <button
+                        onClick={() => {
+                          setChefProfile((p: any) => ({ ...p, vacationStart: null, vacationEnd: null }));
+                          updateChefProfile({ vacationStart: null, vacationEnd: null });
+                        }}
+                        className="mt-3 px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition"
+                        style={{ color: "#EF4444", background: "rgba(239,68,68,0.08)" }}
+                      >
+                        <X size={12} /> Cancel Vacation
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {/* Bank Details */}
                 <div className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
                   <div className="flex items-center justify-between mb-4">
@@ -2879,6 +3515,680 @@ export default function DashboardPage() {
               </div>
             </>
           )}
+
+          {/* Menu Scheduler Page */}
+          {activePage === "scheduler" && (() => {
+            const { from } = getScheduleRange();
+            const weekStart = new Date(from + "T00:00:00");
+            const days: { date: string; label: string; dayName: string; isToday: boolean }[] = [];
+            for (let i = 0; i < 14; i++) {
+              const d = new Date(weekStart);
+              d.setDate(d.getDate() + i);
+              const ds = d.toISOString().split("T")[0];
+              days.push({
+                date: ds,
+                label: d.getDate().toString(),
+                dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()],
+                isToday: ds === new Date().toISOString().split("T")[0],
+              });
+            }
+            const selectedDayData = scheduleData.find((d: any) => d.date === selectedDate);
+            const selectedItems = selectedDayData?.items || [];
+            const selectedIsClosed = selectedDayData?.isClosed || false;
+            const selectedOrderCount = selectedDayData?.orderCount || 0;
+            const selectedNotes = selectedDayData?.notes || "";
+
+            return (
+            <>
+              {/* Scheduler Header */}
+              <div className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-4 animate-fade-in-up">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
+                      <Calendar size={22} color="white" strokeWidth={2} />
+                    </div>
+                    <div>
+                      <h2 className="text-[15px] font-semibold text-[var(--text)]">Menu Scheduler</h2>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">Plan your menus for the next 2 weeks</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => fetchSchedule()} className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                      <RefreshCw size={16} className={`text-[var(--text-muted)] ${scheduleLoading ? "animate-spin" : ""}`} />
+                    </button>
+                    <button
+                      onClick={copyWeek}
+                      disabled={schedulerSaving}
+                      className="px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition hover:opacity-90 border border-[var(--border)]"
+                      style={{ background: "var(--input)", color: "var(--text)" }}
+                    >
+                      <Repeat size={13} />
+                      <span>Copy Week</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two-Week Calendar Strip */}
+              <div className="rounded-2xl glass-card px-3 sm:px-4 py-3 mb-4 animate-fade-in-up" style={{ animationDelay: "0.05s" }}>
+                {/* Week labels */}
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">This Week</span>
+                  <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Next Week</span>
+                </div>
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-1.5">
+                  {days.slice(0, 7).map((day) => {
+                    const dayData = scheduleData.find((d: any) => d.date === day.date);
+                    const itemCount = dayData?.items?.length || 0;
+                    const isClosed = dayData?.isClosed;
+                    const isSelected = selectedDate === day.date;
+                    const orderCt = dayData?.orderCount || 0;
+                    let bg = "var(--input)";
+                    let border = "transparent";
+                    if (isClosed) { bg = "rgba(239,68,68,0.08)"; border = "rgba(239,68,68,0.3)"; }
+                    else if (itemCount > 0) { bg = "rgba(16,185,129,0.08)"; border = "rgba(16,185,129,0.3)"; }
+                    if (isSelected) { border = "#8B5CF6"; }
+
+                    return (
+                      <button
+                        key={day.date}
+                        onClick={() => selectScheduleDate(day.date)}
+                        className="flex flex-col items-center py-2 px-1 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        style={{ background: bg, border: `2px solid ${border}` }}
+                      >
+                        <span className={`text-[10px] font-medium ${day.isToday ? "text-[#8B5CF6]" : "text-[var(--text-muted)]"}`}>{day.dayName}</span>
+                        <span className={`text-sm font-bold mt-0.5 ${day.isToday ? "text-[#8B5CF6]" : "text-[var(--text)]"}`}>{day.label}</span>
+                        {itemCount > 0 && (
+                          <span className="text-[9px] mt-0.5 font-medium" style={{ color: isClosed ? "#EF4444" : "#10B981" }}>
+                            {isClosed ? "Closed" : `${itemCount} items`}
+                          </span>
+                        )}
+                        {orderCt > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full mt-0.5 font-semibold" style={{ background: "rgba(59,130,246,0.12)", color: "#3B82F6" }}>
+                            {orderCt} orders
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {days.slice(7, 14).map((day) => {
+                    const dayData = scheduleData.find((d: any) => d.date === day.date);
+                    const itemCount = dayData?.items?.length || 0;
+                    const isClosed = dayData?.isClosed;
+                    const isSelected = selectedDate === day.date;
+                    const orderCt = dayData?.orderCount || 0;
+                    let bg = "var(--input)";
+                    let border = "transparent";
+                    if (isClosed) { bg = "rgba(239,68,68,0.08)"; border = "rgba(239,68,68,0.3)"; }
+                    else if (itemCount > 0) { bg = "rgba(16,185,129,0.08)"; border = "rgba(16,185,129,0.3)"; }
+                    if (isSelected) { border = "#8B5CF6"; }
+
+                    return (
+                      <button
+                        key={day.date}
+                        onClick={() => selectScheduleDate(day.date)}
+                        className="flex flex-col items-center py-2 px-1 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        style={{ background: bg, border: `2px solid ${border}` }}
+                      >
+                        <span className={`text-[10px] font-medium ${day.isToday ? "text-[#8B5CF6]" : "text-[var(--text-muted)]"}`}>{day.dayName}</span>
+                        <span className={`text-sm font-bold mt-0.5 ${day.isToday ? "text-[#8B5CF6]" : "text-[var(--text)]"}`}>{day.label}</span>
+                        {itemCount > 0 && (
+                          <span className="text-[9px] mt-0.5 font-medium" style={{ color: isClosed ? "#EF4444" : "#10B981" }}>
+                            {isClosed ? "Closed" : `${itemCount} items`}
+                          </span>
+                        )}
+                        {orderCt > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full mt-0.5 font-semibold" style={{ background: "rgba(59,130,246,0.12)", color: "#3B82F6" }}>
+                            {orderCt} orders
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Legend */}
+                <div className="flex items-center gap-4 mt-3 px-1">
+                  <span className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />Has Items</span>
+                  <span className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-red-400" />Closed</span>
+                  <span className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full" style={{ background: "var(--text-muted)", opacity: 0.4 }} />Empty</span>
+                </div>
+              </div>
+
+              {/* Selected Day Panel */}
+              <div className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-4 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[var(--text)]">
+                      {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[11px] text-[var(--text-muted)]">{selectedItems.length} items</span>
+                      <span className="text-[11px]" style={{ color: selectedIsClosed ? "#EF4444" : "#10B981" }}>
+                        {selectedIsClosed ? "Closed" : "Open"}
+                      </span>
+                      {selectedOrderCount > 0 && (
+                        <span className="text-[11px] font-medium" style={{ color: "#3B82F6" }}>{selectedOrderCount} orders</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => toggleDayClosed(selectedDate)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition border"
+                      style={{
+                        background: selectedIsClosed ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+                        borderColor: selectedIsClosed ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)",
+                        color: selectedIsClosed ? "#10B981" : "#EF4444",
+                      }}
+                    >
+                      <Power size={12} />
+                      {selectedIsClosed ? "Open Day" : "Close Day"}
+                    </button>
+                    <button
+                      onClick={() => setSchedulerShowAddItem(!schedulerShowAddItem)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition btn-premium text-white"
+                    >
+                      <PlusCircle size={12} />
+                      Add Item
+                    </button>
+                    <button
+                      onClick={() => setSchedulerShowCopy(!schedulerShowCopy)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition border border-[var(--border)]"
+                      style={{ background: "var(--input)", color: "var(--text)" }}
+                    >
+                      <Repeat size={12} />
+                      Copy To...
+                    </button>
+                    {selectedItems.length > 0 && (
+                      <button
+                        onClick={() => setSchedulerShowTemplate(!schedulerShowTemplate)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition border border-[var(--border)]"
+                        style={{ background: "var(--input)", color: "var(--text)" }}
+                      >
+                        <Save size={12} />
+                        Save Template
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Add Item Form */}
+                {schedulerShowAddItem && (
+                  <div className="rounded-xl p-4 mb-4 border border-[var(--border)]" style={{ background: "var(--input)" }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-semibold text-[var(--text)]">Add Item to {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</h4>
+                      <button onClick={() => setSchedulerShowAddItem(false)} className="text-[var(--text-muted)] hover:text-[var(--text)] transition"><X size={16} /></button>
+                    </div>
+
+                    {/* Tab switcher */}
+                    <div className="flex gap-1 mb-3 p-0.5 rounded-lg" style={{ background: "var(--bg)" }}>
+                      <button onClick={() => setSchedulerAddMode("menu")} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition ${schedulerAddMode === "menu" ? "bg-[#8B5CF6] text-white shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}>
+                        From Menu
+                      </button>
+                      <button onClick={() => setSchedulerAddMode("new")} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition ${schedulerAddMode === "new" ? "bg-[#8B5CF6] text-white shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}>
+                        New Item
+                      </button>
+                    </div>
+
+                    {schedulerAddMode === "menu" ? (
+                      /* Pick from existing menu items */
+                      <div>
+                        {menuItems.length === 0 ? (
+                          <p className="text-xs text-[var(--text-muted)] text-center py-4">No dishes yet. Create dishes in &quot;Add Dish&quot; first, or switch to &quot;New Item&quot;.</p>
+                        ) : (
+                          <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                            {menuItems.map((dish: any) => {
+                              const alreadyAdded = selectedItems.some((si: any) => si.name === dish.name);
+                              return (
+                                <div key={dish.id} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-[var(--border)] hover:border-[rgba(139,92,246,0.3)] transition" style={{ background: "var(--bg)" }}>
+                                  {dish.image ? (
+                                    <img src={dish.image} alt={dish.name} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                                  ) : (
+                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: dish.isVeg ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)" }}>
+                                      <span className="text-xs">{dish.isVeg ? "🥬" : "🍖"}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs font-semibold text-[var(--text)] truncate block">{dish.name}</span>
+                                    <span className="text-[11px] font-medium" style={{ color: "#8B5CF6" }}>£{typeof dish.price === "number" ? dish.price.toFixed(2) : dish.price}</span>
+                                    {dish.category?.name && <span className="text-[10px] text-[var(--text-muted)] ml-2">{dish.category.name}</span>}
+                                  </div>
+                                  <button
+                                    onClick={() => addExistingDishToSchedule(dish)}
+                                    disabled={schedulerSaving || alreadyAdded}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${alreadyAdded ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" : "btn-premium text-white"} disabled:opacity-50`}
+                                  >
+                                    {alreadyAdded ? "Added" : schedulerSaving ? "..." : "+ Add"}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* New item form with all fields */
+                      <div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Dish Name *</label>
+                            <input type="text" placeholder="e.g. Chicken Biryani" value={schedulerNewItem.name} onChange={e => setSchedulerNewItem(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Price (£) *</label>
+                            <input type="number" placeholder="0.00" value={schedulerNewItem.price} onChange={e => setSchedulerNewItem(p => ({ ...p, price: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Category</label>
+                            <select value={schedulerNewItem.categoryId} onChange={e => setSchedulerNewItem(p => ({ ...p, categoryId: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition">
+                              <option value="">Select category</option>
+                              {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Offer Price (£)</label>
+                            <input type="number" placeholder="Special offer" value={schedulerNewItem.offerPrice} onChange={e => setSchedulerNewItem(p => ({ ...p, offerPrice: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Prep Time (mins)</label>
+                            <input type="number" placeholder="e.g. 30" value={schedulerNewItem.prepTime} onChange={e => setSchedulerNewItem(p => ({ ...p, prepTime: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Serving Size</label>
+                            <input type="text" placeholder="e.g. 1-2 persons" value={schedulerNewItem.servingSize} onChange={e => setSchedulerNewItem(p => ({ ...p, servingSize: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Stock Count</label>
+                            <input type="number" placeholder="Leave empty for unlimited" value={schedulerNewItem.stockCount} onChange={e => setSchedulerNewItem(p => ({ ...p, stockCount: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Allergen Info</label>
+                            <input type="text" placeholder="e.g. Contains dairy" value={schedulerNewItem.allergens} onChange={e => setSchedulerNewItem(p => ({ ...p, allergens: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition" />
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Description</label>
+                          <textarea placeholder="Describe your dish..." value={schedulerNewItem.description} onChange={e => setSchedulerNewItem(p => ({ ...p, description: e.target.value }))} rows={2} className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition resize-none" />
+                        </div>
+
+                        {/* Diet type + Egg option row */}
+                        <div className="flex flex-wrap items-center gap-4 mt-3">
+                          <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-medium text-[var(--text-muted)]">Diet:</label>
+                            <label className="flex items-center gap-1.5 text-xs text-[var(--text)]">
+                              <input type="radio" name="schedVeg" checked={schedulerNewItem.isVeg} onChange={() => setSchedulerNewItem(p => ({ ...p, isVeg: true }))} className="accent-emerald-500" />
+                              Veg
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-[var(--text)]">
+                              <input type="radio" name="schedVeg" checked={!schedulerNewItem.isVeg} onChange={() => setSchedulerNewItem(p => ({ ...p, isVeg: false }))} className="accent-red-500" />
+                              Non-Veg
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-medium text-[var(--text-muted)]">Egg:</label>
+                            <select value={schedulerNewItem.eggOption} onChange={e => setSchedulerNewItem(p => ({ ...p, eggOption: e.target.value }))} className="px-2 py-1 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition">
+                              <option value="">None</option>
+                              <option value="egg">Egg</option>
+                              <option value="eggless">Eggless</option>
+                              <option value="both">Both</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Image upload */}
+                        <div className="flex items-center gap-2 mt-3">
+                          <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] cursor-pointer hover:border-[#8B5CF6] transition">
+                            <Upload size={12} />
+                            {imageUploading ? "Uploading..." : "Upload Image"}
+                            <input type="file" accept="image/*" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleSchedulerImageUpload(file, "new"); }} />
+                          </label>
+                          {schedulerNewItem.image && (
+                            <div className="relative">
+                              <img src={schedulerNewItem.image} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-[var(--border)]" />
+                              <button type="button" onClick={() => setSchedulerNewItem(p => ({ ...p, image: "" }))} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition"><X size={8} /></button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Submit */}
+                        <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[var(--border)]">
+                          <button onClick={() => setSchedulerShowAddItem(false)} className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:opacity-80 transition">Cancel</button>
+                          <button
+                            onClick={addSchedulerItem}
+                            disabled={schedulerSaving || !schedulerNewItem.name || !schedulerNewItem.price}
+                            className="px-4 py-1.5 rounded-lg text-xs font-medium text-white btn-premium transition disabled:opacity-50"
+                          >
+                            {schedulerSaving ? "Adding..." : "Add Item"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Copy To Panel */}
+                {schedulerShowCopy && (
+                  <div className="rounded-xl p-4 mb-4 border border-[var(--border)]" style={{ background: "var(--input)" }}>
+                    <h4 className="text-xs font-semibold text-[var(--text)] mb-3">Copy menu to other dates</h4>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {days.filter(d => d.date !== selectedDate).map((day) => {
+                        const isSelected = schedulerCopyTarget.includes(day.date);
+                        return (
+                          <button
+                            key={day.date}
+                            onClick={() => setSchedulerCopyTarget(prev => isSelected ? prev.filter(d => d !== day.date) : [...prev, day.date])}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition border"
+                            style={{
+                              background: isSelected ? "rgba(139,92,246,0.1)" : "var(--bg)",
+                              borderColor: isSelected ? "#8B5CF6" : "var(--border)",
+                              color: isSelected ? "#8B5CF6" : "var(--text)",
+                            }}
+                          >
+                            {day.dayName} {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { setSchedulerShowCopy(false); setSchedulerCopyTarget([]); }} className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:opacity-80 transition">Cancel</button>
+                      <button
+                        onClick={copyDayTo}
+                        disabled={schedulerSaving || schedulerCopyTarget.length === 0}
+                        className="px-4 py-1.5 rounded-lg text-xs font-medium text-white btn-premium transition disabled:opacity-50"
+                      >
+                        {schedulerSaving ? "Copying..." : `Copy to ${schedulerCopyTarget.length} day(s)`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Save as Template Panel */}
+                {schedulerShowTemplate && (
+                  <div className="rounded-xl p-4 mb-4 border border-[var(--border)]" style={{ background: "var(--input)" }}>
+                    <h4 className="text-xs font-semibold text-[var(--text)] mb-3">Save current menu as template</h4>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Template name (e.g. Monday Special)"
+                        value={schedulerTemplateName}
+                        onChange={e => setSchedulerTemplateName(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-lg text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                      />
+                      <button onClick={() => setSchedulerShowTemplate(false)} className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:opacity-80 transition">Cancel</button>
+                      <button
+                        onClick={saveAsTemplate}
+                        disabled={schedulerSaving || !schedulerTemplateName.trim()}
+                        className="px-4 py-1.5 rounded-lg text-xs font-medium text-white btn-premium transition disabled:opacity-50"
+                      >
+                        {schedulerSaving ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Day Notes */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <MessageSquare size={12} className="text-[var(--text-muted)]" />
+                    <span className="text-[11px] font-medium text-[var(--text-muted)]">Day Notes</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add a note for this day..."
+                      value={schedulerDayNotes}
+                      onChange={e => setSchedulerDayNotes(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                    />
+                    <button
+                      onClick={() => updateDayNotes(selectedDate, schedulerDayNotes)}
+                      className="px-3 py-2 rounded-lg text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)] transition border border-[var(--border)]"
+                      style={{ background: "var(--input)" }}
+                    >
+                      <Save size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                {selectedItems.length === 0 ? (
+                  <div className="text-center py-8">
+                    <UtensilsCrossed size={32} className="mx-auto mb-2 text-[var(--text-muted)] opacity-40" />
+                    <p className="text-xs text-[var(--text-muted)]">No items for this day</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Add items or apply a template to get started</p>
+                  </div>
+                ) : (
+                  <>
+                  <div className="space-y-2">
+                    {selectedItems.map((item: any, idx: number) => (
+                      <div key={item.id || idx}>
+                        {/* Inline edit form */}
+                        {schedulerEditItem === item.id ? (
+                          <div className="rounded-xl p-3 border-2 border-[#8B5CF6] space-y-2" style={{ background: "var(--input)" }}>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <input type="text" placeholder="Dish name *" value={schedulerEditForm.name} onChange={e => setSchedulerEditForm(p => ({ ...p, name: e.target.value }))} className="px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition" />
+                              <input type="number" placeholder="Price (£) *" value={schedulerEditForm.price} onChange={e => setSchedulerEditForm(p => ({ ...p, price: e.target.value }))} className="px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition" />
+                              <input type="text" placeholder="Description" value={schedulerEditForm.description} onChange={e => setSchedulerEditForm(p => ({ ...p, description: e.target.value }))} className="px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition" />
+                              <input type="number" placeholder="Stock count" value={schedulerEditForm.stockCount} onChange={e => setSchedulerEditForm(p => ({ ...p, stockCount: e.target.value }))} className="px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition" />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] cursor-pointer hover:border-[#8B5CF6] transition">
+                                <Upload size={11} />
+                                {imageUploading ? "Uploading..." : "Image"}
+                                <input type="file" accept="image/*" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleSchedulerImageUpload(file, "edit"); }} />
+                              </label>
+                              {schedulerEditForm.image && (
+                                <div className="relative">
+                                  <img src={schedulerEditForm.image} alt="Preview" className="w-8 h-8 rounded-lg object-cover border border-[var(--border)]" />
+                                  <button type="button" onClick={() => setSchedulerEditForm(p => ({ ...p, image: "" }))} className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center"><X size={7} /></button>
+                                </div>
+                              )}
+                              <label className="flex items-center gap-1.5 text-xs text-[var(--text)]">
+                                <input type="checkbox" checked={schedulerEditForm.isVeg} onChange={e => setSchedulerEditForm(p => ({ ...p, isVeg: e.target.checked }))} className="accent-emerald-500" />
+                                Veg
+                              </label>
+                              <div className="flex-1" />
+                              <button onClick={() => setSchedulerEditItem(null)} className="px-2.5 py-1 rounded-lg text-[11px] text-[var(--text-muted)] hover:opacity-80 transition">Cancel</button>
+                              <button
+                                onClick={() => schedulerDayMenu?.id && editSchedulerItem(schedulerDayMenu.id, item.id)}
+                                disabled={schedulerSaving || !schedulerEditForm.name || !schedulerEditForm.price}
+                                className="px-3 py-1 rounded-lg text-[11px] font-medium text-white btn-premium transition disabled:opacity-50"
+                              >
+                                {schedulerSaving ? "Saving..." : "Save"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Normal item display */
+                          <div
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition hover:border-[rgba(139,92,246,0.3)] ${!item.isAvailable ? "opacity-60 border-red-200 dark:border-red-900" : "border-[var(--border)]"}`}
+                            style={{ background: "var(--input)" }}
+                          >
+                            {item.image ? (
+                              <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: item.isVeg ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)" }}>
+                                <span className="text-sm">{item.isVeg ? "🥬" : "🍖"}</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-[var(--text)] truncate">{item.name}</span>
+                                {item.isVeg && <span className="w-3 h-3 rounded-sm border-2 border-emerald-500 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /></span>}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] font-semibold" style={{ color: "#8B5CF6" }}>£{typeof item.price === 'number' ? item.price.toFixed(2) : item.price}</span>
+                                {item.offerPrice && <span className="text-[10px] line-through text-[var(--text-muted)]">£{item.offerPrice}</span>}
+                                {item.stockCount !== null && item.stockCount !== undefined && (
+                                  <span className="text-[10px] text-[var(--text-muted)]">Stock: {item.stockCount}</span>
+                                )}
+                                {!item.isAvailable && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 font-medium">Sold Out</span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Sold Out toggle */}
+                            <button
+                              onClick={() => schedulerDayMenu?.id && toggleItemSoldOut(schedulerDayMenu.id, item.id)}
+                              className={`p-1.5 rounded-lg transition ${item.isAvailable ? "hover:bg-amber-50 dark:hover:bg-amber-900/20 text-[var(--text-muted)] hover:text-amber-600" : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600"}`}
+                              title={item.isAvailable ? "Mark sold out" : "Mark available"}
+                            >
+                              <Power size={14} />
+                            </button>
+                            {/* Edit button */}
+                            <button
+                              onClick={() => {
+                                setSchedulerEditItem(item.id);
+                                setSchedulerEditForm({
+                                  name: item.name || "",
+                                  price: typeof item.price === 'number' ? item.price.toString() : item.price || "",
+                                  description: item.description || "",
+                                  stockCount: item.stockCount != null ? item.stockCount.toString() : "",
+                                  image: item.image || "",
+                                  isVeg: item.isVeg ?? true,
+                                });
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition text-[var(--text-muted)] hover:text-blue-500"
+                              title="Edit item"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            {/* Delete button */}
+                            <button
+                              onClick={() => schedulerDayMenu?.id && deleteSchedulerItem(schedulerDayMenu.id, item.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition text-[var(--text-muted)] hover:text-red-500"
+                              title="Delete item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bulk Price Update */}
+                  {selectedItems.length > 0 && (
+                    <div className="mt-3">
+                      {!schedulerShowBulkPrice ? (
+                        <button
+                          onClick={() => setSchedulerShowBulkPrice(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-[var(--text-muted)] border border-[var(--border)] hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition"
+                          style={{ background: "var(--input)" }}
+                        >
+                          <PoundSterling size={12} />
+                          Bulk Update Prices
+                        </button>
+                      ) : (
+                        <div className="rounded-xl p-3 border border-[var(--border)]" style={{ background: "var(--input)" }}>
+                          <h4 className="text-xs font-semibold text-[var(--text)] mb-2 flex items-center gap-1.5">
+                            <PoundSterling size={13} />
+                            Bulk Price Update
+                          </h4>
+                          <div className="flex items-center gap-3 mb-2">
+                            <label className="flex items-center gap-1.5 text-xs text-[var(--text)]">
+                              <input type="radio" name="bulkType" checked={schedulerBulkType === "percentage"} onChange={() => setSchedulerBulkType("percentage")} className="accent-[#8B5CF6]" />
+                              Percentage (%)
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-[var(--text)]">
+                              <input type="radio" name="bulkType" checked={schedulerBulkType === "fixed"} onChange={() => setSchedulerBulkType("fixed")} className="accent-[#8B5CF6]" />
+                              Fixed amount (£)
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              placeholder={schedulerBulkType === "percentage" ? "e.g. 10 for +10%" : "e.g. 0.50 for +£0.50"}
+                              value={schedulerBulkValue}
+                              onChange={e => setSchedulerBulkValue(e.target.value)}
+                              className="flex-1 px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[#8B5CF6] transition"
+                            />
+                            <button onClick={() => { setSchedulerShowBulkPrice(false); setSchedulerBulkValue(""); }} className="px-2.5 py-1.5 rounded-lg text-[11px] text-[var(--text-muted)] hover:opacity-80 transition">Cancel</button>
+                            <button
+                              onClick={() => {
+                                const val = parseFloat(schedulerBulkValue);
+                                if (!isNaN(val) && val !== 0) {
+                                  bulkUpdatePrices(schedulerBulkType, val);
+                                  setSchedulerShowBulkPrice(false);
+                                  setSchedulerBulkValue("");
+                                }
+                              }}
+                              disabled={schedulerSaving || !schedulerBulkValue || parseFloat(schedulerBulkValue) === 0}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white btn-premium transition disabled:opacity-50"
+                            >
+                              {schedulerSaving ? "Updating..." : "Apply"}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1.5">Use negative values to decrease prices. Applies to all {selectedItems.length} items.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  </>
+                )}
+              </div>
+
+              {/* Templates Section */}
+              <div className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-4 animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                    <Box size={15} className="text-[var(--text-muted)]" />
+                    Menu Templates
+                  </h3>
+                </div>
+
+                {/* Apply Template */}
+                <div className="flex items-center gap-2 mb-3">
+                  <select
+                    value={schedulerApplyTemplateId}
+                    onChange={e => setSchedulerApplyTemplateId(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg text-xs border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[#8B5CF6] transition"
+                  >
+                    <option value="">Select template to apply...</option>
+                    {templates.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.name} ({Array.isArray(t.items) ? t.items.length : 0} items)</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={applyTemplate}
+                    disabled={!schedulerApplyTemplateId || schedulerSaving}
+                    className="px-4 py-2 rounded-lg text-xs font-medium text-white btn-premium transition disabled:opacity-50"
+                  >
+                    Apply
+                  </button>
+                </div>
+
+                {/* Template List */}
+                {templates.length === 0 ? (
+                  <p className="text-[11px] text-[var(--text-muted)] text-center py-3">No templates yet. Save a day&apos;s menu as a template to reuse it.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {templates.map((t: any) => (
+                      <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--border)]" style={{ background: "var(--input)" }}>
+                        <div>
+                          <span className="text-xs font-medium text-[var(--text)]">{t.name}</span>
+                          <span className="text-[10px] text-[var(--text-muted)] ml-2">{Array.isArray(t.items) ? t.items.length : 0} items</span>
+                        </div>
+                        <button
+                          onClick={() => deleteTemplate(t.id)}
+                          className="p-1 rounded-lg hover:bg-red-50 transition text-[var(--text-muted)] hover:text-red-500"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+            );
+          })()}
 
           {/* Menu Management Page */}
           {activePage === "menu" && (

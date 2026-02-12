@@ -16,10 +16,71 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate chef availability
+    const chef = await prisma.chef.findUnique({ where: { id: chefId } });
+    if (!chef) {
+      res.status(404).json({ success: false, error: "Chef not found" });
+      return;
+    }
+
+    // Check vacation
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const today = new Date(todayStr + "T00:00:00.000Z");
+    if (chef.vacationStart && chef.vacationEnd && today >= chef.vacationStart && today <= chef.vacationEnd) {
+      res.status(400).json({ success: false, error: "This kitchen is currently on holiday" });
+      return;
+    }
+
+    // Check order cutoff time
+    if (chef.orderCutoffTime) {
+      const [cutH, cutM] = chef.orderCutoffTime.split(":").map(Number);
+      const ukHour = now.getUTCHours();
+      const ukMin = now.getUTCMinutes();
+      if (ukHour > cutH || (ukHour === cutH && ukMin >= cutM)) {
+        res.status(400).json({ success: false, error: `Ordering closed for today. Cutoff time is ${chef.orderCutoffTime}.` });
+        return;
+      }
+    }
+
+    // Check daily order cap
+    if (chef.dailyOrderCap) {
+      const todayStart = new Date(todayStr + "T00:00:00.000Z");
+      const todayEnd = new Date(todayStr + "T23:59:59.999Z");
+      const todayOrderCount = await prisma.order.count({
+        where: {
+          chefId,
+          createdAt: { gte: todayStart, lte: todayEnd },
+          status: { notIn: ["CANCELLED", "REJECTED"] },
+        },
+      });
+      if (todayOrderCount >= chef.dailyOrderCap) {
+        res.status(400).json({ success: false, error: `This kitchen has reached its daily order limit (${chef.dailyOrderCap})` });
+        return;
+      }
+    }
+
     // Calculate totals
     const menuItems = await prisma.menuItem.findMany({
       where: { id: { in: items.map((i: { menuItemId: string }) => i.menuItemId) } },
     });
+
+    // Validate stock availability
+    for (const item of items as Array<{ menuItemId: string; quantity: number }>) {
+      const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+      if (!menuItem) {
+        res.status(400).json({ success: false, error: `Item not found: ${item.menuItemId}` });
+        return;
+      }
+      if (!menuItem.isAvailable) {
+        res.status(400).json({ success: false, error: `"${menuItem.name}" is no longer available` });
+        return;
+      }
+      if (menuItem.stockCount !== null && menuItem.stockCount < item.quantity) {
+        res.status(400).json({ success: false, error: `"${menuItem.name}" only has ${menuItem.stockCount} left in stock` });
+        return;
+      }
+    }
 
     let subtotal = 0;
     const orderItems = items.map((item: { menuItemId: string; quantity: number; notes?: string }) => {
@@ -32,9 +93,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
     const deliveryFee = 0.30;
     const total = subtotal + deliveryFee;
 
-    // Get chef commission rate
-    const chef = await prisma.chef.findUnique({ where: { id: chefId }, select: { commissionRate: true } });
-    const commissionRate = (chef?.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
+    const commissionRate = (chef.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
     const platformFee = Math.round(total * commissionRate * 100) / 100;
     const chefPayout = Math.round((total - platformFee) * 100) / 100;
 
@@ -66,6 +125,21 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         chef: { include: { user: { select: { name: true } } } },
       },
     });
+
+    // Decrement stock counts
+    for (const item of items as Array<{ menuItemId: string; quantity: number }>) {
+      const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+      if (menuItem?.stockCount !== null && menuItem?.stockCount !== undefined) {
+        const newCount = Math.max(0, menuItem.stockCount - item.quantity);
+        await prisma.menuItem.update({
+          where: { id: item.menuItemId },
+          data: {
+            stockCount: newCount,
+            ...(newCount === 0 ? { isAvailable: false } : {}),
+          },
+        });
+      }
+    }
 
     // Notify chef via Socket.IO
     notifyChefNewOrder(chefId, { orderId: order.id, order });

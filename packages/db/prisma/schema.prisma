@@ -136,16 +136,21 @@ model Chef {
   cakeEnabled     Boolean    @default(false)
   bakeryEnabled   Boolean    @default(false)
   paymentConfig   String?    @db.Text
+  dailyOrderCap   Int?
+  orderCutoffTime String?    @db.VarChar(5)
+  vacationStart   DateTime?  @db.Date
+  vacationEnd     DateTime?  @db.Date
   createdAt       DateTime   @default(now()) @db.DateTime(3)
   updatedAt       DateTime   @updatedAt @db.DateTime(3)
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   menus     Menu[]
   orders    Order[]
   reviews   Review[]
   services  Service[]
   payments  Payment[]
   followers ChefFollow[]
+  templates MenuTemplate[]
 
   @@index([latitude, longitude])
   @@index([isOnline])
@@ -157,13 +162,15 @@ model Menu {
   name      String   @db.VarChar(255)
   date      DateTime @db.Date
   isActive  Boolean  @default(true)
+  isClosed  Boolean  @default(false)
+  notes     String?  @db.VarChar(500)
   createdAt DateTime @default(now()) @db.DateTime(3)
   updatedAt DateTime @updatedAt @db.DateTime(3)
 
   chef  Chef       @relation(fields: [chefId], references: [id], onDelete: Cascade)
   items MenuItem[]
 
-  @@index([chefId, date])
+  @@unique([chefId, date])
 }
 
 model MenuItem {
@@ -184,6 +191,7 @@ model MenuItem {
   prepTime     Int?
   servingSize  String?  @db.VarChar(100)
   eggOption    String?  @db.VarChar(20)
+  sortOrder    Int      @default(0)
   createdAt    DateTime @default(now()) @db.DateTime(3)
   updatedAt    DateTime @updatedAt @db.DateTime(3)
 
@@ -448,5 +456,18 @@ model ChefFollow {
   chef Chef @relation(fields: [chefId], references: [id], onDelete: Cascade)
 
   @@unique([userId, chefId])
+  @@index([chefId])
+}
+
+model MenuTemplate {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  chefId    String   @db.VarChar(36)
+  name      String   @db.VarChar(255)
+  items     String   @db.Text
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+
+  chef Chef @relation(fields: [chefId], references: [id], onDelete: Cascade)
+
   @@index([chefId])
 }

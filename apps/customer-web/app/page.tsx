@@ -22,20 +22,20 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const heroVideos = ["/hero-cooking.mp4", "/hero-buffet.mp4", "/hero-breakfast.mp4"];
+  const heroVideos = useRef(["/hero-cooking.mp4", "/hero-vegetables.mp4", "/hero-breakfast.mp4", "/hero-fruits.mp4", "/hero-apple.mp4"]);
   const [currentVideo, setCurrentVideo] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleVideoEnded = useCallback(() => {
-    setCurrentVideo((prev) => (prev + 1) % heroVideos.length);
-  }, [heroVideos.length]);
+    setCurrentVideo((prev) => (prev + 1) % heroVideos.current.length);
+  }, []);
 
   useEffect(() => {
     const vid = videoRef.current;
-    if (vid) {
-      vid.load();
-      vid.play().catch(() => {});
-    }
+    if (!vid) return;
+    vid.src = heroVideos.current[currentVideo];
+    vid.load();
+    vid.play().catch(() => {});
   }, [currentVideo]);
 
   async function handleSearch(e: React.FormEvent) {
@@ -81,15 +81,11 @@ export default function HomePage() {
         {/* Background Video — cycles through 3 clips */}
         <video
           ref={videoRef}
-          autoPlay
           muted
           playsInline
           onEnded={handleVideoEnded}
           className="absolute inset-0 w-full h-full object-cover z-0"
-          key={currentVideo}
-        >
-          <source src={heroVideos[currentVideo]} type="video/mp4" />
-        </video>
+        />
         {/* Dark overlay for text readability */}
         <div className="absolute inset-0 bg-black/60 z-0" />
 

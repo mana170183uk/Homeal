@@ -119,7 +119,7 @@ function SearchContent() {
       if (res.success && res.data) {
         setChefs(res.data);
       } else {
-        setError("Failed to load chefs. Please try again.");
+        setError("Failed to load sellers. Please try again.");
       }
     } catch {
       setError("Something went wrong. Please try again.");

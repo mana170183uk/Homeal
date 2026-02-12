@@ -13,9 +13,9 @@ export function newChefNotificationHtml(params: {
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
       </h1>
-      <p style="color:#9595B0;font-size:13px;margin:4px 0 0;">New Chef Registration</p>
+      <p style="color:#9595B0;font-size:13px;margin:4px 0 0;">New Home Maker Registration</p>
     </div>
-    <p style="color:#2D2D3F;font-size:15px;">A new chef has registered and is waiting for your approval:</p>
+    <p style="color:#2D2D3F;font-size:15px;">A new Home Maker has registered and is waiting for your approval:</p>
     <div style="background:#F5F0FF;border-radius:12px;padding:16px;margin:16px 0;">
       <table style="width:100%;font-size:14px;border-collapse:collapse;">
         <tr><td style="color:#9595B0;padding:6px 0;width:80px;">Name</td><td style="font-weight:600;color:#2D2D3F;">${params.chefName}</td></tr>
@@ -74,7 +74,7 @@ export function chefApprovedHtml(params: {
     </ul>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
     <p style="font-size:11px;color:#AEAEC8;text-align:center;">
-      Need help? Email us at <a href="mailto:homealforuk@gmail.com" style="color:#8B5CF6;">homealforuk@gmail.com</a><br>
+      Need help? Email us at <a href="mailto:support@homeal.uk" style="color:#8B5CF6;">support@homeal.uk</a><br>
       Homeal - Healthy food, from home.
     </p>
   </div>
@@ -165,7 +165,7 @@ export function adminAccessRejectedHtml(params: {
       If you believe this was a mistake, please contact the platform owner.
     </p>
     <div style="text-align:center;margin:28px 0;">
-      <a href="mailto:homealforuk@gmail.com" style="display:inline-block;background:#8B5CF6;color:#fff;padding:12px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Contact Support</a>
+      <a href="mailto:support@homeal.uk" style="display:inline-block;background:#8B5CF6;color:#fff;padding:12px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Contact Support</a>
     </div>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
     <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>
@@ -200,7 +200,7 @@ export function chefRejectedHtml(params: {
       If you believe this was a mistake or would like to provide additional information, please don&rsquo;t hesitate to reach out.
     </p>
     <div style="text-align:center;margin:28px 0;">
-      <a href="mailto:homealforuk@gmail.com" style="display:inline-block;background:#8B5CF6;color:#fff;padding:12px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Contact Support</a>
+      <a href="mailto:support@homeal.uk" style="display:inline-block;background:#8B5CF6;color:#fff;padding:12px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Contact Support</a>
     </div>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
     <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>

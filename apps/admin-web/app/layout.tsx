@@ -15,7 +15,7 @@ const fredoka = Fredoka({
 });
 
 export const metadata: Metadata = {
-  title: "Homeal - Chef Dashboard",
+  title: "Homeal - Home Maker Dashboard",
   description: "Manage your kitchen, menus, and orders on Homeal",
   icons: {
     icon: [

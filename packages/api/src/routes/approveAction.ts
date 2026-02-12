@@ -57,7 +57,7 @@ router.get("/", async (req: Request, res: Response) => {
     });
 
     if (!chef) {
-      res.status(404).send(renderPage("Chef Not Found", "The chef account could not be found.", false));
+      res.status(404).send(renderPage("Home Maker Not Found", "The Home Maker account could not be found.", false));
       return;
     }
 
@@ -94,7 +94,7 @@ router.get("/", async (req: Request, res: Response) => {
       }
 
       res.send(renderPage(
-        "Chef Approved!",
+        "Home Maker Approved!",
         `<strong>${chef.kitchenName}</strong> has been approved. A welcome email has been sent to ${chef.user.email}. The 3-month free Unlimited plan starts today.`,
         true
       ));
@@ -120,7 +120,7 @@ router.get("/", async (req: Request, res: Response) => {
       }
 
       res.send(renderPage(
-        "Chef Rejected",
+        "Home Maker Rejected",
         `<strong>${chef.kitchenName}</strong> has been rejected. A notification email has been sent to ${chef.user.email}.`,
         false
       ));

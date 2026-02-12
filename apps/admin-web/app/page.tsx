@@ -965,7 +965,7 @@ export default function DashboardPage() {
             </ul>
           </div>
           <p className="text-xs" style={{ color: "#9595B0" }}>
-            Questions? Email us at <a href="mailto:homealforuk@gmail.com" style={{ color: "#8B5CF6", fontWeight: 600 }}>homealforuk@gmail.com</a>
+            Questions? Contact <span style={{ color: "#8B5CF6", fontWeight: 600 }}>Homeal Admin</span> for support
           </p>
         </div>
       </div>
@@ -987,7 +987,7 @@ export default function DashboardPage() {
             Unfortunately, your registration could not be approved at this time. If you believe this was a mistake, please reach out to us.
           </p>
           <a
-            href="mailto:homealforuk@gmail.com"
+            href="mailto:support@homeal.uk"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-semibold transition hover:opacity-90"
             style={{ background: "#8B5CF6" }}
           >
@@ -1039,7 +1039,7 @@ export default function DashboardPage() {
           </div>
           <div className="px-2.5 py-2">
             <p className="text-xs text-[var(--sidebar-muted)]">Welcome back</p>
-            <p className="text-sm font-semibold text-[var(--sidebar-text)]">{chefName || "Chef Dashboard"}</p>
+            <p className="text-sm font-semibold text-[var(--sidebar-text)]">{chefName || "Home Maker Dashboard"}</p>
           </div>
         </div>
 
@@ -1177,7 +1177,7 @@ export default function DashboardPage() {
                     <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">Amma&apos;s Kitchen</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1.5"><Phone size={12} /> +44 7700 900000</span>
-                      <span className="flex items-center gap-1.5 hidden sm:flex"><Mail size={12} /> chef@homeal.co.uk</span>
+                      <span className="flex items-center gap-1.5 hidden sm:flex"><Mail size={12} /> support@homeal.uk</span>
                       <span className="flex items-center gap-1.5"><MapPin size={12} /> London, UK</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
@@ -1185,7 +1185,7 @@ export default function DashboardPage() {
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />Active
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium border" style={{ color: "#3B82F6", borderColor: "rgba(59,130,246,0.3)", background: "rgba(59,130,246,0.1)" }}>
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5" />Home Chef
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5" />Home Maker
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium border" style={{ color: "#10B981", borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.1)" }}>
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />Online
@@ -1194,7 +1194,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm text-[var(--text-muted)]">Welcome, Chef</p>
+                  <p className="text-sm text-[var(--text-muted)]">Welcome, Home Maker</p>
                   <span
                     className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 rounded-full text-[11px] font-semibold border"
                     style={{ color: "var(--primary)", borderColor: "rgba(255,90,31,0.3)", background: "rgba(255,90,31,0.08)" }}
@@ -1210,7 +1210,7 @@ export default function DashboardPage() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-semibold text-[var(--text)] flex items-center gap-2">
-                    <Award size={14} style={{ color: "#F59E0B" }} /> Chef Badges & Trust Score
+                    <Award size={14} style={{ color: "#F59E0B" }} /> Home Maker Badges & Trust Score
                   </h3>
                   <span className="text-[11px] text-[var(--text-muted)]">3 of 6 earned</span>
                 </div>
@@ -3686,7 +3686,7 @@ export default function DashboardPage() {
                       <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
                       <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Customer</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Amount</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Chef Payout</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Home Maker Payout</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Date</th>
                     </tr>

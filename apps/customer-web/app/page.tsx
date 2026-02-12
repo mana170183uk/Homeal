@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -9,7 +9,6 @@ import {
   Truck,
   UtensilsCrossed,
   ArrowRight,
-  Star,
   Sparkles,
 } from "lucide-react";
 import { api } from "./lib/api";
@@ -23,13 +22,21 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // If already logged in, redirect to Discover page
+  const heroVideos = ["/hero-cooking.mp4", "/hero-buffet.mp4", "/hero-breakfast.mp4"];
+  const [currentVideo, setCurrentVideo] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleVideoEnded = useCallback(() => {
+    setCurrentVideo((prev) => (prev + 1) % heroVideos.length);
+  }, [heroVideos.length]);
+
   useEffect(() => {
-    const token = localStorage.getItem("homeal_token");
-    if (token) {
-      router.push("/search");
+    const vid = videoRef.current;
+    if (vid) {
+      vid.load();
+      vid.play().catch(() => {});
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentVideo]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -69,24 +76,34 @@ export default function HomePage() {
     <div className="min-h-screen w-full overflow-x-hidden">
       <Header />
 
-      {/* Hero Section */}
-      <section className="relative px-4 sm:px-6 pt-10 sm:pt-16 pb-14 sm:pb-20 max-w-7xl mx-auto text-center overflow-hidden">
-        {/* Decorative gradient orbs */}
-        <div className="absolute top-0 left-1/4 w-72 h-72 bg-[var(--badge-from)] opacity-[0.08] rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-20 right-1/4 w-96 h-96 bg-[var(--badge-to)] opacity-[0.08] rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-[var(--accent)] opacity-[0.05] rounded-full blur-3xl pointer-events-none" />
+      {/* Hero Section with Video Background */}
+      <section className="relative px-4 sm:px-6 pt-10 sm:pt-16 pb-14 sm:pb-20 text-center overflow-hidden">
+        {/* Background Video — cycles through 3 clips */}
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          onEnded={handleVideoEnded}
+          className="absolute inset-0 w-full h-full object-cover z-0"
+          key={currentVideo}
+        >
+          <source src={heroVideos[currentVideo]} type="video/mp4" />
+        </video>
+        {/* Dark overlay for text readability */}
+        <div className="absolute inset-0 bg-black/60 z-0" />
 
-        <div className="relative z-[1]">
+        <div className="relative z-[1] max-w-7xl mx-auto">
           <div className="inline-flex items-center gap-2 badge-gradient text-white font-medium text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full mb-6 shadow-lg">
             <Sparkles className="w-4 h-4" />
             Trusted by 500+ home makers across the UK
           </div>
-          <h1 className="font-display text-3xl sm:text-5xl md:text-7xl font-bold text-[var(--text)] leading-tight mb-4 sm:mb-6">
+          <h1 className="font-display text-3xl sm:text-5xl md:text-7xl font-bold text-white leading-tight mb-4 sm:mb-6">
             Homemade goodness,
             <br />
             <span className="gradient-text">delivered to your door</span>
           </h1>
-          <p className="text-base sm:text-lg md:text-xl text-[var(--text-soft)] max-w-2xl mx-auto mb-8 sm:mb-10">
+          <p className="text-base sm:text-lg md:text-xl text-white/80 max-w-2xl mx-auto mb-8 sm:mb-10">
             Discover authentic homemade food, cakes, pickles, masalas &amp; more from
             talented local home makers. Fresh, healthy, and made with love.
           </p>
@@ -122,10 +139,10 @@ export default function HomePage() {
               <span className="hidden sm:inline">Search</span>
             </button>
           </form>
-          {error && <p className="text-alert text-sm mt-3">{error}</p>}
-          <p className="text-sm text-[var(--text-muted)] mt-4">
+          {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
+          <p className="text-sm text-white/60 mt-4">
             or{" "}
-            <a href="/search" className="gradient-text font-semibold hover:opacity-80 transition">
+            <a href="/search" className="text-white font-semibold hover:opacity-80 transition underline underline-offset-2">
               browse all products
             </a>
           </p>
@@ -211,7 +228,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Join as Chef CTA */}
+      {/* Join as Home Maker CTA */}
       <section className="px-4 sm:px-6 py-12 sm:py-20">
         <div className="max-w-4xl mx-auto badge-gradient rounded-3xl p-6 sm:p-10 md:p-14 text-center text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer pointer-events-none" />
@@ -247,10 +264,7 @@ export default function HomePage() {
             </a>
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-sm">
               <a href="https://admin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-accent transition">
-                Chef Portal
-              </a>
-              <a href="https://superadmin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-[var(--badge-to)] transition">
-                Super Admin
+                Home Maker Portal
               </a>
             </div>
           </div>

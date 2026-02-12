@@ -178,10 +178,10 @@ export default function ChefProfilePage({
         if (res.success && res.data) {
           setChef(res.data);
         } else {
-          setError("Chef not found.");
+          setError("Home Maker not found.");
         }
       } catch {
-        setError("Failed to load chef profile.");
+        setError("Failed to load profile.");
       } finally {
         setLoading(false);
       }
@@ -320,7 +320,7 @@ export default function ChefProfilePage({
         <div className="text-center">
           <ChefHat className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
           <h1 className="font-display text-2xl font-bold text-[var(--text)] mb-2">
-            {error || "Chef not found"}
+            {error || "Home Maker not found"}
           </h1>
           <a href="/" className="text-primary font-medium hover:underline">
             Go back home

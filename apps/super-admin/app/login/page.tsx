@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Lock, Shield, User, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Mail, Lock, Shield, User, Clock, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
 import { signInWithEmailAndPassword, signInWithPopup, createUserWithEmailAndPassword } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [requestStatus, setRequestStatus] = useState<"" | "PENDING" | "APPROVED" | "REJECTED">("");
@@ -223,7 +224,7 @@ export default function LoginPage() {
                 </div>
                 <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>Request Submitted</h2>
                 <p className="text-sm mb-4" style={{ color: "var(--text-soft)" }}>
-                  Your Super Admin access request has been sent to the platform owner at <strong>homealforuk@gmail.com</strong>. You&apos;ll receive an email once it&apos;s approved.
+                  Your Super Admin access request has been sent to the <strong>Homeal Admin</strong> team. You&apos;ll receive an email once it&apos;s approved.
                 </p>
                 <div className="rounded-xl p-3 text-xs" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", color: "#F59E0B" }}>
                   Status: Awaiting Approval
@@ -255,7 +256,7 @@ export default function LoginPage() {
                 </div>
                 <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>Request Rejected</h2>
                 <p className="text-sm mb-4" style={{ color: "var(--text-soft)" }}>
-                  Your access request was not approved. Please contact <strong>homealforuk@gmail.com</strong> for more information.
+                  Your access request was not approved. Please contact the <strong>Homeal Admin</strong> team for more information.
                 </p>
               </>
             )}
@@ -341,13 +342,21 @@ export default function LoginPage() {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: "var(--text-muted)" }} />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(""); }}
                 placeholder={mode === "request" ? "Password (min 6 characters)" : "Password"}
-                className="w-full pl-11 pr-4 py-3 rounded-xl outline-none transition text-sm"
+                className="w-full pl-11 pr-11 py-3 rounded-xl outline-none transition text-sm"
                 style={{ background: "var(--input)", border: "1px solid var(--border)", color: "var(--text)" }}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
 
             {error && (

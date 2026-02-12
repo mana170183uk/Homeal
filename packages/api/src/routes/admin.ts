@@ -68,7 +68,7 @@ router.get("/notifications", async (_req: Request, res: Response) => {
       items.push({
         id: `chef-pending-${chef.id}`,
         type: "chef_pending",
-        title: "New Chef Registration",
+        title: "New Home Maker Registration",
         message: `${chef.kitchenName} (${chef.user.name}) is waiting for approval`,
         time: chef.createdAt,
         actionId: chef.id,
@@ -90,7 +90,7 @@ router.get("/notifications", async (_req: Request, res: Response) => {
         items.push({
           id: `chef-approved-${chef.id}`,
           type: "chef_approved",
-          title: "Chef Approved",
+          title: "Home Maker Approved",
           message: `${chef.kitchenName} was approved`,
           time: chef.approvedAt,
         });
@@ -311,13 +311,19 @@ router.post("/access-requests/:id/approve", async (req: Request, res: Response) 
       return;
     }
 
-    // Create user with SUPER_ADMIN role
-    await prisma.user.create({
-      data: {
+    // FIX: Superadmin approval bug — previously used prisma.user.create() which threw
+    // a unique constraint error when approving a user who already existed (e.g. a customer
+    // requesting admin access). Switched to upsert so existing users get their role upgraded
+    // to ADMIN without duplicate-key failures. Role is ADMIN (not SUPER_ADMIN) because
+    // SUPER_ADMIN is reserved for the platform owner; approved requests grant ADMIN access.
+    await prisma.user.upsert({
+      where: { firebaseUid: request.firebaseUid },
+      update: { role: "ADMIN" },
+      create: {
         name: request.name,
         email: request.email,
         firebaseUid: request.firebaseUid,
-        role: "SUPER_ADMIN",
+        role: "ADMIN",
       },
     });
 

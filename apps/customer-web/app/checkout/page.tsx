@@ -13,6 +13,8 @@ import {
   Check,
   Banknote,
   ShoppingBag,
+  Truck,
+  Package,
 } from "lucide-react";
 import Header from "../components/Header";
 import { api } from "../lib/api";
@@ -58,6 +60,9 @@ export default function CheckoutPage() {
   const [newPostcode, setNewPostcode] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState("");
+
+  // Delivery method
+  const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
 
   // Order state
   const [specialInstructions, setSpecialInstructions] = useState("");
@@ -161,7 +166,7 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
-    if (!selectedAddressId) {
+    if (deliveryMethod === "delivery" && !selectedAddressId) {
       setOrderError("Please select or add a delivery address.");
       return;
     }
@@ -181,7 +186,8 @@ export default function CheckoutPage() {
         token,
         body: JSON.stringify({
           chefId: cart[0].chefId,
-          addressId: selectedAddressId,
+          addressId: deliveryMethod === "delivery" ? selectedAddressId : undefined,
+          deliveryMethod,
           items: cart.map((item) => ({
             menuItemId: item.id,
             quantity: item.quantity,
@@ -207,7 +213,8 @@ export default function CheckoutPage() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const total = cart.length > 0 ? subtotal + DELIVERY_FEE : 0;
+  const deliveryFee = deliveryMethod === "pickup" ? 0 : DELIVERY_FEE;
+  const total = cart.length > 0 ? subtotal + deliveryFee : 0;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   if (!mounted) {
@@ -241,7 +248,47 @@ export default function CheckoutPage() {
         </h1>
 
         <div className="space-y-6">
+          {/* Delivery Method Toggle */}
+          <div className="glass-card rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Truck className="w-5 h-5 text-primary" />
+              <h2 className="font-display font-semibold text-[var(--text)]">
+                Delivery Method
+              </h2>
+            </div>
+            <div className="flex rounded-xl p-1" style={{ background: "var(--input)" }}>
+              <button
+                onClick={() => setDeliveryMethod("delivery")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition ${
+                  deliveryMethod === "delivery"
+                    ? "bg-[var(--card)] text-primary shadow-sm"
+                    : "text-[var(--text-muted)]"
+                }`}
+              >
+                <Truck className="w-4 h-4" />
+                Delivery
+              </button>
+              <button
+                onClick={() => setDeliveryMethod("pickup")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition ${
+                  deliveryMethod === "pickup"
+                    ? "bg-[var(--card)] text-primary shadow-sm"
+                    : "text-[var(--text-muted)]"
+                }`}
+              >
+                <Package className="w-4 h-4" />
+                Pick up
+              </button>
+            </div>
+            {deliveryMethod === "pickup" && (
+              <p className="text-xs text-[var(--text-muted)] mt-3 text-center">
+                You&apos;ll collect your order directly from the seller. No delivery fee applies.
+              </p>
+            )}
+          </div>
+
           {/* Delivery Address Section */}
+          {deliveryMethod === "delivery" && (
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <MapPin className="w-5 h-5 text-primary" />
@@ -423,6 +470,7 @@ export default function CheckoutPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Special Instructions */}
           <div className="glass-card rounded-2xl p-5">
@@ -475,8 +523,8 @@ export default function CheckoutPage() {
                 <span>&pound;{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[var(--text-soft)]">
-                <span>Delivery fee</span>
-                <span>&pound;{DELIVERY_FEE.toFixed(2)}</span>
+                <span>{deliveryMethod === "pickup" ? "Pick up" : "Delivery fee"}</span>
+                <span>{deliveryMethod === "pickup" ? "Free" : `£${deliveryFee.toFixed(2)}`}</span>
               </div>
               <div className="border-t border-[var(--border)] pt-2 flex justify-between font-bold text-[var(--text)]">
                 <span>Total</span>
@@ -520,7 +568,7 @@ export default function CheckoutPage() {
           {/* Place Order Button */}
           <button
             onClick={handlePlaceOrder}
-            disabled={placing || !selectedAddressId}
+            disabled={placing || (deliveryMethod === "delivery" && !selectedAddressId)}
             className="btn-premium w-full font-semibold py-4 rounded-xl text-white flex items-center justify-center gap-2 text-lg disabled:opacity-50 disabled:transform-none"
           >
             {placing ? (

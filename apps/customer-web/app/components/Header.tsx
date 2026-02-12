@@ -14,6 +14,7 @@ import {
   Store,
   ShoppingBasket,
   Bell,
+  ArrowRightLeft,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
@@ -111,6 +112,11 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
   const displayName = storedName || user?.displayName || user?.email?.split("@")[0] || "User";
   const initials = displayName.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2) || "U";
   const avatar = user?.photoURL;
+  // Role-switch logic: A user is considered a Home Maker if their DB role is CHEF
+  // OR they have a chef profile flag in localStorage (set during login/signup).
+  // This lets them see the "Home Maker Portal" switcher link on the customer site
+  // without requiring a logout — deep links pass the auth token to admin.homeal.uk.
+  const isChefUser = userRole === "CHEF" || (typeof window !== "undefined" && localStorage.getItem("homeal_has_chef_profile") === "true");
 
   const navLinks = [
     { label: "Discover Kitchens", href: "/search", icon: Compass },
@@ -172,6 +178,18 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
         )}
 
         <div className="flex-1" />
+
+        {/* Role switcher pill — desktop only */}
+        {!loading && user && isChefUser && (
+          <a
+            href={`https://admin.homeal.uk?token=${encodeURIComponent(typeof window !== "undefined" ? localStorage.getItem("homeal_token") || "" : "")}`}
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-accent/10 text-accent hover:bg-accent/20 transition"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+            Home Maker Portal
+          </a>
+        )}
+
         <ThemeToggle />
 
         {/* Notification bell (logged-in users) - desktop only */}
@@ -259,22 +277,13 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                 </a>
 
                 {/* Role switch links */}
-                {(userRole === "CHEF" || localStorage.getItem("homeal_has_chef_profile") === "true") && (
+                {isChefUser && (
                   <a
                     href={`https://admin.homeal.uk?token=${encodeURIComponent(localStorage.getItem("homeal_token") || "")}`}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-accent hover:bg-accent/5 transition"
                   >
-                    <Store className="w-4 h-4" />
-                    Seller Dashboard
-                  </a>
-                )}
-                {(userRole === "SUPER_ADMIN" || userRole === "ADMIN") && (
-                  <a
-                    href="https://superadmin.homeal.uk"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-accent hover:bg-accent/5 transition"
-                  >
-                    <Store className="w-4 h-4" />
-                    Admin Portal
+                    <ArrowRightLeft className="w-4 h-4" />
+                    Home Maker Portal
                   </a>
                 )}
 
@@ -300,6 +309,13 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             >
               Log in
             </a>
+            {/* Mobile: visible login button with solid background for light-mode contrast */}
+            <a
+              href="/login"
+              className="sm:hidden text-xs font-semibold px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--input)] transition"
+            >
+              Log in
+            </a>
             {/* Desktop: show both signup buttons */}
             <a
               href="/signup?role=customer"
@@ -311,7 +327,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
               href="/signup?role=chef"
               className="hidden sm:inline-flex text-xs font-semibold px-3 py-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition"
             >
-              Sign up as Chef
+              Sign up as Home Maker
             </a>
             {/* Mobile: dropdown */}
             <div className="relative sm:hidden" ref={signupMenuRef}>
@@ -340,7 +356,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                     href="/signup?role=chef"
                     className="flex items-center gap-2 px-4 py-3 text-sm text-accent font-medium hover:bg-accent/5 transition"
                   >
-                    Sign up as Chef
+                    Sign up as Home Maker
                   </a>
                 </div>
               )}

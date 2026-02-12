@@ -60,7 +60,7 @@ export async function notifySuperAdminNewChef(params: {
   kitchenName: string;
   chefEmail: string;
 }): Promise<boolean> {
-  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "homealforuk@gmail.com";
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "admin@homeal.uk";
   const apiBase = process.env.API_URL || "https://homeal-api.azurewebsites.net";
   const superAdminPanelUrl = process.env.SUPER_ADMIN_URL || "https://homeal-superadmin.azurewebsites.net";
 
@@ -72,7 +72,7 @@ export async function notifySuperAdminNewChef(params: {
 
   return sendEmail({
     to: superAdminEmail,
-    subject: `New Chef Registration: ${params.kitchenName}`,
+    subject: `New Home Maker Registration: ${params.kitchenName}`,
     html: newChefNotificationHtml({
       chefName: params.chefName,
       kitchenName: params.kitchenName,
@@ -118,7 +118,7 @@ export async function notifySuperAdminAccessRequest(params: {
   requesterName: string;
   requesterEmail: string;
 }): Promise<boolean> {
-  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "homealforuk@gmail.com";
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "admin@homeal.uk";
   const apiBase = process.env.API_URL || "https://homeal-api.azurewebsites.net";
   const superAdminPanelUrl = process.env.SUPER_ADMIN_URL || "https://homeal-superadmin.azurewebsites.net";
 

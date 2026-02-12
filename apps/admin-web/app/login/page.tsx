@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, Lock, ChefHat } from "lucide-react";
+import { Mail, Lock, ChefHat, Eye, EyeOff } from "lucide-react";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
@@ -11,6 +11,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,7 +27,7 @@ function LoginContent() {
             window.location.href = "/";
           } else {
             localStorage.removeItem("homeal_token");
-            setError("Unable to verify your chef access. Please log in.");
+            setError("Unable to verify your Home Maker access. Please log in.");
           }
         })
         .catch(() => {
@@ -66,7 +67,7 @@ function LoginContent() {
       }
 
       if (!res.data.hasChefProfile && res.data.user.role !== "CHEF") {
-        setError("This portal is for sellers only. Please register as a chef at homeal.uk first.");
+        setError("This portal is for sellers only. Please register as a Home Maker at homeal.uk first.");
         return;
       }
 
@@ -105,12 +106,12 @@ function LoginContent() {
       });
 
       if (!res.success || !res.data) {
-        setError("No account found. Please sign up as a chef at homeal.uk first.");
+        setError("No account found. Please sign up as a Home Maker at homeal.uk first.");
         return;
       }
 
       if (!res.data.hasChefProfile && res.data.user.role !== "CHEF") {
-        setError("This portal is for sellers only. Please register as a chef at homeal.uk first.");
+        setError("This portal is for sellers only. Please register as a Home Maker at homeal.uk first.");
         return;
       }
 
@@ -135,10 +136,10 @@ function LoginContent() {
             <ChefHat className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--text)", fontFamily: "var(--font-fredoka)" }}>
-            Chef Portal
+            Home Maker Portal
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-soft)" }}>
-            Login to manage your kitchen on Homeal
+            Log in to manage your business on Homeal
           </p>
         </div>
 
@@ -159,13 +160,21 @@ function LoginContent() {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: "var(--text-muted)" }} />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(""); }}
                 placeholder="Password"
-                className="w-full pl-11 pr-4 py-3 rounded-xl outline-none transition text-sm"
+                className="w-full pl-11 pr-11 py-3 rounded-xl outline-none transition text-sm"
                 style={{ background: "var(--input)", border: "1px solid var(--border)", color: "var(--text)" }}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
 
             {error && (
@@ -180,7 +189,7 @@ function LoginContent() {
               className="w-full font-semibold py-3 rounded-xl text-white transition disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
-              {loading ? "Logging in..." : "Log in as Chef"}
+              {loading ? "Logging in..." : "Log in as Home Maker"}
             </button>
           </form>
 
@@ -207,7 +216,7 @@ function LoginContent() {
           </button>
 
           <p className="text-center text-xs mt-4" style={{ color: "var(--text-muted)" }}>
-            Not a chef yet?{" "}
+            Not a Home Maker yet?{" "}
             <a href="https://homeal.uk/signup?role=chef" className="font-medium" style={{ color: "var(--primary)" }}>
               Sign up at homeal.uk
             </a>

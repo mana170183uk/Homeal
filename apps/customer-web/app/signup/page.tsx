@@ -491,7 +491,7 @@ function SignupContent() {
               </h1>
               <p className="text-[var(--text-soft)] text-sm">
                 {role
-                  ? `Signing up as ${role === "CHEF" ? "a Chef" : "a Customer"}`
+                  ? `Signing up as ${role === "CHEF" ? "a Home Maker" : "a Customer"}`
                   : "Choose how you'd like to get started"}
               </p>
             </div>
@@ -501,7 +501,7 @@ function SignupContent() {
               <div className="space-y-4">
                 <button
                   onClick={() => setRole("CUSTOMER")}
-                  className="w-full flex items-center gap-4 p-4 sm:p-5 glass-card rounded-2xl border-2 border-transparent hover:border-[var(--badge-to)] transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 text-left"
+                  className="w-full flex items-center gap-4 p-4 sm:p-5 glass-card rounded-2xl border-2 border-[var(--border)] hover:border-[var(--badge-to)] transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 text-left"
                 >
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[var(--badge-from)] to-[var(--badge-to)] flex items-center justify-center shrink-0 shadow-lg">
                     <User className="w-7 h-7 text-white" />
@@ -580,7 +580,7 @@ function SignupContent() {
                     <Sparkles className="w-3.5 h-3.5 inline mr-1 text-[var(--badge-to)]" />
                     Signing up as{" "}
                     <span className={role === "CHEF" ? "text-accent" : "gradient-text font-semibold"}>
-                      {role === "CHEF" ? "Chef" : "Customer"}
+                      {role === "CHEF" ? "Home Maker" : "Customer"}
                     </span>
                   </span>
                 </div>
@@ -707,7 +707,7 @@ function SignupContent() {
                       Creating account...
                     </span>
                   ) : role === "CHEF"
-                    ? "Submit Chef Application"
+                    ? "Submit Home Maker Application"
                     : "Create Account"}
                 </button>
 
@@ -734,9 +734,11 @@ function SignupContent() {
                   <span className="font-medium text-[var(--text)]">Continue with Google</span>
                 </button>
 
-                {/* Login link */}
+                {/* Login link — context-aware text per role */}
                 <p className="text-center text-sm text-[var(--text-muted)] pt-2">
-                  Already have an account?{" "}
+                  {role === "CHEF"
+                    ? "Already have a Home Maker account? "
+                    : "Already have a customer account? "}
                   <a href="/login" className="font-semibold gradient-text hover:opacity-80 transition">
                     Log in
                   </a>

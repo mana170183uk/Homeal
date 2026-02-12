@@ -21,7 +21,7 @@ const SIDEBAR_ITEMS: SidebarGroup[] = [
     { icon: LayoutDashboard, label: "Dashboard", id: "dashboard" },
   ]},
   { section: "MANAGEMENT", items: [
-    { icon: ChefHat, label: "Chefs", id: "chefs" },
+    { icon: ChefHat, label: "Home Makers", id: "chefs" },
     { icon: Users, label: "Customers", id: "customers" },
     { icon: ClipboardList, label: "Orders", id: "orders" },
   ]},
@@ -54,7 +54,7 @@ const STATS_ROW2 = [
 
 const PAGE_TITLES: Record<string, string> = {
   "dashboard": "Super Admin Dashboard",
-  "chefs": "Chef Management",
+  "chefs": "Home Maker Management",
   "customers": "Customer Management",
   "orders": "All Orders",
   "service-types": "Service Types",
@@ -67,7 +67,7 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 const PAGE_META: Record<string, { green: string; red: string; cta?: string }> = {
-  "chefs": { green: "0 Approved", red: "0 Pending", cta: "Add Chef" },
+  "chefs": { green: "0 Approved", red: "0 Pending", cta: "Add Home Maker" },
   "customers": { green: "0 Active", red: "0 Inactive" },
   "orders": { green: "0 Completed", red: "0 Cancelled" },
   "service-types": { green: "4 Types", red: "0 Disabled" },
@@ -194,7 +194,7 @@ const BADGE_SYSTEM = [
   { name: "Top Rated", icon: Award, color: "#F59E0B", description: "Maintains 4.5+ average rating with 50+ reviews" },
   { name: "Community Favourite", icon: Heart, color: "#EC4899", description: "Receives 100+ repeat orders from unique customers" },
   { name: "Eco Friendly", icon: Leaf, color: "#10B981", description: "Uses sustainable packaging and eco-friendly practices" },
-  { name: "Local Hero", icon: MapPin, color: "#8B5CF6", description: "Top chef in their locality with 200+ orders/month" },
+  { name: "Local Hero", icon: MapPin, color: "#8B5CF6", description: "Top Home Maker in their locality with 200+ orders/month" },
 ];
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3100";
@@ -948,7 +948,7 @@ export default function SuperAdminPage() {
                     <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">Homeal Platform</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1.5"><Shield size={12} /> Super Admin Control</span>
-                      <span className="flex items-center gap-1.5"><Users size={12} /> {chefStats.total} Chef{chefStats.total !== 1 ? "s" : ""} Registered</span>
+                      <span className="flex items-center gap-1.5"><Users size={12} /> {chefStats.total} Home Maker{chefStats.total !== 1 ? "s" : ""} Registered</span>
                       <span className="flex items-center gap-1.5 hidden sm:flex"><MapPin size={12} /> UK Region</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
@@ -2030,7 +2030,7 @@ export default function SuperAdminPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[var(--text)]">Approval Workflow</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">New chefs who register are automatically set to &quot;Pending&quot; status. You&apos;ll receive an email notification at homealforuk@gmail.com with one-click approve/reject buttons. Approved chefs get a 3-month free Unlimited plan. You can extend trials by 3 months at a time.</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">New Home Makers who register are automatically set to &quot;Pending&quot; status. You&apos;ll receive an email notification from the Homeal Admin with one-click approve/reject buttons. Approved Home Makers get a 3-month free Unlimited plan. You can extend trials by 3 months at a time.</p>
                 </div>
               </div>
             </>
@@ -2311,7 +2311,7 @@ export default function SuperAdminPage() {
                         <thead>
                           <tr style={{ background: "var(--input)" }}>
                             <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
-                            <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Chef</th>
+                            <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Home Maker</th>
                             <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Customer</th>
                             <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Items</th>
                             <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Total</th>
@@ -2349,7 +2349,7 @@ export default function SuperAdminPage() {
                       <thead>
                         <tr style={{ background: "var(--input)" }}>
                           <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order ID</th>
-                          <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Chef</th>
+                          <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Home Maker</th>
                           <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Customer</th>
                           <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Items</th>
                           <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Total</th>
@@ -3174,7 +3174,7 @@ export default function SuperAdminPage() {
                     {[
                       { label: "Today's Revenue", value: `£${(today.revenue || 0).toFixed(2)}`, sub: `${today.orders || 0} orders`, icon: PoundSterling, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
                       { label: "Platform Fee (Today)", value: `£${(today.platformFee || 0).toFixed(2)}`, sub: "Commission earned", icon: Wallet, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-                      { label: "Chef Payouts (Today)", value: `£${(today.chefPayout || 0).toFixed(2)}`, sub: "Chef earnings", icon: TrendingUp, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                      { label: "Home Maker Payouts (Today)", value: `£${(today.chefPayout || 0).toFixed(2)}`, sub: "Home Maker earnings", icon: TrendingUp, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
                       { label: "Total Revenue", value: `£${(total.revenue || 0).toFixed(2)}`, sub: `${total.orders || 0} total orders`, icon: Crown, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
                     ].map((s, i) => {
                       const SI = s.icon;
@@ -3205,7 +3205,7 @@ export default function SuperAdminPage() {
                         <p className="text-xl font-bold mb-2" style={{ color: period.color }}>£{period.revenue.toFixed(2)}</p>
                         <div className="space-y-1.5 text-[11px]">
                           <div className="flex justify-between"><span className="text-[var(--text-muted)]">Platform Fee</span><span className="font-semibold" style={{ color: "#10B981" }}>£{period.fee.toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span className="text-[var(--text-muted)]">Chef Payouts</span><span className="font-semibold" style={{ color: "#3B82F6" }}>£{period.payout.toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span className="text-[var(--text-muted)]">Home Maker Payouts</span><span className="font-semibold" style={{ color: "#3B82F6" }}>£{period.payout.toFixed(2)}</span></div>
                           <div className="flex justify-between"><span className="text-[var(--text-muted)]">Orders</span><span className="font-semibold text-[var(--text)]">{period.orders}</span></div>
                         </div>
                       </div>
@@ -3223,10 +3223,10 @@ export default function SuperAdminPage() {
                           <thead>
                             <tr style={{ background: "var(--input)" }}>
                               <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order</th>
-                              <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Chef</th>
+                              <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Home Maker</th>
                               <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Amount</th>
                               <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Platform Fee</th>
-                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Chef Payout</th>
+                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Home Maker Payout</th>
                               <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Date</th>
                             </tr>
                           </thead>
@@ -3258,10 +3258,10 @@ export default function SuperAdminPage() {
                           <thead>
                             <tr style={{ background: "var(--input)" }}>
                               <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Order</th>
-                              <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Chef</th>
+                              <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Home Maker</th>
                               <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Amount</th>
                               <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Platform Fee</th>
-                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Chef Payout</th>
+                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Home Maker Payout</th>
                               <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Date</th>
                             </tr>
                           </thead>

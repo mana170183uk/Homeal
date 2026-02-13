@@ -34,17 +34,7 @@ function getMinPrice(chef: Chef): number | null {
 function DiscoverContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [authChecked, setAuthChecked] = useState(false);
-
-  // Auth gate — redirect to login if not logged in
-  useEffect(() => {
-    const token = localStorage.getItem("homeal_token");
-    if (!token) {
-      router.push("/login?redirect=/discover");
-      return;
-    }
-    setAuthChecked(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Public page — no login required. Guests can browse freely.
 
   // URL params
   const urlLat = searchParams.get("lat");
@@ -219,14 +209,6 @@ function DiscoverContent() {
 
     return result;
   }, [chefs, selectedCuisines, vegetarianOnly, sortBy]);
-
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
-        <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">

@@ -50,16 +50,7 @@ const PRODUCT_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1546069901-ba9
 function HomemadeProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem("homeal_token");
-    if (!token) {
-      router.push("/login?redirect=/homemade-products");
-      return;
-    }
-    setAuthChecked(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Public page — no login required. Guests can browse products freely.
 
   const urlCategory = searchParams.get("category") || "";
   const urlSearch = searchParams.get("search") || "";
@@ -240,14 +231,6 @@ function HomemadeProductsContent() {
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
   const hasMore = products.length < total;
   const hasLocation = !!(lat && lng);
-
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
-        <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">

@@ -150,11 +150,11 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
           <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
             <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
           </div>
-          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-10 w-auto shrink-0" />
+          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="h-7 sm:h-8 lg:h-10 w-auto shrink-0" />
         </a>
 
-        {/* Desktop nav links — only visible when logged in */}
-        {!loading && user && (
+        {/* Desktop nav links — visible to all visitors */}
+        {!loading && (
           <nav className="hidden md:flex items-center gap-1 ml-2">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -219,9 +219,9 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
           </a>
         )}
 
-        {/* Cart indicator - desktop only */}
+        {/* Cart indicator - all screens */}
         {cartCount > 0 && (
-          <a href="/cart" className="relative p-2 rounded-xl hover:bg-[var(--input)] transition hidden md:flex">
+          <a href="/cart" className="relative p-2 rounded-xl hover:bg-[var(--input)] transition flex">
             <ShoppingBag className="w-5 h-5 text-[var(--text-soft)]" />
             <span className="absolute -top-0.5 -right-0.5 w-5 h-5 badge-gradient text-white text-[10px] font-bold rounded-full flex items-center justify-center">
               {cartCount}

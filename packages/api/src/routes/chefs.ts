@@ -127,6 +127,29 @@ router.get("/:id", async (req: Request, res: Response) => {
       res.status(404).json({ success: false, error: "Chef not found" });
       return;
     }
+
+    // Check if request is authenticated (optional — no middleware required)
+    const authHeader = req.headers.authorization;
+    const isAuthenticated = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 10);
+
+    if (!isAuthenticated) {
+      // Mask reviewer names: "John" → "J***"
+      const maskedReviews = chef.reviews.map((r: any) => ({
+        ...r,
+        user: {
+          ...r.user,
+          name: r.user.name ? r.user.name.charAt(0).toUpperCase() + "***" : "User",
+          avatar: null,
+        },
+      }));
+      // Omit operating hours for guests
+      res.json({
+        success: true,
+        data: { ...chef, reviews: maskedReviews, operatingHours: null },
+      });
+      return;
+    }
+
     res.json({ success: true, data: chef });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch chef";

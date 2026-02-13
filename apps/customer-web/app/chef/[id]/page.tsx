@@ -151,7 +151,6 @@ export default function ChefProfilePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const [authChecked, setAuthChecked] = useState(false);
   const [chef, setChef] = useState<ChefDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -167,15 +166,7 @@ export default function ChefProfilePage({
   const [isOnVacation, setIsOnVacation] = useState(false);
   const [pastCutoff, setPastCutoff] = useState(false);
 
-  // Auth gate
-  useEffect(() => {
-    const token = localStorage.getItem("homeal_token");
-    if (!token) {
-      router.push(`/login?redirect=/chef/${id}`);
-      return;
-    }
-    setAuthChecked(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Public page — no login required. Guests can browse chef profiles freely.
 
   useEffect(() => {
     setCart(getCart());
@@ -184,7 +175,8 @@ export default function ChefProfilePage({
   useEffect(() => {
     async function fetchChef() {
       try {
-        const res = await api<ChefDetail>(`/chefs/${id}`);
+        const token = localStorage.getItem("homeal_token") || undefined;
+        const res = await api<ChefDetail>(`/chefs/${id}`, { token });
         if (res.success && res.data) {
           setChef(res.data);
         } else {
@@ -275,7 +267,10 @@ export default function ChefProfilePage({
 
   async function toggleFollow() {
     const token = localStorage.getItem("homeal_token");
-    if (!token) return;
+    if (!token) {
+      router.push(`/login?redirect=/chef/${id}`);
+      return;
+    }
     setFollowLoading(true);
     try {
       if (isFollowing) {
@@ -364,14 +359,6 @@ export default function ChefProfilePage({
 
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.quantity, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
-
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
-        <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   if (loading) {
     return (

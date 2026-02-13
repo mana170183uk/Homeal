@@ -68,12 +68,15 @@ export default function CheckoutPage() {
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [placing, setPlacing] = useState(false);
   const [orderError, setOrderError] = useState("");
+  const [isGuest, setIsGuest] = useState(false);
 
-  // Auth check
+  // Auth check — show login prompt instead of redirect
   useEffect(() => {
     const token = localStorage.getItem("homeal_token");
     if (!token) {
-      router.push("/login?redirect=/checkout");
+      setIsGuest(true);
+      setCart(getCart());
+      setMounted(true);
       return;
     }
 
@@ -236,6 +239,49 @@ export default function CheckoutPage() {
   if (cart.length === 0) {
     router.push("/cart");
     return null;
+  }
+
+  // Guest login prompt — cart is preserved in localStorage
+  if (isGuest) {
+    return (
+      <div className="min-h-screen w-full overflow-x-hidden">
+        <Header showBack />
+        <div className="max-w-lg mx-auto px-4 sm:px-6 py-12 sm:py-20">
+          <div className="glass-card rounded-3xl p-6 sm:p-8 text-center animate-fade-in-up">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-2xl badge-gradient flex items-center justify-center shadow-lg">
+              <ShoppingBag className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-[var(--text)] mb-3">
+              Log in to complete your order
+            </h1>
+            <p className="text-[var(--text-soft)] text-sm mb-2">
+              You have <span className="font-semibold text-primary">{cart.reduce((s, i) => s + i.quantity, 0)} item{cart.reduce((s, i) => s + i.quantity, 0) !== 1 ? "s" : ""}</span> in your cart worth <span className="font-semibold gradient-text">&pound;{(cart.reduce((s, i) => s + i.price * i.quantity, 0)).toFixed(2)}</span>
+            </p>
+            <p className="text-[var(--text-muted)] text-xs mb-6">
+              Your cart is saved and will be here when you get back.
+            </p>
+            <a
+              href="/login?redirect=/checkout"
+              className="btn-premium inline-flex items-center justify-center gap-2 font-semibold py-3.5 px-8 rounded-xl text-white text-lg w-full"
+            >
+              Log in to Checkout
+            </a>
+            <p className="text-sm text-[var(--text-muted)] mt-4">
+              Don&apos;t have an account?{" "}
+              <a href="/signup?role=customer&redirect=/checkout" className="font-semibold gradient-text hover:opacity-80 transition">
+                Sign up
+              </a>
+            </p>
+            <a
+              href="/cart"
+              className="inline-block mt-4 text-sm text-[var(--text-soft)] hover:text-primary transition font-medium"
+            >
+              &larr; Back to cart
+            </a>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

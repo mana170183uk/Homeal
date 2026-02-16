@@ -326,11 +326,16 @@ export default function HomePage() {
       <footer className="px-4 sm:px-6 py-8 sm:py-10 border-t border-[var(--border)]">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
-            <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-                <img src="/favicon-final-2.png" alt="" className="w-6 h-6 rounded-lg" />
+            <a href="/" className="flex items-center gap-1.5" aria-label="Homeal - Home">
+              <img src="/chef-icon.png" alt="" className="h-10 lg:h-11 w-auto shrink-0" />
+              <div className="flex flex-col leading-none">
+                <span className="text-xl lg:text-2xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+                  <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+                  <span className="text-[#FF8800]">me</span>
+                  <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+                </span>
+                <span className="text-[10px] lg:text-[11px] text-[var(--text-soft)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
               </div>
-              <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-9 w-auto shrink-0" />
             </a>
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-sm">
               <a href="https://admin.homeal.uk" className="text-[var(--text-soft)] font-medium hover:text-accent transition">

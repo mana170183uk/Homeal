@@ -64,6 +64,9 @@ export default function CheckoutPage() {
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
 
+  // Chef info for pickup address
+  const [chefInfo, setChefInfo] = useState<{ kitchenName: string; description: string | null } | null>(null);
+
   // Order state
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -83,6 +86,15 @@ export default function CheckoutPage() {
     setCart(getCart());
     setMounted(true);
     fetchAddresses(token);
+
+    // Fetch chef info for pickup address display
+    const currentCart = getCart();
+    if (currentCart.length > 0) {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "https://api.homeal.uk"}/api/v1/chefs/${currentCart[0].chefId}`)
+        .then(r => r.json())
+        .then(d => { if (d.success && d.data) setChefInfo(d.data); })
+        .catch(() => {});
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchAddresses(token: string) {
@@ -327,9 +339,16 @@ export default function CheckoutPage() {
               </button>
             </div>
             {deliveryMethod === "pickup" && (
-              <p className="text-xs text-[var(--text-muted)] mt-3 text-center">
-                You&apos;ll collect your order directly from the seller. No delivery fee applies.
-              </p>
+              <div className="mt-3 text-center">
+                <p className="text-xs text-[var(--text-muted)]">
+                  You&apos;ll collect your order directly from the seller. No delivery fee applies.
+                </p>
+                {chefInfo && (
+                  <p className="text-sm font-semibold text-[var(--text)] mt-2">
+                    Pickup from: {chefInfo.kitchenName}
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -593,10 +612,10 @@ export default function CheckoutPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-[var(--text)]">
-                  Cash on Delivery
+                  {deliveryMethod === "pickup" ? "Cash on Pickup" : "Cash on Delivery"}
                 </p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  Pay when your order arrives
+                  {deliveryMethod === "pickup" ? "Pay when you collect your order" : "Pay when your order arrives"}
                 </p>
               </div>
               <ShieldCheck className="w-5 h-5 text-green-500 ml-auto" />

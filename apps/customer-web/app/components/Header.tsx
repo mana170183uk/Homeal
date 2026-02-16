@@ -146,11 +146,16 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             <ArrowLeft className="w-5 h-5" />
           </a>
         )}
-        <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-          <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-            <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
+        <a href="/" className="flex items-center gap-1.5" aria-label="Homeal - Home">
+          <img src="/chef-icon.png" alt="" className="h-10 sm:h-11 lg:h-12 w-auto shrink-0" />
+          <div className="flex flex-col leading-none">
+            <span className="text-xl sm:text-2xl lg:text-[1.7rem] font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+              <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+              <span className="text-[#FF8800]">me</span>
+              <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+            </span>
+            <span className="text-[10px] sm:text-[11px] lg:text-xs text-[var(--text-soft)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
           </div>
-          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="h-7 sm:h-8 lg:h-10 w-auto shrink-0" />
         </a>
 
         {/* Desktop nav links — visible to all visitors */}
@@ -251,7 +256,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-20">
+              <div className="absolute right-0 mt-2 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-20">
                 {/* User info */}
                 <div className="px-4 py-3 border-b border-[var(--border)]">
                   <p className="text-sm font-medium text-[var(--text)] truncate">{displayName}</p>
@@ -339,7 +344,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                 <ChevronDown className="w-3 h-3" />
               </button>
               {signupMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-20">
+                <div className="absolute right-0 mt-2 w-48 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-20">
                   <a
                     href="/login"
                     className="flex items-center gap-2 px-4 py-3 text-sm text-[var(--text)] hover:bg-[var(--input)] transition border-b border-[var(--border)]"

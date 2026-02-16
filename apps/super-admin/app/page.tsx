@@ -782,11 +782,16 @@ export default function SuperAdminPage() {
         {/* Sidebar branding */}
         <div className="py-3 px-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-                <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
+            <a href="/" className="flex items-center gap-1.5 px-2.5" aria-label="Homeal - Home">
+              <img src="/chef-icon.png" alt="" className="h-10 w-auto shrink-0" />
+              <div className="flex flex-col leading-none">
+                <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+                  <span className="text-[#278848]">Ho</span>
+                  <span className="text-[#FF8800]">me</span>
+                  <span className="text-[#278848]">al</span>
+                </span>
+                <span className="text-[10px] text-[var(--sidebar-muted)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
               </div>
-              <img src="/logo-full.png" alt="Homeal" className="h-9 w-auto shrink-0" />
             </a>
             <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
               <X size={20} style={{ color: "var(--sidebar-text)" }} />

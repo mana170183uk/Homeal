@@ -1534,11 +1534,16 @@ export default function DashboardPage() {
         {/* Sidebar branding */}
         <div className="py-3 px-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <a href="/" className="flex items-center gap-2 px-2.5" aria-label="Homeal - Home">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-                <img src="/favicon-final-2.png" alt="" className="w-7 h-7 rounded-lg" />
+            <a href="/" className="flex items-center gap-1.5 px-2.5" aria-label="Homeal - Home">
+              <img src="/chef-icon.png" alt="" className="h-10 w-auto shrink-0" />
+              <div className="flex flex-col leading-none">
+                <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+                  <span className="text-[#278848]">Ho</span>
+                  <span className="text-[#FF8800]">me</span>
+                  <span className="text-[#278848]">al</span>
+                </span>
+                <span className="text-[10px] text-[var(--sidebar-muted)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
               </div>
-              <img src="/logo-full.png" alt="Homeal" className="h-9 w-auto shrink-0" />
             </a>
             <button className="md:hidden p-1 rounded-lg hover:bg-[var(--sidebar-hover)]" onClick={() => setSidebarOpen(false)}>
               <X size={20} style={{ color: "var(--sidebar-text)" }} />
@@ -1718,11 +1723,11 @@ export default function DashboardPage() {
                     <ChefHat size={28} color="white" strokeWidth={2} />
                   </div>
                   <div>
-                    <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">Amma&apos;s Kitchen</h2>
+                    <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">{chefProfile?.kitchenName || chefName || "My Kitchen"}</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
-                      <span className="flex items-center gap-1.5"><Phone size={12} /> +44 7700 900000</span>
-                      <span className="flex items-center gap-1.5 hidden sm:flex"><Mail size={12} /> support@homeal.uk</span>
-                      <span className="flex items-center gap-1.5"><MapPin size={12} /> London, UK</span>
+                      {chefProfile?.user?.phone && <span className="flex items-center gap-1.5"><Phone size={12} /> {chefProfile.user.phone}</span>}
+                      <span className="flex items-center gap-1.5 hidden sm:flex"><Mail size={12} /> {chefEmail || "—"}</span>
+                      {chefProfile?.businessName && <span className="flex items-center gap-1.5"><MapPin size={12} /> {chefProfile.businessName}</span>}
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium border" style={{ color: "#10B981", borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.1)" }}>
@@ -1738,7 +1743,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm text-[var(--text-muted)]">Welcome, Home Maker</p>
+                  <p className="text-sm text-[var(--text-muted)]">Welcome, {chefName?.split(" ")[0] || "Home Maker"}</p>
                   <span
                     className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 rounded-full text-[11px] font-semibold border"
                     style={{ color: "var(--primary)", borderColor: "rgba(255,90,31,0.3)", background: "rgba(255,90,31,0.08)" }}
@@ -2754,15 +2759,20 @@ export default function DashboardPage() {
                         ))}
                       </ul>
                       <button
-                        onClick={() => setCurrentPlan(plan.name as "Starter" | "Growth" | "Unlimited")}
-                        className="w-full py-2.5 rounded-xl text-sm font-semibold transition hover:opacity-90"
+                        onClick={() => {
+                          if (!isCurrent) {
+                            setToast({ message: "To change your plan, please contact support at support@homeal.uk", type: "error" });
+                          }
+                        }}
+                        disabled={isCurrent}
+                        className="w-full py-2.5 rounded-xl text-sm font-semibold transition hover:opacity-90 disabled:cursor-default"
                         style={
                           isCurrent
                             ? { background: plan.bg, color: plan.color, border: `1px solid ${plan.borderColor}` }
                             : { background: plan.color, color: "#FFFFFF" }
                         }
                       >
-                        {isCurrent ? "Current Plan" : `Select ${plan.name}`}
+                        {isCurrent ? "Current Plan" : "Contact to Upgrade"}
                       </button>
                     </div>
                   );

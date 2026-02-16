@@ -21,13 +21,33 @@ import {
   Cake,
   CookingPot,
 } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
 
 type Role = "CUSTOMER" | "CHEF";
 type SellerType = "KITCHEN" | "CAKE" | "BAKERY" | "OTHER";
+
+const ALLOWED_EMAIL_DOMAINS = [
+  "gmail.com", "googlemail.com",
+  "yahoo.com", "yahoo.co.uk", "yahoo.co.in",
+  "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk", "msn.com",
+  "icloud.com", "me.com", "mac.com",
+  "aol.com",
+  "protonmail.com", "proton.me",
+  "zoho.com",
+  "mail.com",
+  "gmx.com", "gmx.co.uk",
+  "ymail.com",
+  "fastmail.com",
+  "tutanota.com", "tuta.com",
+];
+
+function isAllowedEmailDomain(email: string): boolean {
+  const domain = email.split("@")[1]?.toLowerCase();
+  return domain ? ALLOWED_EMAIL_DOMAINS.includes(domain) : false;
+}
 
 const SELLER_TYPE_OPTIONS: { value: SellerType; label: string; icon: typeof UtensilsCrossed; placeholder: string }[] = [
   { value: "KITCHEN", label: "Kitchen", icon: UtensilsCrossed, placeholder: "e.g. Priya's Kitchen" },
@@ -78,6 +98,10 @@ function SignupContent() {
       setError("Please fill in all required fields.");
       return;
     }
+    if (!isAllowedEmailDomain(form.email)) {
+      setError("Please use a personal email (Gmail, Yahoo, Outlook, etc.). Business or temporary emails are not allowed.");
+      return;
+    }
     if (form.password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
@@ -116,6 +140,12 @@ function SignupContent() {
       );
 
       if (!res.success) {
+        // API registration failed — delete the Firebase user so they aren't left logged in
+        try {
+          await deleteUser(credential.user);
+        } catch {
+          await signOut(getFirebaseAuth());
+        }
         setError(res.error || "Registration failed. Please try again.");
         return;
       }
@@ -291,9 +321,15 @@ function SignupContent() {
           <button onClick={() => setPendingGoogleChef(null)} className="flex items-center text-[var(--text-soft)] hover:text-primary transition">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-            <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-              <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
+          <a href="/" className="flex items-center gap-1.5" aria-label="Homeal - Home">
+            <img src="/chef-icon.png" alt="" className="h-10 lg:h-12 w-auto shrink-0" />
+            <div className="flex flex-col leading-none">
+              <span className="text-xl lg:text-2xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+                <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+                <span className="text-[#FF8800]">me</span>
+                <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+              </span>
+              <span className="text-[10px] lg:text-[11px] text-[var(--text-soft)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
             </div>
           </a>
           <div className="flex-1" />
@@ -466,11 +502,16 @@ function SignupContent() {
         <a href="/" className="flex items-center text-[var(--text-soft)] hover:text-primary transition">
           <ArrowLeft className="w-5 h-5" />
         </a>
-        <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-          <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-            <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
+        <a href="/" className="flex items-center gap-1.5" aria-label="Homeal - Home">
+          <img src="/chef-icon.png" alt="" className="h-10 lg:h-12 w-auto shrink-0" />
+          <div className="flex flex-col leading-none">
+            <span className="text-xl lg:text-2xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+              <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+              <span className="text-[#FF8800]">me</span>
+              <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+            </span>
+            <span className="text-[10px] lg:text-[11px] text-[var(--text-soft)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
           </div>
-          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-10 w-auto shrink-0" />
         </a>
         <div className="flex-1" />
         <ThemeToggle />

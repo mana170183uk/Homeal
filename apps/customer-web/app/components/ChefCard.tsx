@@ -37,6 +37,23 @@ function hasOffers(chef: Chef): boolean {
   );
 }
 
+function isKitchenOpenNow(chef: Chef): boolean {
+  if (chef.isOnline === false) return false;
+  // Check today's operating hours
+  if (chef.operatingHours) {
+    try {
+      const hours = typeof chef.operatingHours === "string"
+        ? JSON.parse(chef.operatingHours)
+        : chef.operatingHours;
+      const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const today = days[new Date().getDay()];
+      const todayHours = hours[today];
+      if (todayHours && todayHours.enabled === false) return false;
+    } catch { /* ignore parse errors */ }
+  }
+  return true;
+}
+
 interface ChefCardProps {
   chef: Chef;
   showDistance?: boolean;
@@ -52,7 +69,7 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
     .flatMap((m) => m.items)
     .slice(0, 2)
     .map((i) => i.name);
-  const isOnline = chef.isOnline !== false;
+  const isOnline = isKitchenOpenNow(chef);
   const chefHasOffers = hasOffers(chef);
 
   return (

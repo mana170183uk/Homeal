@@ -158,11 +158,16 @@ export default function LoginPage() {
         <a href="/" className="flex items-center text-[var(--text-soft)] hover:text-primary transition">
           <ArrowLeft className="w-5 h-5" />
         </a>
-        <a href="/" className="flex items-center gap-2" aria-label="Homeal - Home">
-          <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--logo-bg)" }}>
-            <img src="/favicon-final-2.png" alt="" className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg" />
+        <a href="/" className="flex items-center gap-1.5" aria-label="Homeal - Home">
+          <img src="/chef-icon.png" alt="" className="h-10 lg:h-12 w-auto shrink-0" />
+          <div className="flex flex-col leading-none">
+            <span className="text-xl lg:text-2xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+              <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+              <span className="text-[#FF8800]">me</span>
+              <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+            </span>
+            <span className="text-[10px] lg:text-[11px] text-[var(--text-soft)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
           </div>
-          <img src="/logo-full.png" alt="Homeal - Homemade products, from home" className="hidden lg:block h-10 w-auto shrink-0" />
         </a>
         <div className="flex-1" />
         <ThemeToggle />

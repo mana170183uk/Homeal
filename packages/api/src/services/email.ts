@@ -127,7 +127,7 @@ export async function notifySuperAdminNewChef(params: {
           userId,
           type: "SYSTEM",
           title: "New Home Maker Registration",
-          message: `${params.kitchenName} (${params.chefName}) has registered and is awaiting approval.`,
+          body: `${params.kitchenName} (${params.chefName}) has registered and is awaiting approval.`,
         })),
       });
     }
@@ -208,7 +208,7 @@ export async function notifySuperAdminAccessRequest(params: {
           userId,
           type: "SYSTEM",
           title: "Super Admin Access Request",
-          message: `${params.requesterName} (${params.requesterEmail}) has requested Super Admin access.`,
+          body: `${params.requesterName} (${params.requesterEmail}) has requested Super Admin access.`,
         })),
       });
     }

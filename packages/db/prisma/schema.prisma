@@ -223,8 +223,9 @@ model Order {
   id              String      @id @default(uuid()) @db.VarChar(36)
   userId          String      @db.VarChar(36)
   chefId          String      @db.VarChar(36)
-  addressId       String      @db.VarChar(36)
+  addressId       String?     @db.VarChar(36)
   status          OrderStatus @default(PLACED)
+  deliveryMethod  String      @default("DELIVERY") @db.VarChar(20)
   subtotal        Float
   deliveryFee     Float       @default(0)
   discount        Float       @default(0)
@@ -238,7 +239,7 @@ model Order {
 
   user      User        @relation(fields: [userId], references: [id])
   chef      Chef        @relation(fields: [chefId], references: [id])
-  address   Address     @relation(fields: [addressId], references: [id])
+  address   Address?    @relation(fields: [addressId], references: [id])
   promoCode PromoCode?  @relation(fields: [promoCodeId], references: [id])
   items     OrderItem[]
   payment   Payment?

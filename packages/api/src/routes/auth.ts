@@ -20,10 +20,34 @@ function signToken(payload: object, secret: string, expiresIn: string): string {
   return jwt.sign(payload, secret, { expiresIn: expiresIn as jwt.SignOptions["expiresIn"] });
 }
 
+const ALLOWED_EMAIL_DOMAINS = [
+  "gmail.com", "googlemail.com",
+  "yahoo.com", "yahoo.co.uk", "yahoo.co.in",
+  "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk", "msn.com",
+  "icloud.com", "me.com", "mac.com",
+  "aol.com",
+  "protonmail.com", "proton.me",
+  "zoho.com",
+  "mail.com",
+  "gmx.com", "gmx.co.uk",
+  "ymail.com",
+  "fastmail.com",
+  "tutanota.com", "tuta.com",
+];
+
 // POST /api/v1/auth/register
 router.post("/register", async (req: Request, res: Response) => {
   try {
     const { name, email, phone, firebaseUid, role, kitchenName, sellerType, businessName } = req.body;
+
+    // Validate email domain
+    if (email) {
+      const domain = email.split("@")[1]?.toLowerCase();
+      if (!domain || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+        res.status(400).json({ success: false, error: "Please use a personal email (Gmail, Yahoo, Outlook, etc.). Business or temporary emails are not allowed." });
+        return;
+      }
+    }
 
     // Convert empty phone to null to avoid unique constraint collisions
     const cleanPhone = phone && phone.trim() ? phone.trim() : null;

@@ -9,10 +9,15 @@ const router = Router();
 // POST /api/v1/orders - place order
 router.post("/", authenticate, async (req: Request, res: Response) => {
   try {
-    const { chefId, addressId, items, specialInstructions, paymentMethod } = req.body;
+    const { chefId, addressId, items, specialInstructions, paymentMethod, deliveryMethod } = req.body;
+    const isPickup = deliveryMethod === "pickup";
 
-    if (!chefId || !addressId || !items?.length) {
-      res.status(400).json({ success: false, error: "chefId, addressId, and items are required" });
+    if (!chefId || !items?.length) {
+      res.status(400).json({ success: false, error: "chefId and items are required" });
+      return;
+    }
+    if (!isPickup && !addressId) {
+      res.status(400).json({ success: false, error: "Delivery address is required for delivery orders" });
       return;
     }
 
@@ -90,7 +95,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       return { menuItemId: item.menuItemId, quantity: item.quantity, price, notes: item.notes };
     });
 
-    const deliveryFee = 0.30;
+    const deliveryFee = isPickup ? 0 : 0.30;
     const total = subtotal + deliveryFee;
 
     const commissionRate = (chef.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
@@ -101,11 +106,12 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       data: {
         userId: req.user!.userId,
         chefId,
-        addressId,
+        addressId: addressId || null,
         subtotal,
         deliveryFee,
         total,
         specialInstructions,
+        deliveryMethod: isPickup ? "PICKUP" : "DELIVERY",
         items: { create: orderItems },
         payment: {
           create: {

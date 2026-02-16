@@ -23,6 +23,7 @@ const SIDEBAR_ITEMS: SidebarGroup[] = [
   { section: "MANAGEMENT", items: [
     { icon: ChefHat, label: "Home Makers", id: "chefs" },
     { icon: Users, label: "Customers", id: "customers" },
+    { icon: Shield, label: "Super Admins", id: "super-admins" },
     { icon: ClipboardList, label: "Orders", id: "orders" },
   ]},
   { section: "PLATFORM", items: [
@@ -305,6 +306,10 @@ export default function SuperAdminPage() {
   const [notifCount, setNotifCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  // Super Admins state
+  const [superAdmins, setSuperAdmins] = useState<any[]>([]);
+  const [superAdminsLoading, setSuperAdminsLoading] = useState(false);
+
   function handlePageRefresh() {
     setRefreshingPage(true);
     setTimeout(() => setRefreshingPage(false), 800);
@@ -324,7 +329,7 @@ export default function SuperAdminPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await safeJson(res);
-        if (data.success && data.data && (data.data.role === "SUPER_ADMIN" || data.data.role === "ADMIN")) {
+        if (data.success && data.data && data.data.role === "SUPER_ADMIN") {
           setAuthToken(token);
           setAdminName(data.data.name || "Admin");
           setAdminEmail(data.data.email || "");
@@ -716,6 +721,68 @@ export default function SuperAdminPage() {
     }
   }
 
+  // Fetch super admins
+  async function fetchSuperAdmins() {
+    if (!authToken) return;
+    setSuperAdminsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/super-admins`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await safeJson(res);
+      if (data.success) setSuperAdmins(data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch super admins:", err);
+    } finally {
+      setSuperAdminsLoading(false);
+    }
+  }
+
+  // CSV download helpers
+  function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+    const bom = "\uFEFF";
+    const csvContent = [headers.join(","), ...rows.map(r => r.map(cell => `"${String(cell || "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadChefsCSV() {
+    const headers = ["Name", "Email", "Phone", "Kitchen Name", "Cuisine Types", "Status", "Plan", "Commission %", "Avg Rating", "Orders", "Menus", "Reviews", "Delivery Radius", "Joined"];
+    const rows = chefs.map(c => [
+      c.user.name, c.user.email || "", c.user.phone || "", c.kitchenName, c.cuisineTypes || "",
+      c.isVerified ? "Approved" : c.rejectedAt ? "Rejected" : "Pending",
+      c.plan, String(c.commissionRate), String(c.avgRating), String(c._count.orders), String(c._count.menus), String(c._count.reviews),
+      `${c.deliveryRadius} miles`,
+      c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-GB") : "",
+    ]);
+    downloadCSV(`homeal-homemakers-${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+  }
+
+  function downloadCustomersCSV() {
+    const headers = ["Name", "Email", "Phone", "Orders", "Total Spent", "Status", "Joined"];
+    const rows = customers.map((c: any) => [
+      c.name || "", c.email || "", c.phone || "", String(c._count?.orders || 0),
+      `£${parseFloat(c.totalSpent || 0).toFixed(2)}`, c.isActive ? "Active" : "Inactive",
+      c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-GB") : "",
+    ]);
+    downloadCSV(`homeal-customers-${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+  }
+
+  function downloadSuperAdminsCSV() {
+    const headers = ["Name", "Email", "Phone", "Role", "Status", "Joined"];
+    const rows = superAdmins.map((a: any) => [
+      a.name || "", a.email || "", a.phone || "", a.role,
+      a.isActive ? "Active" : "Inactive",
+      a.createdAt ? new Date(a.createdAt).toLocaleDateString("en-GB") : "",
+    ]);
+    downloadCSV(`homeal-super-admins-${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+  }
+
   // Fetch dashboard stats when auth is ready
   useEffect(() => {
     if (!authToken) return;
@@ -764,11 +831,18 @@ export default function SuperAdminPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, authToken]);
 
+  // Fetch super admins when on super-admins page
+  useEffect(() => {
+    if (!authToken) return;
+    if (activePage === "super-admins") fetchSuperAdmins();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage, authToken]);
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  const customPages = ["dashboard", "settings", "service-types", "chefs", "customers", "orders", "promos", "categories", "analytics", "revenue", "reports"];
+  const customPages = ["dashboard", "settings", "service-types", "chefs", "customers", "super-admins", "orders", "promos", "categories", "analytics", "revenue", "reports"];
 
   return (
     <div className="flex w-full overflow-x-hidden app-height">
@@ -1632,9 +1706,14 @@ export default function SuperAdminPage() {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => fetchChefs()} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
-                  <RefreshCw size={18} className={`text-[var(--text-muted)] ${chefLoading ? "animate-spin" : ""}`} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={downloadChefsCSV} title="Download CSV" className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <Download size={18} className="text-[var(--text-muted)]" />
+                  </button>
+                  <button onClick={() => fetchChefs()} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <RefreshCw size={18} className={`text-[var(--text-muted)] ${chefLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
               </div>
 
               {/* Chef Stats */}
@@ -2131,9 +2210,14 @@ export default function SuperAdminPage() {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => { handlePageRefresh(); fetchCustomers(); }} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
-                  <RefreshCw size={18} className={`text-[var(--text-muted)] transition-transform ${customersLoading ? "animate-spin" : ""}`} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={downloadCustomersCSV} title="Download CSV" className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <Download size={18} className="text-[var(--text-muted)]" />
+                  </button>
+                  <button onClick={() => { handlePageRefresh(); fetchCustomers(); }} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <RefreshCw size={18} className={`text-[var(--text-muted)] transition-transform ${customersLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
               </div>
 
               {/* Customer Stats */}
@@ -2277,6 +2361,145 @@ export default function SuperAdminPage() {
                           <div className="flex items-center justify-between text-[11px] mt-1">
                             <span className="text-[var(--text-muted)]">Spent: <span className="font-semibold" style={{ color: "#10B981" }}>£{parseFloat(customer.totalSpent || 0).toFixed(2)}</span></span>
                             <span className="text-[var(--text-muted)]">Joined: {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "\u2014"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Super Admins Page */}
+          {activePage === "super-admins" && (
+            <>
+              <div className="glass-card rounded-2xl px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
+                    <Shield size={24} color="white" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-[var(--text)]">Super Admin Management</h2>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{superAdmins.filter((a: any) => a.role === "SUPER_ADMIN").length} Super Admins</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-blue-500" />{superAdmins.filter((a: any) => a.role === "ADMIN").length} Admins</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={downloadSuperAdminsCSV} title="Download CSV" className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <Download size={18} className="text-[var(--text-muted)]" />
+                  </button>
+                  <button onClick={() => { handlePageRefresh(); fetchSuperAdmins(); }} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <RefreshCw size={18} className={`text-[var(--text-muted)] transition-transform ${superAdminsLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Super Admin Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                {[
+                  { label: "Total Admins", value: String(superAdmins.length), icon: Shield, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+                  { label: "Super Admins", value: String(superAdmins.filter((a: any) => a.role === "SUPER_ADMIN").length), icon: Crown, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+                  { label: "Admins", value: String(superAdmins.filter((a: any) => a.role === "ADMIN").length), icon: ShieldCheck, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                ].map((s, i) => {
+                  const SI = s.icon;
+                  return (
+                    <div key={i} className="glass-card p-4 rounded-2xl">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-xs font-medium text-[var(--text-muted)]">{s.label}</span>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
+                          <SI size={18} style={{ color: s.color }} />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Super Admins Table */}
+              <div className="glass-card rounded-2xl overflow-hidden">
+                {superAdminsLoading && superAdmins.length === 0 ? (
+                  <div className="text-center py-16">
+                    <RefreshCw size={28} className="mx-auto mb-3 animate-spin text-[var(--text-muted)]" />
+                    <p className="text-sm text-[var(--text-muted)]">Loading super admins...</p>
+                  </div>
+                ) : superAdmins.length === 0 ? (
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <Shield size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No admins found</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Super admins and admins will appear here.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop table */}
+                    <table className="hidden md:table w-full text-xs">
+                      <thead>
+                        <tr style={{ background: "var(--input)" }}>
+                          <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Name</th>
+                          <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Email</th>
+                          <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Phone</th>
+                          <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Role</th>
+                          <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
+                          <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Joined</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {superAdmins.map((admin: any) => (
+                          <tr key={admin.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: admin.role === "SUPER_ADMIN" ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)" }}>
+                                  {admin.role === "SUPER_ADMIN" ? <Crown size={14} style={{ color: "#F59E0B" }} /> : <ShieldCheck size={14} style={{ color: "#3B82F6" }} />}
+                                </div>
+                                <span className="font-semibold text-[var(--text)]">{admin.name || "Unknown"}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-[var(--text-muted)]">{admin.email || "\u2014"}</td>
+                            <td className="px-4 py-3 text-[var(--text-muted)]">{admin.phone || "\u2014"}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{
+                                background: admin.role === "SUPER_ADMIN" ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)",
+                                color: admin.role === "SUPER_ADMIN" ? "#F59E0B" : "#3B82F6",
+                              }}>{admin.role === "SUPER_ADMIN" ? "Super Admin" : "Admin"}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>Active</span>
+                            </td>
+                            <td className="px-4 py-3 text-center text-[var(--text-muted)]">
+                              {admin.createdAt ? new Date(admin.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "\u2014"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {/* Mobile card view */}
+                    <div className="md:hidden divide-y divide-[var(--border)]">
+                      {superAdmins.map((admin: any) => (
+                        <div key={admin.id} className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: admin.role === "SUPER_ADMIN" ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)" }}>
+                                {admin.role === "SUPER_ADMIN" ? <Crown size={14} style={{ color: "#F59E0B" }} /> : <ShieldCheck size={14} style={{ color: "#3B82F6" }} />}
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-[var(--text)]">{admin.name || "Unknown"}</p>
+                                <p className="text-[10px] text-[var(--text-muted)]">{admin.email || "\u2014"}</p>
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{
+                              background: admin.role === "SUPER_ADMIN" ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)",
+                              color: admin.role === "SUPER_ADMIN" ? "#F59E0B" : "#3B82F6",
+                            }}>{admin.role === "SUPER_ADMIN" ? "Super Admin" : "Admin"}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] mt-2">
+                            <span className="text-[var(--text-muted)]">Phone: <span className="text-[var(--text)]">{admin.phone || "\u2014"}</span></span>
+                            <span className="text-[var(--text-muted)]">Joined: {admin.createdAt ? new Date(admin.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "\u2014"}</span>
                           </div>
                         </div>
                       ))}

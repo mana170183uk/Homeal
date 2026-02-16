@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, UtensilsCrossed, Flame, Cherry } from "lucide-react";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, sendEmailVerification, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -28,6 +28,18 @@ export default function LoginPage() {
 
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+
+      // Block unverified email/password users
+      if (!credential.user.emailVerified) {
+        try {
+          await sendEmailVerification(credential.user);
+        } catch {
+          // Rate limited or already sent — ignore
+        }
+        await signOut(getFirebaseAuth());
+        setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
+        return;
+      }
 
       const res = await api<{
         user: { id: string; role: string; name: string };

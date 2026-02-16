@@ -623,6 +623,26 @@ router.delete("/promos/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ==================== SUPER ADMINS ====================
+
+// GET /api/v1/admin/super-admins
+router.get("/super-admins", async (_req: Request, res: Response) => {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["SUPER_ADMIN", "ADMIN"] } },
+      select: {
+        id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({ success: true, data: admins });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch super admins";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
 // ==================== CUSTOMERS ====================
 
 // GET /api/v1/admin/customers

@@ -21,7 +21,7 @@ import {
   Cake,
   CookingPot,
 } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut, sendEmailVerification } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -72,6 +72,8 @@ function SignupContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [chefSubmitted, setChefSubmitted] = useState(false);
+  const [emailVerificationPending, setEmailVerificationPending] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
   const [pendingGoogleChef, setPendingGoogleChef] = useState<{
     firebaseUid: string;
     name: string;
@@ -157,10 +159,19 @@ function SignupContent() {
         localStorage.setItem("homeal_user_role", res.data.user?.role || role);
       }
 
+      // Send email verification for email/password signups
+      try {
+        await sendEmailVerification(credential.user);
+      } catch (verifyErr) {
+        console.error("Failed to send verification email:", verifyErr);
+      }
+
       if (role === "CHEF") {
         setChefSubmitted(true);
       } else {
-        router.push("/search");
+        // Show verification screen for customers
+        setVerificationEmail(form.email);
+        setEmailVerificationPending(true);
       }
     } catch (err: unknown) {
       const message =
@@ -425,6 +436,69 @@ function SignupContent() {
     );
   }
 
+  // Email verification pending screen (for customers)
+  if (emailVerificationPending) {
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-gradient-to-br from-[var(--badge-from)] to-[var(--badge-to)] opacity-[0.07] blur-3xl animate-glow-pulse" />
+          <div className="absolute top-1/3 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-[var(--badge-to)] to-[var(--accent)] opacity-[0.05] blur-3xl animate-glow-pulse" style={{ animationDelay: "1.5s" }} />
+          <div className="absolute -bottom-20 right-1/4 w-72 h-72 rounded-full bg-gradient-to-br from-[var(--badge-from)] to-[var(--primary)] opacity-[0.06] blur-3xl animate-glow-pulse" style={{ animationDelay: "3s" }} />
+        </div>
+        <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-8">
+          <div className="max-w-md w-full animate-slide-up" style={{ opacity: 0, animationFillMode: "forwards" }}>
+            <div className="glass-card rounded-3xl p-6 sm:p-8 text-center">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-accent/10 flex items-center justify-center">
+                <Mail className="w-10 h-10 text-accent" />
+              </div>
+              <h1 className="font-display text-3xl font-bold text-[var(--text)] mb-3">
+                Verify Your Email
+              </h1>
+              <p className="text-[var(--text-soft)] mb-6">
+                We&apos;ve sent a verification link to{" "}
+                <span className="font-semibold text-[var(--text)]">{verificationEmail}</span>.
+                Please check your inbox and click the link to verify your account.
+              </p>
+              <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 mb-6 text-left">
+                <div className="flex items-center gap-2 text-accent font-medium mb-1">
+                  <Clock className="w-4 h-4" />
+                  Didn&apos;t receive the email?
+                </div>
+                <p className="text-sm text-[var(--text-soft)]">
+                  Check your spam folder, or click below to resend.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const auth = getFirebaseAuth();
+                    if (auth.currentUser) {
+                      await sendEmailVerification(auth.currentUser);
+                      setError("");
+                      alert("Verification email resent! Check your inbox.");
+                    }
+                  } catch {
+                    alert("Please wait a moment before requesting another email.");
+                  }
+                }}
+                className="btn-premium w-full font-semibold py-3.5 rounded-xl text-white mb-4"
+              >
+                Resend Verification Email
+              </button>
+              <a
+                href="/login"
+                className="inline-flex items-center gap-2 gradient-text font-semibold hover:opacity-80 transition"
+              >
+                <ArrowLeft className="w-4 h-4 text-[var(--badge-from)]" />
+                Go to Login
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Chef application submitted success
   if (chefSubmitted) {
     return (
@@ -449,7 +523,7 @@ function SignupContent() {
                 Thank you for applying to join Homeal as a seller. Our team will
                 review your application and get back to you soon.
               </p>
-              <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 mb-8 text-left">
+              <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 mb-4 text-left">
                 <div className="flex items-center gap-2 text-accent font-medium mb-1">
                   <Clock className="w-4 h-4" />
                   What happens next?
@@ -465,6 +539,15 @@ function SignupContent() {
                   </a>
                   , where you can set up your store, list products, and start
                   receiving orders.
+                </p>
+              </div>
+              <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 mb-8 text-left">
+                <div className="flex items-center gap-2 text-blue-500 font-medium mb-1">
+                  <Mail className="w-4 h-4" />
+                  Verify your email
+                </div>
+                <p className="text-sm text-[var(--text-soft)]">
+                  We&apos;ve sent a verification link to your email. Please verify it to log in later.
                 </p>
               </div>
               <a

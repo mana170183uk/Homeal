@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import prisma from "@homeal/db";
 import {
   newChefNotificationHtml,
   chefApprovedHtml,
@@ -9,6 +10,35 @@ import {
 } from "./emailTemplates";
 
 const RESEND_API = "https://api.resend.com/emails";
+
+async function getAllSuperAdminEmails(): Promise<string[]> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: "SUPER_ADMIN", isActive: true },
+      select: { email: true },
+    });
+    const emails = admins.map(a => a.email).filter(Boolean) as string[];
+    if (emails.length > 0) return emails;
+  } catch (err) {
+    console.error("[Email] Failed to query super admin emails:", err);
+  }
+  // Fallback to env var
+  const fallback = process.env.SUPER_ADMIN_EMAIL || "admin@homeal.uk";
+  return [fallback];
+}
+
+async function getAllSuperAdminIds(): Promise<string[]> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: "SUPER_ADMIN", isActive: true },
+      select: { id: true },
+    });
+    return admins.map(a => a.id);
+  } catch (err) {
+    console.error("[Email] Failed to query super admin IDs:", err);
+    return [];
+  }
+}
 
 interface SendEmailParams {
   to: string;
@@ -60,7 +90,6 @@ export async function notifySuperAdminNewChef(params: {
   kitchenName: string;
   chefEmail: string;
 }): Promise<boolean> {
-  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "admin@homeal.uk";
   const apiBase = process.env.API_URL || "https://homeal-api.azurewebsites.net";
   const superAdminPanelUrl = process.env.SUPER_ADMIN_URL || "https://homeal-superadmin.azurewebsites.net";
 
@@ -70,18 +99,43 @@ export async function notifySuperAdminNewChef(params: {
   const approveUrl = `${apiBase}/api/v1/approve-action?action=approve&chefId=${params.chefId}&token=${approveToken}`;
   const rejectUrl = `${apiBase}/api/v1/approve-action?action=reject&chefId=${params.chefId}&token=${rejectToken}`;
 
-  return sendEmail({
-    to: superAdminEmail,
-    subject: `New Home Maker Registration: ${params.kitchenName}`,
-    html: newChefNotificationHtml({
-      chefName: params.chefName,
-      kitchenName: params.kitchenName,
-      chefEmail: params.chefEmail,
-      approveUrl,
-      rejectUrl,
-      superAdminPanelUrl,
-    }),
+  const html = newChefNotificationHtml({
+    chefName: params.chefName,
+    kitchenName: params.kitchenName,
+    chefEmail: params.chefEmail,
+    approveUrl,
+    rejectUrl,
+    superAdminPanelUrl,
   });
+
+  // Send to ALL super admins
+  const emails = await getAllSuperAdminEmails();
+  const results = await Promise.allSettled(
+    emails.map(email => sendEmail({
+      to: email,
+      subject: `New Home Maker Registration: ${params.kitchenName}`,
+      html,
+    }))
+  );
+
+  // Create in-app notifications for all super admins
+  try {
+    const adminIds = await getAllSuperAdminIds();
+    if (adminIds.length > 0) {
+      await prisma.notification.createMany({
+        data: adminIds.map(userId => ({
+          userId,
+          type: "SYSTEM",
+          title: "New Home Maker Registration",
+          message: `${params.kitchenName} (${params.chefName}) has registered and is awaiting approval.`,
+        })),
+      });
+    }
+  } catch (err) {
+    console.error("[Email] Failed to create in-app notifications:", err);
+  }
+
+  return results.some(r => r.status === "fulfilled" && r.value === true);
 }
 
 export async function sendChefApprovalEmail(params: {
@@ -118,7 +172,6 @@ export async function notifySuperAdminAccessRequest(params: {
   requesterName: string;
   requesterEmail: string;
 }): Promise<boolean> {
-  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "admin@homeal.uk";
   const apiBase = process.env.API_URL || "https://homeal-api.azurewebsites.net";
   const superAdminPanelUrl = process.env.SUPER_ADMIN_URL || "https://homeal-superadmin.azurewebsites.net";
 
@@ -128,17 +181,42 @@ export async function notifySuperAdminAccessRequest(params: {
   const approveUrl = `${apiBase}/api/v1/approve-action?action=approve_admin&requestId=${params.requestId}&token=${approveToken}`;
   const rejectUrl = `${apiBase}/api/v1/approve-action?action=reject_admin&requestId=${params.requestId}&token=${rejectToken}`;
 
-  return sendEmail({
-    to: superAdminEmail,
-    subject: `Super Admin Access Request: ${params.requesterName}`,
-    html: adminAccessRequestHtml({
-      requesterName: params.requesterName,
-      requesterEmail: params.requesterEmail,
-      approveUrl,
-      rejectUrl,
-      superAdminPanelUrl,
-    }),
+  const html = adminAccessRequestHtml({
+    requesterName: params.requesterName,
+    requesterEmail: params.requesterEmail,
+    approveUrl,
+    rejectUrl,
+    superAdminPanelUrl,
   });
+
+  // Send to ALL super admins
+  const emails = await getAllSuperAdminEmails();
+  const results = await Promise.allSettled(
+    emails.map(email => sendEmail({
+      to: email,
+      subject: `Super Admin Access Request: ${params.requesterName}`,
+      html,
+    }))
+  );
+
+  // Create in-app notifications for all super admins
+  try {
+    const adminIds = await getAllSuperAdminIds();
+    if (adminIds.length > 0) {
+      await prisma.notification.createMany({
+        data: adminIds.map(userId => ({
+          userId,
+          type: "SYSTEM",
+          title: "Super Admin Access Request",
+          message: `${params.requesterName} (${params.requesterEmail}) has requested Super Admin access.`,
+        })),
+      });
+    }
+  } catch (err) {
+    console.error("[Email] Failed to create in-app notifications:", err);
+  }
+
+  return results.some(r => r.status === "fulfilled" && r.value === true);
 }
 
 export async function sendAdminAccessApprovedEmail(params: {

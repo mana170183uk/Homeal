@@ -45,7 +45,7 @@ export default function LoginPage() {
         return;
       }
 
-      if (res.data.user.role !== "SUPER_ADMIN" && res.data.user.role !== "ADMIN") {
+      if (res.data.user.role !== "SUPER_ADMIN") {
         setError("Access denied. This portal is for Super Admins only.");
         return;
       }
@@ -156,7 +156,7 @@ export default function LoginPage() {
       });
 
       if (loginRes.success && loginRes.data) {
-        if (loginRes.data.user.role !== "SUPER_ADMIN" && loginRes.data.user.role !== "ADMIN") {
+        if (loginRes.data.user.role !== "SUPER_ADMIN") {
           setError("Access denied. This portal is for Super Admins only.");
           return;
         }

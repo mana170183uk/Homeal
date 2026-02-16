@@ -11,7 +11,7 @@ export function newChefNotificationHtml(params: {
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
       <h1 style="margin:0;font-size:28px;">
-        <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
       <p style="color:#9595B0;font-size:13px;margin:4px 0 0;">New Home Maker Registration</p>
     </div>
@@ -31,7 +31,7 @@ export function newChefNotificationHtml(params: {
       Or manage from the <a href="${params.superAdminPanelUrl}" style="color:#8B5CF6;font-weight:600;">Super Admin Panel</a>
     </p>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
-    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>
+    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Where Every Meal Feels Like Home.</p>
   </div>
 </body></html>`;
 }
@@ -47,7 +47,7 @@ export function chefApprovedHtml(params: {
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
       <h1 style="margin:0;font-size:28px;">
-        <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
     </div>
     <div style="text-align:center;margin-bottom:24px;">
@@ -75,7 +75,7 @@ export function chefApprovedHtml(params: {
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
     <p style="font-size:11px;color:#AEAEC8;text-align:center;">
       Need help? Email us at <a href="mailto:support@homeal.uk" style="color:#8B5CF6;">support@homeal.uk</a><br>
-      Homeal - Healthy food, from home.
+      Homeal - Where Every Meal Feels Like Home.
     </p>
   </div>
 </body></html>`;
@@ -93,7 +93,7 @@ export function adminAccessRequestHtml(params: {
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
       <h1 style="margin:0;font-size:28px;">
-        <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
       <p style="color:#9595B0;font-size:13px;margin:4px 0 0;">Super Admin Access Request</p>
     </div>
@@ -113,7 +113,7 @@ export function adminAccessRequestHtml(params: {
       Or manage from the <a href="${params.superAdminPanelUrl}" style="color:#8B5CF6;font-weight:600;">Super Admin Panel</a>
     </p>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
-    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>
+    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Where Every Meal Feels Like Home.</p>
   </div>
 </body></html>`;
 }
@@ -127,7 +127,7 @@ export function adminAccessApprovedHtml(params: {
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
       <h1 style="margin:0;font-size:28px;">
-        <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
     </div>
     <div style="text-align:center;margin-bottom:24px;">
@@ -141,7 +141,7 @@ export function adminAccessApprovedHtml(params: {
       <a href="${params.loginUrl}" style="display:inline-block;background:#8B5CF6;color:#fff;padding:14px 40px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Log In Now</a>
     </div>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
-    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>
+    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Where Every Meal Feels Like Home.</p>
   </div>
 </body></html>`;
 }
@@ -154,7 +154,7 @@ export function adminAccessRejectedHtml(params: {
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
       <h1 style="margin:0;font-size:28px;">
-        <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
     </div>
     <h2 style="text-align:center;color:#2D2D3F;font-size:20px;margin:0 0 8px;">Access Request Update</h2>
@@ -168,7 +168,7 @@ export function adminAccessRejectedHtml(params: {
       <a href="mailto:support@homeal.uk" style="display:inline-block;background:#8B5CF6;color:#fff;padding:12px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Contact Support</a>
     </div>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
-    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>
+    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Where Every Meal Feels Like Home.</p>
   </div>
 </body></html>`;
 }
@@ -188,7 +188,7 @@ export function chefRejectedHtml(params: {
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
       <h1 style="margin:0;font-size:28px;">
-        <span style="color:#2D8B3D;">Ho</span><span style="color:#FF8534;">me</span><span style="color:#2D8B3D;">al</span>
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
     </div>
     <h2 style="text-align:center;color:#2D2D3F;font-size:20px;margin:0 0 8px;">Registration Update</h2>
@@ -203,7 +203,7 @@ export function chefRejectedHtml(params: {
       <a href="mailto:support@homeal.uk" style="display:inline-block;background:#8B5CF6;color:#fff;padding:12px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;">Contact Support</a>
     </div>
     <hr style="border:none;border-top:1px solid #FFD6E0;margin:24px 0 16px;">
-    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Healthy food, from home.</p>
+    <p style="font-size:11px;color:#AEAEC8;text-align:center;">Homeal - Where Every Meal Feels Like Home.</p>
   </div>
 </body></html>`;
 }

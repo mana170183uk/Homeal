@@ -298,6 +298,14 @@ router.get("/access-requests", async (_req: Request, res: Response) => {
 // POST /api/v1/admin/access-requests/:id/approve
 router.post("/access-requests/:id/approve", async (req: Request, res: Response) => {
   try {
+    // Only the platform owner can approve admin access requests
+    const ownerEmail = process.env.PLATFORM_OWNER_EMAIL || "homealforuk@gmail.com";
+    const approver = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true } });
+    if (!approver || approver.email !== ownerEmail) {
+      res.status(403).json({ success: false, error: "Only the platform owner can approve admin access requests." });
+      return;
+    }
+
     const id = req.params.id as string;
 
     const request = await prisma.adminAccessRequest.findUnique({ where: { id } });
@@ -347,6 +355,14 @@ router.post("/access-requests/:id/approve", async (req: Request, res: Response) 
 // POST /api/v1/admin/access-requests/:id/reject
 router.post("/access-requests/:id/reject", async (req: Request, res: Response) => {
   try {
+    // Only the platform owner can reject admin access requests
+    const ownerEmail = process.env.PLATFORM_OWNER_EMAIL || "homealforuk@gmail.com";
+    const approver = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true } });
+    if (!approver || approver.email !== ownerEmail) {
+      res.status(403).json({ success: false, error: "Only the platform owner can reject admin access requests." });
+      return;
+    }
+
     const id = req.params.id as string;
 
     const request = await prisma.adminAccessRequest.findUnique({ where: { id } });

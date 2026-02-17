@@ -149,13 +149,15 @@ router.get("/", async (req: Request, res: Response) => {
         return;
       }
 
-      // Create the user with SUPER_ADMIN role
-      await prisma.user.create({
-        data: {
+      // Create the user with ADMIN role (SUPER_ADMIN is reserved for the platform owner)
+      await prisma.user.upsert({
+        where: { firebaseUid: request.firebaseUid },
+        update: { role: "ADMIN" },
+        create: {
           name: request.name,
           email: request.email,
           firebaseUid: request.firebaseUid,
-          role: "SUPER_ADMIN",
+          role: "ADMIN",
         },
       });
 

@@ -21,7 +21,7 @@ import {
   Cake,
   CookingPot,
 } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut, sendEmailVerification } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut, sendEmailVerification } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -153,7 +153,56 @@ function SignupContent() {
       const message =
         err instanceof Error ? err.message : "Registration failed";
       if (message.includes("email-already-in-use")) {
-        setError("An account with this email already exists. Please log in.");
+        // Firebase user exists — could be a ghost from a previous failed signup.
+        // Try signing in and completing DB registration.
+        try {
+          const credential = await signInWithEmailAndPassword(
+            getFirebaseAuth(),
+            form.email,
+            form.password
+          );
+          await updateProfile(credential.user, { displayName: form.name });
+
+          const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
+            "/auth/register",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                name: form.name,
+                email: form.email,
+                phone: form.phone,
+                firebaseUid: credential.user.uid,
+                role,
+                ...(role === "CHEF" ? { kitchenName: form.businessName, sellerType, businessName: form.businessName } : {}),
+              }),
+            }
+          );
+
+          if (res.success && res.data?.token) {
+            // Ghost user recovered — DB record created
+            localStorage.setItem("homeal_token", res.data.token);
+            localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+            localStorage.setItem("homeal_user_name", res.data.user?.name || form.name);
+            localStorage.setItem("homeal_user_role", res.data.user?.role || role);
+
+            try { await sendEmailVerification(credential.user); } catch { /* ignore */ }
+
+            if (role === "CHEF") {
+              setChefSubmitted(true);
+            } else {
+              setVerificationEmail(form.email);
+              setEmailVerificationPending(true);
+            }
+            return;
+          }
+
+          // If register also failed (409 = truly exists in DB too), it's a real duplicate
+          await signOut(getFirebaseAuth());
+          setError("An account with this email already exists. Please log in.");
+        } catch {
+          // Sign-in failed (wrong password or different auth method)
+          setError("An account with this email already exists. Please log in or try 'Continue with Google'.");
+        }
       } else {
         setError(message);
       }

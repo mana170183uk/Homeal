@@ -7,6 +7,7 @@ import {
   sendAdminAccessApprovedEmail,
   sendAdminAccessRejectedEmail,
 } from "../services/email";
+import { firebaseAdminAuth, deleteFirebaseUserByEmail } from "../lib/firebaseAdmin";
 
 const router = Router();
 
@@ -743,6 +744,74 @@ router.get("/revenue-stats", async (_req: Request, res: Response) => {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch revenue stats";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// ==================== FIREBASE SYNC ====================
+
+// DELETE /api/v1/admin/firebase-user?email=xxx — delete a ghost Firebase user (not in DB)
+router.delete("/firebase-user", async (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string;
+    if (!email) {
+      res.status(400).json({ success: false, error: "email query parameter is required" });
+      return;
+    }
+
+    // Safety check: refuse if user exists in DB
+    const dbUser = await prisma.user.findUnique({ where: { email } });
+    if (dbUser) {
+      res.status(409).json({ success: false, error: "User exists in the database. Use proper account deletion instead." });
+      return;
+    }
+
+    const deleted = await deleteFirebaseUserByEmail(email);
+    if (deleted) {
+      res.json({ success: true, data: { message: `Firebase account for ${email} deleted. They can now re-register.` } });
+    } else {
+      res.json({ success: true, data: { message: `No Firebase account found for ${email}.` } });
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to delete Firebase user";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// POST /api/v1/admin/firebase-sync — find and clean ghost Firebase users (in Firebase but not DB)
+router.post("/firebase-sync", async (_req: Request, res: Response) => {
+  try {
+    // List all Firebase users and check against DB
+    const ghosts: string[] = [];
+    let nextPageToken: string | undefined;
+
+    do {
+      const listResult = await firebaseAdminAuth.listUsers(100, nextPageToken);
+
+      for (const fbUser of listResult.users) {
+        if (!fbUser.email) continue;
+        const dbUser = await prisma.user.findFirst({
+          where: { OR: [{ email: fbUser.email }, { firebaseUid: fbUser.uid }] },
+        });
+        if (!dbUser) {
+          // Ghost user — exists in Firebase but not in DB
+          await firebaseAdminAuth.deleteUser(fbUser.uid);
+          ghosts.push(fbUser.email);
+        }
+      }
+
+      nextPageToken = listResult.pageToken;
+    } while (nextPageToken);
+
+    res.json({
+      success: true,
+      data: {
+        message: `Sync complete. Cleaned ${ghosts.length} ghost Firebase account(s).`,
+        cleaned: ghosts,
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Firebase sync failed";
     res.status(500).json({ success: false, error: message });
   }
 });

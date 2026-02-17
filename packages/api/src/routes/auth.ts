@@ -20,34 +20,10 @@ function signToken(payload: object, secret: string, expiresIn: string): string {
   return jwt.sign(payload, secret, { expiresIn: expiresIn as jwt.SignOptions["expiresIn"] });
 }
 
-const ALLOWED_EMAIL_DOMAINS = [
-  "gmail.com", "googlemail.com",
-  "yahoo.com", "yahoo.co.uk", "yahoo.co.in",
-  "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk", "msn.com",
-  "icloud.com", "me.com", "mac.com",
-  "aol.com",
-  "protonmail.com", "proton.me",
-  "zoho.com",
-  "mail.com",
-  "gmx.com", "gmx.co.uk",
-  "ymail.com",
-  "fastmail.com",
-  "tutanota.com", "tuta.com",
-];
-
 // POST /api/v1/auth/register
 router.post("/register", async (req: Request, res: Response) => {
   try {
     const { name, email, phone, firebaseUid, role, kitchenName, sellerType, businessName } = req.body;
-
-    // Validate email domain
-    if (email) {
-      const domain = email.split("@")[1]?.toLowerCase();
-      if (!domain || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
-        res.status(400).json({ success: false, error: "Please use a personal email (Gmail, Yahoo, Outlook, etc.). Business or temporary emails are not allowed." });
-        return;
-      }
-    }
 
     // Convert empty phone to null to avoid unique constraint collisions
     const cleanPhone = phone && phone.trim() ? phone.trim() : null;
@@ -125,7 +101,7 @@ router.post("/register", async (req: Request, res: Response) => {
 // POST /api/v1/auth/login
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { firebaseUid } = req.body;
+    const { firebaseUid, emailVerified } = req.body;
 
     const user = await prisma.user.findUnique({
       where: { firebaseUid },
@@ -135,6 +111,23 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!user) {
       res.status(404).json({ success: false, error: "User not found" });
       return;
+    }
+
+    // Server-side email verification enforcement
+    // Skip for: already-verified users (backfilled), test account, Google users (emailVerified: true)
+    const alreadyVerified = !!user.emailVerifiedAt;
+    const isTestAccount = user.email === "manisha@gmail.com";
+    if (!emailVerified && !alreadyVerified && !isTestAccount) {
+      res.status(403).json({ success: false, error: "Please verify your email before logging in." });
+      return;
+    }
+
+    // Track email verification timestamp (once)
+    if (emailVerified && !user.emailVerifiedAt) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
     }
 
     const tokenPayload = { userId: user.id, role: user.role };

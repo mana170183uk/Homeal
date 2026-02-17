@@ -16,6 +16,7 @@ import reviewRoutes from "./routes/reviews";
 import followRoutes from "./routes/follows";
 import notificationRoutes from "./routes/notifications";
 import templateRoutes from "./routes/templates";
+import prisma from "@homeal/db";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -48,9 +49,21 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "homeal-api", timestamp: new Date().toISOString() });
+// Health check with DB connectivity test
+app.get("/health", async (_req, res) => {
+  let dbStatus = "ok";
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {
+    dbStatus = "error";
+  }
+  const status = dbStatus === "ok" ? "ok" : "degraded";
+  res.status(dbStatus === "ok" ? 200 : 503).json({
+    status,
+    service: "homeal-api",
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // API Routes

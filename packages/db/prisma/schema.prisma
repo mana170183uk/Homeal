@@ -87,10 +87,11 @@ model User {
   avatar       String?   @db.VarChar(500)
   role         UserRole  @default(CUSTOMER)
   dietaryPrefs String?   @db.Text
-  isActive     Boolean   @default(true)
-  firebaseUid  String?   @unique @db.VarChar(128)
-  createdAt    DateTime  @default(now()) @db.DateTime(3)
-  updatedAt    DateTime  @updatedAt @db.DateTime(3)
+  isActive        Boolean   @default(true)
+  firebaseUid     String?   @unique @db.VarChar(128)
+  emailVerifiedAt DateTime? @db.DateTime(3)
+  createdAt       DateTime  @default(now()) @db.DateTime(3)
+  updatedAt       DateTime  @updatedAt @db.DateTime(3)
 
   chef          Chef?
   orders        Order[]

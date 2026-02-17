@@ -29,8 +29,8 @@ export default function LoginPage() {
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 
-      // Block unverified email/password users
-      if (!credential.user.emailVerified) {
+      // Block unverified email/password users (exception for test account)
+      if (!credential.user.emailVerified && credential.user.email !== "manisha@gmail.com") {
         try {
           await sendEmailVerification(credential.user);
         } catch {
@@ -48,7 +48,7 @@ export default function LoginPage() {
         hasChefProfile?: boolean;
       }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ firebaseUid: credential.user.uid }),
+        body: JSON.stringify({ firebaseUid: credential.user.uid, emailVerified: credential.user.emailVerified }),
       });
 
       if (!res.success || !res.data) {
@@ -94,7 +94,7 @@ export default function LoginPage() {
         "/auth/login",
         {
           method: "POST",
-          body: JSON.stringify({ firebaseUid: user.uid }),
+          body: JSON.stringify({ firebaseUid: user.uid, emailVerified: user.emailVerified }),
         }
       );
 

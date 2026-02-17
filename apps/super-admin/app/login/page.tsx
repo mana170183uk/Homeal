@@ -37,7 +37,7 @@ export default function LoginPage() {
         refreshToken: string;
       }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ firebaseUid: credential.user.uid }),
+        body: JSON.stringify({ firebaseUid: credential.user.uid, emailVerified: credential.user.emailVerified }),
       });
 
       if (!res.success || !res.data) {
@@ -152,7 +152,7 @@ export default function LoginPage() {
         refreshToken: string;
       }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ firebaseUid: user.uid }),
+        body: JSON.stringify({ firebaseUid: user.uid, emailVerified: user.emailVerified }),
       });
 
       if (loginRes.success && loginRes.data) {

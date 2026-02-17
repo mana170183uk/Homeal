@@ -29,26 +29,6 @@ import ThemeToggle from "../components/ThemeToggle";
 type Role = "CUSTOMER" | "CHEF";
 type SellerType = "KITCHEN" | "CAKE" | "BAKERY" | "OTHER";
 
-const ALLOWED_EMAIL_DOMAINS = [
-  "gmail.com", "googlemail.com",
-  "yahoo.com", "yahoo.co.uk", "yahoo.co.in",
-  "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk", "msn.com",
-  "icloud.com", "me.com", "mac.com",
-  "aol.com",
-  "protonmail.com", "proton.me",
-  "zoho.com",
-  "mail.com",
-  "gmx.com", "gmx.co.uk",
-  "ymail.com",
-  "fastmail.com",
-  "tutanota.com", "tuta.com",
-];
-
-function isAllowedEmailDomain(email: string): boolean {
-  const domain = email.split("@")[1]?.toLowerCase();
-  return domain ? ALLOWED_EMAIL_DOMAINS.includes(domain) : false;
-}
-
 const SELLER_TYPE_OPTIONS: { value: SellerType; label: string; icon: typeof UtensilsCrossed; placeholder: string }[] = [
   { value: "KITCHEN", label: "Kitchen", icon: UtensilsCrossed, placeholder: "e.g. Priya's Kitchen" },
   { value: "CAKE", label: "Cake", icon: Cake, placeholder: "e.g. Sarah's Cake Studio" },
@@ -98,10 +78,6 @@ function SignupContent() {
 
     if (!form.name || !form.email || !form.phone || !form.password) {
       setError("Please fill in all required fields.");
-      return;
-    }
-    if (!isAllowedEmailDomain(form.email)) {
-      setError("Please use a personal email (Gmail, Yahoo, Outlook, etc.). Business or temporary emails are not allowed.");
       return;
     }
     if (form.password.length < 6) {

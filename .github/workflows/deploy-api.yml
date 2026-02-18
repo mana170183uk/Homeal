@@ -38,33 +38,46 @@ jobs:
 
       - name: Prepare deployment package
         run: |
-          mkdir -p deploy/node_modules
+          mkdir -p deploy
           cp -r packages/api/dist deploy/
+          # Copy workspace packages that the API depends on
+          cp -r packages/db deploy/packages-db
+          cp -r packages/shared deploy/packages-shared
           # Copy node_modules following symlinks so workspace packages are resolved
           cp -rL node_modules/. deploy/node_modules/
           # Create entry point
           cat > deploy/server.js << 'ENTRY'
           require('./dist/server.js');
           ENTRY
-          cat > deploy/package.json << 'PKG'
-          {
-            "name": "homeal-api-deploy",
-            "version": "1.0.0",
-            "main": "server.js",
-            "scripts": { "start": "node server.js" }
-          }
-          PKG
+          # Create package.json with real dependencies (so npm install works as fallback)
+          node -e "
+            const pkg = require('./packages/api/package.json');
+            const deps = {...pkg.dependencies};
+            delete deps['@homeal/db'];
+            delete deps['@homeal/shared'];
+            const out = {
+              name: 'homeal-api-deploy',
+              version: '1.0.0',
+              main: 'server.js',
+              scripts: { start: 'node server.js' },
+              dependencies: deps
+            };
+            require('fs').writeFileSync('deploy/package.json', JSON.stringify(out, null, 2));
+          "
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Enable build during deployment
+        run: |
+          az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: homeal-api
-          package: deploy
+        run: |
+          cd deploy && zip -r -q ../deploy.zip . && cd ..
+          az webapp deploy --resource-group rg-visualstudio-lab-mana --name homeal-api --src-path deploy.zip --type zip --async true
 
       - name: Configure startup
         run: |

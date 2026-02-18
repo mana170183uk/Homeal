@@ -173,6 +173,98 @@ export function adminAccessRejectedHtml(params: {
 </body></html>`;
 }
 
+export function emailVerificationHtml(params: {
+  userName: string;
+  verifyUrl: string;
+}): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #FFD6E0;">
+    <!-- Header with logo -->
+    <div style="background:linear-gradient(135deg,#F5F0FF,#FFF0F3);padding:32px 32px 24px;text-align:center;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:inline-block;vertical-align:middle;margin-bottom:8px;" />
+      <h1 style="margin:0;font-size:32px;letter-spacing:-0.5px;">
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
+      </h1>
+      <p style="color:#9595B0;font-size:12px;margin:4px 0 0;letter-spacing:0.5px;">Where Every Meal Feels Like Home</p>
+    </div>
+    <!-- Body -->
+    <div style="padding:32px;">
+      <h2 style="color:#2D2D3F;font-size:20px;margin:0 0 12px;text-align:center;">Verify Your Email Address</h2>
+      <p style="color:#4A4A65;font-size:14px;line-height:1.7;text-align:center;">
+        Hi ${params.userName},<br><br>
+        Thank you for signing up with Homeal! Please click the button below to verify your email address and activate your account.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${params.verifyUrl}" style="display:inline-block;background:linear-gradient(135deg,#FF5A1F,#FF8534);color:#fff;padding:14px 48px;border-radius:12px;text-decoration:none;font-weight:600;font-size:15px;box-shadow:0 4px 12px rgba(255,90,31,0.3);">Verify Email</a>
+      </div>
+      <p style="color:#9595B0;font-size:12px;text-align:center;line-height:1.6;">
+        If the button doesn&rsquo;t work, copy and paste this link into your browser:<br>
+        <a href="${params.verifyUrl}" style="color:#8B5CF6;word-break:break-all;font-size:11px;">${params.verifyUrl}</a>
+      </p>
+      <p style="color:#9595B0;font-size:12px;text-align:center;margin-top:16px;">
+        If you didn&rsquo;t create an account, you can safely ignore this email.
+      </p>
+    </div>
+    <!-- Footer -->
+    <div style="background:#FAFAFA;padding:24px 32px;border-top:1px solid #FFD6E0;">
+      <p style="color:#4A4A65;font-size:14px;margin:0 0 4px;text-align:center;font-weight:600;">Thanks,<br>Homeal-UK Team</p>
+      <p style="font-size:11px;color:#AEAEC8;text-align:center;margin:12px 0 0;">
+        Homeal - Where Every Meal Feels Like Home.<br>
+        &copy; 2026 Homeal. Product owned &amp; designed by TotalCloudAI Limited
+      </p>
+    </div>
+  </div>
+</body></html>`;
+}
+
+export function passwordResetHtml(params: {
+  userName: string;
+  resetUrl: string;
+}): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #FFD6E0;">
+    <!-- Header with logo -->
+    <div style="background:linear-gradient(135deg,#F5F0FF,#FFF0F3);padding:32px 32px 24px;text-align:center;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:inline-block;vertical-align:middle;margin-bottom:8px;" />
+      <h1 style="margin:0;font-size:32px;letter-spacing:-0.5px;">
+        <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
+      </h1>
+      <p style="color:#9595B0;font-size:12px;margin:4px 0 0;letter-spacing:0.5px;">Where Every Meal Feels Like Home</p>
+    </div>
+    <!-- Body -->
+    <div style="padding:32px;">
+      <h2 style="color:#2D2D3F;font-size:20px;margin:0 0 12px;text-align:center;">Reset Your Password</h2>
+      <p style="color:#4A4A65;font-size:14px;line-height:1.7;text-align:center;">
+        Hi ${params.userName},<br><br>
+        We received a request to reset the password for your Homeal account. Click the button below to choose a new password.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${params.resetUrl}" style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#A78BFA);color:#fff;padding:14px 48px;border-radius:12px;text-decoration:none;font-weight:600;font-size:15px;box-shadow:0 4px 12px rgba(139,92,246,0.3);">Reset Password</a>
+      </div>
+      <p style="color:#9595B0;font-size:12px;text-align:center;line-height:1.6;">
+        If the button doesn&rsquo;t work, copy and paste this link into your browser:<br>
+        <a href="${params.resetUrl}" style="color:#8B5CF6;word-break:break-all;font-size:11px;">${params.resetUrl}</a>
+      </p>
+      <div style="background:#FFF5F5;border-radius:10px;padding:14px 16px;margin-top:20px;border-left:4px solid #FF5A1F;">
+        <p style="margin:0;color:#4A4A65;font-size:12px;line-height:1.6;">
+          <strong>Didn&rsquo;t request this?</strong> If you did not request a password reset, please ignore this email. Your password will remain unchanged.
+        </p>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div style="background:#FAFAFA;padding:24px 32px;border-top:1px solid #FFD6E0;">
+      <p style="color:#4A4A65;font-size:14px;margin:0 0 4px;text-align:center;font-weight:600;">Thanks,<br>Homeal-UK Team</p>
+      <p style="font-size:11px;color:#AEAEC8;text-align:center;margin:12px 0 0;">
+        Homeal - Where Every Meal Feels Like Home.<br>
+        &copy; 2026 Homeal. Product owned &amp; designed by TotalCloudAI Limited
+      </p>
+    </div>
+  </div>
+</body></html>`;
+}
+
 export function chefRejectedHtml(params: {
   chefName: string;
   reason?: string;

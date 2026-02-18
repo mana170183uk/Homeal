@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Mail, Lock, ChefHat, Eye, EyeOff } from "lucide-react";
-import { signInWithEmailAndPassword, signInWithPopup, sendEmailVerification, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 
@@ -14,6 +14,8 @@ function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Handle cross-domain token login from customer-web
   useEffect(() => {
@@ -52,11 +54,11 @@ function LoginContent() {
 
       // Block unverified email/password users (exception for test account)
       if (!credential.user.emailVerified && credential.user.email !== "manisha@gmail.com") {
-        try {
-          await sendEmailVerification(credential.user);
-        } catch {
-          // Rate limited or already sent — ignore
-        }
+        // Send branded verification email via API
+        api("/auth/send-verification", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        }).catch(() => {});
         await signOut(getFirebaseAuth());
         setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
         return;
@@ -97,6 +99,26 @@ function LoginContent() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setError("Please enter your email address first.");
+      return;
+    }
+    setResetLoading(true);
+    setError("");
+    try {
+      await api("/auth/send-password-reset", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      setResetSent(true);
+    } catch {
+      setError("Failed to send reset email. Please try again.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -188,6 +210,26 @@ function LoginContent() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+
+            {/* Forgot password */}
+            <div style={{ textAlign: "right", marginTop: "-4px" }}>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-xs font-medium transition"
+                style={{ color: "var(--primary)", opacity: resetLoading ? 0.5 : 1 }}
+              >
+                {resetLoading ? "Sending..." : "Forgot password?"}
+              </button>
+            </div>
+
+            {/* Reset sent success */}
+            {resetSent && (
+              <p className="text-sm px-4 py-2 rounded-xl" style={{ color: "var(--accent)", background: "rgba(0,179,65,0.05)", border: "1px solid rgba(0,179,65,0.2)" }}>
+                Password reset link sent! Check your inbox.
+              </p>
+            )}
 
             {error && (
               <p className="text-sm px-4 py-2 rounded-xl" style={{ color: "var(--alert)", background: "rgba(255,45,85,0.05)", border: "1px solid rgba(255,45,85,0.2)" }}>

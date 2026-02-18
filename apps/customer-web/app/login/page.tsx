@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, UtensilsCrossed, Flame, Cherry } from "lucide-react";
-import { signInWithEmailAndPassword, signInWithPopup, sendEmailVerification, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -15,6 +15,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -31,11 +33,11 @@ export default function LoginPage() {
 
       // Block unverified email/password users (exception for test account)
       if (!credential.user.emailVerified && credential.user.email !== "manisha@gmail.com") {
-        try {
-          await sendEmailVerification(credential.user);
-        } catch {
-          // Rate limited or already sent — ignore
-        }
+        // Send branded verification email via API
+        api("/auth/send-verification", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        }).catch(() => {});
         await signOut(getFirebaseAuth());
         setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
         return;
@@ -80,6 +82,26 @@ export default function LoginPage() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setError("Please enter your email address first.");
+      return;
+    }
+    setResetLoading(true);
+    setError("");
+    try {
+      await api("/auth/send-password-reset", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      setResetSent(true);
+    } catch {
+      setError("Failed to send reset email. Please try again.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -234,6 +256,27 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+
+              {/* Forgot password */}
+              <div className="text-right -mt-1">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resetLoading}
+                  className="text-xs font-medium gradient-text hover:opacity-80 transition"
+                >
+                  {resetLoading ? "Sending..." : "Forgot password?"}
+                </button>
+              </div>
+
+              {/* Reset sent success */}
+              {resetSent && (
+                <div className="animate-fade-in-up">
+                  <p className="text-accent text-sm bg-accent/5 border border-accent/20 rounded-xl px-4 py-2.5">
+                    Password reset link sent! Check your inbox.
+                  </p>
+                </div>
+              )}
 
               {/* Error */}
               {error && (

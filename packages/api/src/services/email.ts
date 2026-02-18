@@ -7,7 +7,10 @@ import {
   adminAccessRequestHtml,
   adminAccessApprovedHtml,
   adminAccessRejectedHtml,
+  emailVerificationHtml,
+  passwordResetHtml,
 } from "./emailTemplates";
+import { firebaseAdminAuth } from "../lib/firebaseAdmin";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -262,4 +265,66 @@ export async function sendChefRejectionEmail(params: {
       reason: params.reason,
     }),
   });
+}
+
+export async function sendVerificationEmail(params: {
+  email: string;
+  userName: string;
+}): Promise<boolean> {
+  try {
+    const actionUrl = `${process.env.CUSTOMER_WEB_URL || "https://homeal.uk"}/auth/action`;
+    const verifyUrl = await firebaseAdminAuth.generateEmailVerificationLink(
+      params.email,
+      { url: actionUrl }
+    );
+
+    // Replace Firebase's default action URL with our custom branded page
+    const url = new URL(verifyUrl);
+    const oobCode = url.searchParams.get("oobCode");
+    const apiKey = url.searchParams.get("apiKey");
+    const brandedUrl = `${actionUrl}?mode=verifyEmail&oobCode=${oobCode}&apiKey=${apiKey}&lang=en`;
+
+    return sendEmail({
+      to: params.email,
+      subject: "Verify your email for Homeal",
+      html: emailVerificationHtml({
+        userName: params.userName,
+        verifyUrl: brandedUrl,
+      }),
+    });
+  } catch (err) {
+    console.error("[Email] Failed to send verification email:", err);
+    return false;
+  }
+}
+
+export async function sendPasswordResetEmail(params: {
+  email: string;
+  userName: string;
+}): Promise<boolean> {
+  try {
+    const actionUrl = `${process.env.CUSTOMER_WEB_URL || "https://homeal.uk"}/auth/action`;
+    const resetUrl = await firebaseAdminAuth.generatePasswordResetLink(
+      params.email,
+      { url: actionUrl }
+    );
+
+    // Replace Firebase's default action URL with our custom branded page
+    const url = new URL(resetUrl);
+    const oobCode = url.searchParams.get("oobCode");
+    const apiKey = url.searchParams.get("apiKey");
+    const brandedUrl = `${actionUrl}?mode=resetPassword&oobCode=${oobCode}&apiKey=${apiKey}&lang=en`;
+
+    return sendEmail({
+      to: params.email,
+      subject: "Reset your password for Homeal",
+      html: passwordResetHtml({
+        userName: params.userName,
+        resetUrl: brandedUrl,
+      }),
+    });
+  } catch (err) {
+    console.error("[Email] Failed to send password reset email:", err);
+    return false;
+  }
 }

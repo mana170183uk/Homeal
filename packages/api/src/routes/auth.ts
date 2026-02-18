@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
 import { authenticate } from "../middleware/auth";
-import { notifySuperAdminNewChef, notifySuperAdminAccessRequest } from "../services/email";
+import { notifySuperAdminNewChef, notifySuperAdminAccessRequest, sendVerificationEmail, sendPasswordResetEmail } from "../services/email";
 
 const router = Router();
 
@@ -310,6 +310,74 @@ router.get("/me", authenticate, async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch user";
     res.status(500).json({ success: false, error: message });
+  }
+});
+
+// POST /api/v1/auth/send-verification
+router.post("/send-verification", async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ success: false, error: "Email is required" });
+      return;
+    }
+
+    // Look up user name for personalisation
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { name: true },
+    });
+
+    const sent = await sendVerificationEmail({
+      email,
+      userName: user?.name || "there",
+    });
+
+    if (sent) {
+      res.json({ success: true, data: { message: "Verification email sent" } });
+    } else {
+      res.status(500).json({ success: false, error: "Failed to send verification email" });
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to send verification email";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// POST /api/v1/auth/send-password-reset
+router.post("/send-password-reset", async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ success: false, error: "Email is required" });
+      return;
+    }
+
+    // Look up user name for personalisation
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { name: true },
+    });
+
+    if (!user) {
+      // Don't reveal whether the email exists — always return success
+      res.json({ success: true, data: { message: "If an account exists with this email, a password reset link has been sent." } });
+      return;
+    }
+
+    const sent = await sendPasswordResetEmail({
+      email,
+      userName: user.name,
+    });
+
+    // Always return success to prevent email enumeration
+    res.json({ success: true, data: { message: "If an account exists with this email, a password reset link has been sent." } });
+    if (!sent) {
+      console.error(`[Auth] Failed to send password reset email to ${email}`);
+    }
+  } catch (error: unknown) {
+    // Always return success to prevent email enumeration
+    res.json({ success: true, data: { message: "If an account exists with this email, a password reset link has been sent." } });
   }
 });
 

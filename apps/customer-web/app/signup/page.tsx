@@ -21,7 +21,7 @@ import {
   Cake,
   CookingPot,
 } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut, sendEmailVerification } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -135,12 +135,11 @@ function SignupContent() {
         localStorage.setItem("homeal_user_role", res.data.user?.role || role);
       }
 
-      // Send email verification for email/password signups
-      try {
-        await sendEmailVerification(credential.user);
-      } catch (verifyErr) {
-        console.error("Failed to send verification email:", verifyErr);
-      }
+      // Send branded verification email via API
+      api("/auth/send-verification", {
+        method: "POST",
+        body: JSON.stringify({ email: form.email }),
+      }).catch(() => {});
 
       if (role === "CHEF") {
         setChefSubmitted(true);
@@ -185,7 +184,7 @@ function SignupContent() {
             localStorage.setItem("homeal_user_name", res.data.user?.name || form.name);
             localStorage.setItem("homeal_user_role", res.data.user?.role || role);
 
-            try { await sendEmailVerification(credential.user); } catch { /* ignore */ }
+            api("/auth/send-verification", { method: "POST", body: JSON.stringify({ email: form.email }) }).catch(() => {});
 
             if (role === "CHEF") {
               setChefSubmitted(true);
@@ -496,12 +495,11 @@ function SignupContent() {
               <button
                 onClick={async () => {
                   try {
-                    const auth = getFirebaseAuth();
-                    if (auth.currentUser) {
-                      await sendEmailVerification(auth.currentUser);
-                      setError("");
-                      alert("Verification email resent! Check your inbox.");
-                    }
+                    await api("/auth/send-verification", {
+                      method: "POST",
+                      body: JSON.stringify({ email: verificationEmail }),
+                    });
+                    alert("Verification email resent! Check your inbox.");
                   } catch {
                     alert("Please wait a moment before requesting another email.");
                   }

@@ -49,7 +49,10 @@ jobs:
           cat > deploy/server.js << 'ENTRY'
           require('./dist/server.js');
           ENTRY
-          # Create package.json with real dependencies (so npm install works as fallback)
+          # Override stale oryx-manifest.toml — prevents Azure runtime from
+          # extracting a compressed node_modules.tar.gz over our pre-built modules
+          echo '' > deploy/oryx-manifest.toml
+          # Create package.json with real dependencies (including @prisma/client)
           node -e "
             const pkg = require('./packages/api/package.json');
             const deps = {...pkg.dependencies};

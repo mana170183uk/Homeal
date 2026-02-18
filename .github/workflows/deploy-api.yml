@@ -60,6 +60,11 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Disable Oryx build during deployment
+        run: |
+          az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:

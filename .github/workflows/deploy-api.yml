@@ -38,67 +38,33 @@ jobs:
 
       - name: Prepare deployment package
         run: |
-          mkdir -p deploy
-
-          # 1. Copy compiled API code
-          cp -r packages/api/dist deploy/dist
-
-          # 2. Create package.json with ALL production dependencies (no postinstall)
-          node -e "
-            const apiPkg = require('./packages/api/package.json');
-            const dbPkg = require('./packages/db/package.json');
-            const deps = {...apiPkg.dependencies, ...dbPkg.dependencies};
-            delete deps['@homeal/db'];
-            delete deps['@homeal/shared'];
-            const out = {
-              name: 'homeal-api-deploy',
-              version: '1.0.0',
-              main: 'server.js',
-              scripts: { start: 'node server.js' },
-              dependencies: deps
-            };
-            require('fs').writeFileSync('deploy/package.json', JSON.stringify(out, null, 2));
-          "
-
-          # 3. Install production dependencies in deploy dir (clean, Linux-native)
-          cd deploy && npm install --omit=dev && cd ..
-
-          # 4. Copy workspace packages AFTER npm install (so they don't get wiped)
-          mkdir -p deploy/node_modules/@homeal
-          cp -r packages/db deploy/node_modules/@homeal/db
-          cp -r packages/shared deploy/node_modules/@homeal/shared
-
-          # 5. Generate Prisma client into deploy's node_modules
-          npx prisma generate --schema=deploy/node_modules/@homeal/db/prisma/schema.prisma
-
-          # 6. Verify .prisma generated client exists
-          ls -la deploy/node_modules/.prisma/client/ || echo "FATAL: .prisma not generated!"
-
-          # 7. Create entry point
+          mkdir -p deploy/node_modules
+          cp -r packages/api/dist deploy/
+          # Copy node_modules following symlinks so workspace packages are resolved
+          cp -rL node_modules/. deploy/node_modules/
+          # Create entry point
           cat > deploy/server.js << 'ENTRY'
           require('./dist/server.js');
           ENTRY
-
-          # 8. Show deploy size
-          du -sh deploy/
-          du -sh deploy/node_modules/
+          cat > deploy/package.json << 'PKG'
+          {
+            "name": "homeal-api-deploy",
+            "version": "1.0.0",
+            "main": "server.js",
+            "scripts": { "start": "node server.js" }
+          }
+          PKG
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Configure app settings
-        run: |
-          az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false WEBSITE_RUN_FROM_PACKAGE=1
-
       - name: Deploy to Azure Web App
-        run: |
-          cd deploy && zip -r -q ../deploy.zip . && cd ..
-          ls -lh deploy.zip
-          az webapp deploy --resource-group rg-visualstudio-lab-mana --name homeal-api \
-            --src-path deploy.zip --type zip --clean true --restart true --async false
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: homeal-api
+          package: deploy
 
       - name: Configure startup
         run: |

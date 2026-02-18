@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import imageCompression from "browser-image-compression";
 import {
   LayoutDashboard, ClipboardList, Package, Bell, UtensilsCrossed,
   PlusCircle, PoundSterling, Star, BarChart3, Sun, Moon, Settings,
@@ -267,6 +268,10 @@ export default function DashboardPage() {
   const [chefMenuId, setChefMenuId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [dishForm, setDishForm] = useState({ name: '', categoryId: '', description: '', isVeg: true, price: '', prepTime: '', servingSize: '', allergens: '', stockCount: '', offerPrice: '', image: '', eggOption: '' });
+  const [showSuggestCategory, setShowSuggestCategory] = useState(false);
+  const [suggestCategoryName, setSuggestCategoryName] = useState("");
+  const [suggestCategoryDesc, setSuggestCategoryDesc] = useState("");
+  const [suggestingCategory, setSuggestingCategory] = useState(false);
   const [dishSubmitting, setDishSubmitting] = useState(false);
   // Kitchen
   const [chefProfile, setChefProfile] = useState<any>(null);
@@ -291,9 +296,17 @@ export default function DashboardPage() {
   // Image upload
   const [imageMode, setImageMode] = useState<"upload" | "url">("url");
   const [imageUploading, setImageUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   // Earnings
   const [earnings, setEarnings] = useState<any>(null);
   const [earningsLoading, setEarningsLoading] = useState(false);
+  // Tiffin Plans
+  const [tiffinPlans, setTiffinPlans] = useState<any[]>([]);
+  const [tiffinSubscribers, setTiffinSubscribers] = useState<any[]>([]);
+  const [tiffinLoading, setTiffinLoading] = useState(false);
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const [newPlan, setNewPlan] = useState({ name: "", description: "", frequency: "WEEKLY", price: "", mealsPerDay: "1", isVeg: false });
+  const [creatingPlan, setCreatingPlan] = useState(false);
   // Reviews
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -555,6 +568,112 @@ export default function DashboardPage() {
       console.error("Failed to fetch earnings:", e);
     } finally {
       setEarningsLoading(false);
+    }
+  }
+
+  async function fetchTiffinPlans() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    setTiffinLoading(true);
+    try {
+      const [plansRes, subsRes] = await Promise.all([
+        fetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans/mine`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${ADMIN_API_URL}/api/v1/subscriptions/subscribers`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+      const plansData = await plansRes.json();
+      const subsData = await subsRes.json();
+      if (plansData.success && plansData.data) setTiffinPlans(plansData.data);
+      if (subsData.success && subsData.data) setTiffinSubscribers(subsData.data);
+    } catch (e) {
+      console.error("Failed to fetch tiffin plans:", e);
+    } finally {
+      setTiffinLoading(false);
+    }
+  }
+
+  async function handleSuggestCategory() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token || !suggestCategoryName.trim()) return;
+    setSuggestingCategory(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/categories/suggest`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: suggestCategoryName.trim(), description: suggestCategoryDesc.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Category suggestion submitted! We'll review it soon.", "success");
+        setShowSuggestCategory(false);
+        setSuggestCategoryName("");
+        setSuggestCategoryDesc("");
+      } else {
+        showToast(data.error || "Failed to submit suggestion.", "error");
+      }
+    } catch {
+      showToast("Failed to submit suggestion.", "error");
+    } finally {
+      setSuggestingCategory(false);
+    }
+  }
+
+  async function handleCreatePlan() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    if (!newPlan.name || !newPlan.price) {
+      showToast("Please enter plan name and price.", "error");
+      return;
+    }
+    setCreatingPlan(true);
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newPlan.name,
+          description: newPlan.description || undefined,
+          frequency: newPlan.frequency,
+          price: parseFloat(newPlan.price),
+          mealsPerDay: parseInt(newPlan.mealsPerDay) || 1,
+          isVeg: newPlan.isVeg,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Tiffin plan created!", "success");
+        setShowCreatePlan(false);
+        setNewPlan({ name: "", description: "", frequency: "WEEKLY", price: "", mealsPerDay: "1", isVeg: false });
+        fetchTiffinPlans();
+      } else {
+        showToast(data.error || "Failed to create plan.", "error");
+      }
+    } catch {
+      showToast("Failed to create plan.", "error");
+    } finally {
+      setCreatingPlan(false);
+    }
+  }
+
+  async function togglePlanActive(planId: string, isActive: boolean) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans/${planId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(isActive ? "Plan activated" : "Plan deactivated", "success");
+        fetchTiffinPlans();
+      }
+    } catch {
+      showToast("Failed to update plan.", "error");
     }
   }
 
@@ -884,32 +1003,104 @@ export default function DashboardPage() {
     }
   }
 
-  // --- Image upload handler ---
-  async function handleImageUpload(file: File) {
-    const token = localStorage.getItem("homeal_token");
-    if (!token) return;
-    setImageUploading(true);
+  // --- Refresh token helper ---
+  async function ensureFreshToken(): Promise<string | null> {
+    let token = localStorage.getItem("homeal_token");
+    if (!token) return null;
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success && data.data?.url) {
-        setDishForm(f => ({ ...f, image: data.data.url }));
-        showToast("Image uploaded successfully!");
-      } else {
-        showToast(data.error || "Failed to upload image", "error");
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const expiresIn = payload.exp * 1000 - Date.now();
+      if (expiresIn < 120_000) {
+        const refreshToken = localStorage.getItem("homeal_refresh_token");
+        if (refreshToken) {
+          const res = await fetch(`${ADMIN_API_URL}/api/v1/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          });
+          const data = await res.json();
+          if (data.success && data.data?.token) {
+            localStorage.setItem("homeal_token", data.data.token);
+            token = data.data.token;
+          }
+        }
       }
+    } catch { /* proceed with existing token */ }
+    return token;
+  }
+
+  // --- Compress & upload image with progress ---
+  async function compressAndUpload(file: File): Promise<string | null> {
+    const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+    if (!ALLOWED.includes(file.type)) {
+      showToast("Only JPEG, PNG, and WebP images are allowed.", "error");
+      return null;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be under 5 MB.", "error");
+      return null;
+    }
+    const token = await ensureFreshToken();
+    if (!token) { showToast("Please log in again.", "error"); return null; }
+
+    setUploadProgress(0);
+    setImageUploading(true);
+
+    try {
+      // Client-side compression: max 1 MB, max 1200px
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: "image/webp",
+      });
+
+      // Upload with XHR for progress tracking
+      return await new Promise<string | null>((resolve) => {
+        const formData = new FormData();
+        formData.append("file", compressed, compressed.name || "image.webp");
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${ADMIN_API_URL}/api/v1/upload`);
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.timeout = 60_000;
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.success && data.data?.url) {
+              showToast("Image uploaded successfully!");
+              resolve(data.data.url);
+            } else {
+              showToast(data.error || "Upload failed. Please try a smaller image.", "error");
+              resolve(null);
+            }
+          } catch {
+            showToast("Upload failed. Please try again.", "error");
+            resolve(null);
+          }
+        };
+        xhr.onerror = () => { showToast("Upload failed. Check your connection.", "error"); resolve(null); };
+        xhr.ontimeout = () => { showToast("Upload timed out. Please try a smaller image.", "error"); resolve(null); };
+        xhr.send(formData);
+      });
     } catch (e) {
-      console.error("Failed to upload image:", e);
-      showToast("Failed to upload image", "error");
+      console.error("Image compression/upload failed:", e);
+      showToast("Failed to process image. Please try a smaller file.", "error");
+      return null;
     } finally {
       setImageUploading(false);
+      setUploadProgress(0);
     }
+  }
+
+  // --- Image upload handler ---
+  async function handleImageUpload(file: File) {
+    const url = await compressAndUpload(file);
+    if (url) setDishForm(f => ({ ...f, image: url }));
   }
 
   // --- Scheduler functions ---
@@ -1268,33 +1459,13 @@ export default function DashboardPage() {
   }
 
   async function handleSchedulerImageUpload(file: File, target: "new" | "edit") {
-    const token = localStorage.getItem("homeal_token");
-    if (!token) return;
-    setImageUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success && data.data?.url) {
-        if (target === "new") {
-          setSchedulerNewItem(p => ({ ...p, image: data.data.url }));
-        } else {
-          setSchedulerEditForm(p => ({ ...p, image: data.data.url }));
-        }
-        showToast("Image uploaded!");
+    const url = await compressAndUpload(file);
+    if (url) {
+      if (target === "new") {
+        setSchedulerNewItem(p => ({ ...p, image: url }));
       } else {
-        showToast(data.error || "Failed to upload image", "error");
+        setSchedulerEditForm(p => ({ ...p, image: url }));
       }
-    } catch (e) {
-      console.error("Failed to upload image:", e);
-      showToast("Failed to upload image", "error");
-    } finally {
-      setImageUploading(false);
     }
   }
 
@@ -1398,6 +1569,9 @@ export default function DashboardPage() {
     if (activePage === "scheduler") {
       fetchSchedule();
       fetchTemplates();
+    }
+    if (activePage === "subscriptions") {
+      fetchTiffinPlans();
     }
   }, [activePage]);
 
@@ -1507,6 +1681,32 @@ export default function DashboardPage() {
 
   return (
     <div className="flex w-full overflow-x-hidden app-height">
+      {/* Suggest Category Modal */}
+      {showSuggestCategory && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSuggestCategory(false)}>
+          <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-6 max-w-md w-full mx-4 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-[var(--text)] mb-4">Suggest a New Category</h3>
+            <p className="text-xs text-[var(--text-muted)] mb-4">Can&apos;t find the right category for your dish? Suggest one and our team will review it. If approved, you&apos;ll earn a Menu Innovator badge!</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Category Name *</label>
+                <input type="text" value={suggestCategoryName} onChange={(e) => setSuggestCategoryName(e.target.value)} placeholder="e.g. Korean, Desserts, Street Food" className="w-full px-3 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Description (optional)</label>
+                <textarea value={suggestCategoryDesc} onChange={(e) => setSuggestCategoryDesc(e.target.value)} placeholder="Brief description of this category..." rows={2} className="w-full px-3 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowSuggestCategory(false)} className="flex-1 text-sm font-medium py-2.5 rounded-xl border border-[var(--border)] text-[var(--text-soft)] hover:bg-[var(--input)] transition">Cancel</button>
+              <button onClick={handleSuggestCategory} disabled={suggestingCategory || !suggestCategoryName.trim()} className="flex-1 btn-premium text-sm font-semibold py-2.5 rounded-xl text-white disabled:opacity-50 flex items-center justify-center gap-2">
+                {suggestingCategory ? <><RefreshCw size={14} className="animate-spin" /> Submitting...</> : "Submit Suggestion"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notification */}
       {toast && (
         <div className="fixed top-4 right-4 z-[100] animate-fade-in-up" style={{ animationDuration: '0.3s' }}>
@@ -1723,12 +1923,17 @@ export default function DashboardPage() {
                     <ChefHat size={28} color="white" strokeWidth={2} />
                   </div>
                   <div>
-                    <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">{chefProfile?.kitchenName || chefName || "My Kitchen"}</h2>
+                    <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">{chefProfile?.kitchenName || chefName || "My Kitchen"}{chefProfile?.kitchenName ? " Dashboard" : ""}</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-[var(--text-muted)]">
+                      {chefProfile?.user?.name && <span className="flex items-center gap-1.5"><User size={12} /> {chefProfile.user.name}</span>}
                       {chefProfile?.user?.phone && <span className="flex items-center gap-1.5"><Phone size={12} /> {chefProfile.user.phone}</span>}
                       <span className="flex items-center gap-1.5 hidden sm:flex"><Mail size={12} /> {chefEmail || "—"}</span>
-                      {chefProfile?.businessName && <span className="flex items-center gap-1.5"><MapPin size={12} /> {chefProfile.businessName}</span>}
                     </div>
+                    {(chefProfile?.address || chefProfile?.postcode) && (
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-[var(--text-muted)]">
+                        <span className="flex items-center gap-1.5"><MapPin size={12} /> {[chefProfile.address, chefProfile.postcode].filter(Boolean).join(", ")}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium border" style={{ color: "#10B981", borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.1)" }}>
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />Active
@@ -1752,6 +1957,18 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Missing postcode warning */}
+              {chefProfile && !chefProfile.postcode && (
+                <div className="rounded-2xl border border-amber-400/30 bg-amber-50/50 dark:bg-amber-900/10 px-4 py-3 mb-5 flex items-center gap-3 animate-fade-in-up">
+                  <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Complete your kitchen profile</p>
+                    <p className="text-xs text-amber-600/70 dark:text-amber-400/60">Add your postcode and address to appear in customer search results.</p>
+                  </div>
+                  <button onClick={() => setActivePage("settings")} className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline shrink-0">Go to Settings</button>
+                </div>
+              )}
 
               {/* Chef Badges & Trust Indicators */}
               <div
@@ -2238,6 +2455,7 @@ export default function DashboardPage() {
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                      <button type="button" onClick={() => setShowSuggestCategory(true)} className="text-[11px] text-primary hover:underline mt-1 inline-block">Can&apos;t find your category? Suggest one</button>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
@@ -2304,11 +2522,11 @@ export default function DashboardPage() {
                         <div>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp"
                             onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
                             className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--primary)] file:text-white"
                           />
-                          {imageUploading && <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Uploading...</p>}
+                          {imageUploading && <div className="mt-2"><div className="flex items-center gap-2"><RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" /><span className="text-xs text-[var(--text-muted)]">{uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : "Compressing..."}</span></div>{uploadProgress > 0 && <div className="mt-1 h-1.5 rounded-full bg-[var(--input)] overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] transition-all duration-300" style={{ width: `${uploadProgress}%` }} /></div>}</div>}
                         </div>
                       ) : (
                         <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
@@ -2381,6 +2599,7 @@ export default function DashboardPage() {
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                      <button type="button" onClick={() => setShowSuggestCategory(true)} className="text-[11px] text-primary hover:underline mt-1 inline-block">Can&apos;t find your category? Suggest one</button>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
@@ -2464,11 +2683,11 @@ export default function DashboardPage() {
                         <div>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp"
                             onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
                             className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--primary)] file:text-white"
                           />
-                          {imageUploading && <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Uploading...</p>}
+                          {imageUploading && <div className="mt-2"><div className="flex items-center gap-2"><RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" /><span className="text-xs text-[var(--text-muted)]">{uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : "Compressing..."}</span></div>{uploadProgress > 0 && <div className="mt-1 h-1.5 rounded-full bg-[var(--input)] overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] transition-all duration-300" style={{ width: `${uploadProgress}%` }} /></div>}</div>}
                         </div>
                       ) : (
                         <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
@@ -2541,6 +2760,7 @@ export default function DashboardPage() {
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                      <button type="button" onClick={() => setShowSuggestCategory(true)} className="text-[11px] text-primary hover:underline mt-1 inline-block">Can&apos;t find your category? Suggest one</button>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Description</label>
@@ -2630,11 +2850,11 @@ export default function DashboardPage() {
                         <div>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp"
                             onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
                             className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] outline-none focus:border-[var(--primary)] transition file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--primary)] file:text-white"
                           />
-                          {imageUploading && <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin" /> Uploading...</p>}
+                          {imageUploading && <div className="mt-2"><div className="flex items-center gap-2"><RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" /><span className="text-xs text-[var(--text-muted)]">{uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : "Compressing..."}</span></div>{uploadProgress > 0 && <div className="mt-1 h-1.5 rounded-full bg-[var(--input)] overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] transition-all duration-300" style={{ width: `${uploadProgress}%` }} /></div>}</div>}
                         </div>
                       ) : (
                         <input type="text" placeholder="https://... (image URL)" value={dishForm.image} onChange={e => setDishForm(f => ({...f, image: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition" />
@@ -2967,6 +3187,66 @@ export default function DashboardPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Kitchen Profile */}
+              <div className="mt-6 rounded-2xl glass-card p-5 mb-6">
+                <h3 className="text-sm font-semibold text-[var(--text)] mb-4 flex items-center gap-2">
+                  <MapPin size={16} style={{ color: "#8B5CF6" }} /> Kitchen Location & Details
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Kitchen Name</label>
+                    <input type="text" value={chefProfile?.kitchenName || ""} readOnly className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text-muted)] outline-none cursor-not-allowed" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Business Name</label>
+                    <input type="text" value={chefProfile?.businessName || ""} readOnly className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text-muted)] outline-none cursor-not-allowed" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Address</label>
+                    <textarea
+                      defaultValue={chefProfile?.address || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || e.target.value === (chefProfile?.address || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ address: e.target.value }) });
+                          showToast("Address updated");
+                        } catch { showToast("Failed to update address", "error"); }
+                      }}
+                      rows={2}
+                      placeholder="Full kitchen address"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Postcode</label>
+                    <input
+                      type="text"
+                      defaultValue={chefProfile?.postcode || ""}
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim().toUpperCase();
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || val === (chefProfile?.postcode || "")) return;
+                        if (val && !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(val)) { showToast("Invalid UK postcode", "error"); return; }
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ postcode: val }) });
+                          showToast("Postcode updated — location recalculated");
+                        } catch { showToast("Failed to update postcode", "error"); }
+                      }}
+                      placeholder="e.g. WD17 4BX"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Contact Phone</label>
+                    <input type="text" value={chefProfile?.user?.phone || ""} readOnly className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text-muted)] outline-none cursor-not-allowed" />
+                  </div>
+                </div>
+                {!chefProfile?.postcode && (
+                  <p className="text-xs text-amber-500 mt-3 flex items-center gap-1.5"><AlertCircle size={12} /> Add your postcode to appear in customer search results</p>
+                )}
               </div>
 
               {/* Delivery & Pickup Settings */}
@@ -3856,7 +4136,7 @@ export default function DashboardPage() {
                           <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] cursor-pointer hover:border-[#8B5CF6] transition">
                             <Upload size={12} />
                             {imageUploading ? "Uploading..." : "Upload Image"}
-                            <input type="file" accept="image/*" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleSchedulerImageUpload(file, "new"); }} />
+                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleSchedulerImageUpload(file, "new"); }} />
                           </label>
                           {schedulerNewItem.image && (
                             <div className="relative">
@@ -3991,7 +4271,7 @@ export default function DashboardPage() {
                               <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] cursor-pointer hover:border-[#8B5CF6] transition">
                                 <Upload size={11} />
                                 {imageUploading ? "Uploading..." : "Image"}
-                                <input type="file" accept="image/*" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleSchedulerImageUpload(file, "edit"); }} />
+                                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleSchedulerImageUpload(file, "edit"); }} />
                               </label>
                               {schedulerEditForm.image && (
                                 <div className="relative">
@@ -4838,12 +5118,13 @@ export default function DashboardPage() {
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Tiffin Subscriptions</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Active</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />0 Paused</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{tiffinSubscribers.filter((s: any) => s.status === "ACTIVE").length} Active</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-amber-500" />{tiffinSubscribers.filter((s: any) => s.status === "PAUSED").length} Paused</span>
                     </div>
                   </div>
                 </div>
                 <button
+                  onClick={() => setShowCreatePlan(true)}
                   className="px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition hover:opacity-90 btn-premium"
                 >
                   <PlusCircle size={16} />
@@ -4851,72 +5132,156 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Subscription Plans Overview */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                {[
-                  { name: "Weekly Tiffin", price: "£35", period: "/week", meals: "5 meals/week", color: "#10B981", bg: "rgba(16,185,129,0.08)", subscribers: 0 },
-                  { name: "Monthly Tiffin", price: "£120", period: "/month", meals: "20 meals/month", color: "#3B82F6", bg: "rgba(59,130,246,0.08)", subscribers: 0 },
-                  { name: "Premium Daily", price: "£50", period: "/week", meals: "7 meals/week + snacks", color: "#8B5CF6", bg: "rgba(139,92,246,0.08)", subscribers: 0 },
-                ].map((plan, i) => (
-                  <div key={i} className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: plan.bg }}>
-                        <Repeat size={20} style={{ color: plan.color }} />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-[var(--text)]">{plan.name}</h4>
-                        <p className="text-[10px] text-[var(--text-muted)]">{plan.meals}</p>
-                      </div>
+              {/* Create Plan Form */}
+              {showCreatePlan && (
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5 mb-6 animate-fade-in-up space-y-4">
+                  <h3 className="text-sm font-bold text-[var(--text)]">Create New Tiffin Plan</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Plan Name *</label>
+                      <input type="text" value={newPlan.name} onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })} placeholder="e.g. Weekly Tiffin" className="w-full px-3 py-2.5 rounded-xl text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none" style={{ background: "var(--input)", border: "1px solid var(--border)" }} />
                     </div>
-                    <div className="mb-3">
-                      <span className="text-2xl font-bold" style={{ color: plan.color }}>{plan.price}</span>
-                      <span className="text-xs text-[var(--text-muted)]">{plan.period}</span>
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Price (£) *</label>
+                      <input type="number" step="0.01" value={newPlan.price} onChange={(e) => setNewPlan({ ...newPlan, price: e.target.value })} placeholder="35.00" className="w-full px-3 py-2.5 rounded-xl text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none" style={{ background: "var(--input)", border: "1px solid var(--border)" }} />
                     </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
-                      <span className="text-[11px] text-[var(--text-muted)]">{plan.subscribers} subscribers</span>
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ color: plan.color, background: plan.bg }}>Active</span>
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Frequency</label>
+                      <select value={newPlan.frequency} onChange={(e) => setNewPlan({ ...newPlan, frequency: e.target.value })} className="w-full px-3 py-2.5 rounded-xl text-sm text-[var(--text)] outline-none" style={{ background: "var(--input)", border: "1px solid var(--border)" }}>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="MONTHLY">Monthly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Meals per Day</label>
+                      <input type="number" min="1" max="5" value={newPlan.mealsPerDay} onChange={(e) => setNewPlan({ ...newPlan, mealsPerDay: e.target.value })} className="w-full px-3 py-2.5 rounded-xl text-sm text-[var(--text)] outline-none" style={{ background: "var(--input)", border: "1px solid var(--border)" }} />
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Description</label>
+                    <textarea value={newPlan.description} onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })} placeholder="Describe what's included in this plan..." rows={2} className="w-full px-3 py-2.5 rounded-xl text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none resize-none" style={{ background: "var(--input)", border: "1px solid var(--border)" }} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="isVeg" checked={newPlan.isVeg} onChange={(e) => setNewPlan({ ...newPlan, isVeg: e.target.checked })} className="accent-[var(--primary)]" />
+                    <label htmlFor="isVeg" className="text-xs font-medium text-[var(--text)]">Vegetarian only</label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowCreatePlan(false)} className="flex-1 text-sm font-medium py-2.5 rounded-xl border border-[var(--border)] text-[var(--text-soft)] hover:bg-[var(--input)] transition">Cancel</button>
+                    <button onClick={handleCreatePlan} disabled={creatingPlan} className="flex-1 btn-premium text-sm font-semibold py-2.5 rounded-xl text-white disabled:opacity-50 flex items-center justify-center gap-2">
+                      {creatingPlan ? <><RefreshCw size={14} className="animate-spin" /> Creating...</> : <><PlusCircle size={14} /> Create Plan</>}
+                    </button>
+                  </div>
+                </div>
+              )}
 
-              {/* Subscribers Table */}
-              <div className="rounded-2xl glass-card overflow-hidden">
-                <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-[var(--text)]">Active Subscribers</h3>
+              {/* Subscription Plans Overview */}
+              {tiffinLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <RefreshCw size={24} className="animate-spin text-primary" />
                 </div>
-                <table className="w-full text-xs hidden md:table">
-                  <thead>
-                    <tr style={{ background: "var(--input)" }}>
-                      <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Customer</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Plan</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Start Date</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Next Delivery</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td colSpan={6} className="px-5 py-16 text-center text-[var(--text-muted)]">
-                        <Calendar size={40} className="mx-auto mb-3 opacity-20" />
-                        <p className="text-sm font-medium">No subscribers yet</p>
-                        <p className="text-[11px] mt-1">Customers who subscribe to your tiffin plans will appear here</p>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                {/* Mobile Cards */}
-                <div className="md:hidden p-4">
-                  <div className="text-center py-16 animate-fade-in-up">
-                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
-                      <Calendar size={36} className="text-white" />
-                    </div>
-                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No subscribers yet</h3>
-                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">Customers who subscribe to your tiffin plans will appear here</p>
+              ) : tiffinPlans.length === 0 ? (
+                <div className="text-center py-16 animate-fade-in-up">
+                  <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                    <Calendar size={36} className="text-white" />
                   </div>
+                  <h3 className="text-base font-bold text-[var(--text)] mb-1">No tiffin plans yet</h3>
+                  <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto mb-4">Create your first tiffin subscription plan and customers can subscribe for recurring meals.</p>
+                  <button onClick={() => setShowCreatePlan(true)} className="btn-premium px-6 py-2.5 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2">
+                    <PlusCircle size={16} /> Create Your First Plan
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                    {tiffinPlans.map((plan: any) => {
+                      const colors = ["#10B981", "#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444"];
+                      const color = colors[tiffinPlans.indexOf(plan) % colors.length];
+                      const bg = color + "14";
+                      return (
+                        <div key={plan.id} className="rounded-2xl border border-[var(--border)] p-5" style={{ background: "var(--header-bg)" }}>
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: bg }}>
+                              <Repeat size={20} style={{ color }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-bold text-[var(--text)] truncate">{plan.name}</h4>
+                              <p className="text-[10px] text-[var(--text-muted)]">{plan.mealsPerDay} meal{plan.mealsPerDay > 1 ? "s" : ""}/day{plan.isVeg ? " · Veg" : ""}</p>
+                            </div>
+                          </div>
+                          {plan.description && <p className="text-[11px] text-[var(--text-muted)] mb-3 line-clamp-2">{plan.description}</p>}
+                          <div className="mb-3">
+                            <span className="text-2xl font-bold" style={{ color }}>£{plan.price.toFixed(2)}</span>
+                            <span className="text-xs text-[var(--text-muted)]">/{plan.frequency === "WEEKLY" ? "week" : "month"}</span>
+                          </div>
+                          <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
+                            <span className="text-[11px] text-[var(--text-muted)]">{plan._count?.subscriptions || 0} subscribers</span>
+                            <button onClick={() => togglePlanActive(plan.id, !plan.isActive)} className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ color: plan.isActive ? color : "#EF4444", background: plan.isActive ? bg : "rgba(239,68,68,0.08)" }}>
+                              {plan.isActive ? "Active" : "Inactive"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Subscribers Table */}
+                  <div className="rounded-2xl glass-card overflow-hidden">
+                    <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-[var(--text)]">Subscribers</h3>
+                    </div>
+                    {tiffinSubscribers.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <Calendar size={40} className="mx-auto mb-3 opacity-20" />
+                        <p className="text-sm font-medium text-[var(--text-muted)]">No subscribers yet</p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1">Customers who subscribe to your tiffin plans will appear here</p>
+                      </div>
+                    ) : (
+                      <>
+                        <table className="w-full text-xs hidden md:table">
+                          <thead>
+                            <tr style={{ background: "var(--input)" }}>
+                              <th className="text-left px-5 py-3 font-semibold text-[var(--text)]">Customer</th>
+                              <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Plan</th>
+                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Start Date</th>
+                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Next Delivery</th>
+                              <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tiffinSubscribers.map((sub: any) => (
+                              <tr key={sub.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
+                                <td className="px-5 py-3 font-semibold text-[var(--text)]">{sub.user?.name || "Customer"}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)]">{sub.tiffinPlan?.name || sub.name}</td>
+                                <td className="px-4 py-3 text-center text-[var(--text-muted)]">{new Date(sub.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+                                <td className="px-4 py-3 text-center text-[var(--text-muted)]">{sub.nextDelivery ? new Date(sub.nextDelivery).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${sub.status === "ACTIVE" ? "text-emerald-600 bg-emerald-100" : sub.status === "PAUSED" ? "text-amber-600 bg-amber-100" : "text-red-600 bg-red-100"}`}>
+                                    {sub.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {/* Mobile Cards */}
+                        <div className="md:hidden divide-y divide-[var(--border)]">
+                          {tiffinSubscribers.map((sub: any) => (
+                            <div key={sub.id} className="p-4">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-semibold text-[var(--text)]">{sub.user?.name || "Customer"}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${sub.status === "ACTIVE" ? "text-emerald-600 bg-emerald-100" : sub.status === "PAUSED" ? "text-amber-600 bg-amber-100" : "text-red-600 bg-red-100"}`}>
+                                  {sub.status}
+                                </span>
+                              </div>
+                              <p className="text-xs text-[var(--text-muted)]">{sub.tiffinPlan?.name || sub.name} · £{sub.price?.toFixed(2)}/{sub.frequency === "WEEKLY" ? "wk" : "mo"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
 

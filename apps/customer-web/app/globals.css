@@ -49,6 +49,12 @@
   --header-bg: rgba(21,27,46,0.88);
 }
 
+/* Ensure dropdown options are always readable on all themes/browsers */
+select option {
+  color: #1a1a2e;
+  background-color: #ffffff;
+}
+
 html, body {
   width: 100%;
   max-width: 100vw;

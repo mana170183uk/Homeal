@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ClipboardList,
   ChevronRight,
   Search,
   UtensilsCrossed,
   Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import Header from "../components/Header";
 import { api } from "../lib/api";
@@ -30,9 +31,20 @@ function getStatusConfig(status: string) {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showMultiSuccess, setShowMultiSuccess] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("placed") === "multi") {
+      setShowMultiSuccess(true);
+      // Auto-dismiss after 6 seconds
+      const timer = setTimeout(() => setShowMultiSuccess(false), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const token = localStorage.getItem("homeal_token");
@@ -77,6 +89,17 @@ export default function OrdersPage() {
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-[var(--text)] mb-6">
           Your <span className="gradient-text">Orders</span>
         </h1>
+
+        {/* Multi-vendor order success banner */}
+        {showMultiSuccess && (
+          <div className="flex items-center gap-3 mb-6 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 animate-fade-in-up">
+            <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-[var(--text)]">Orders placed successfully!</p>
+              <p className="text-xs text-[var(--text-soft)]">Your orders have been sent to each kitchen. You&apos;ll be notified when they&apos;re accepted.</p>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">

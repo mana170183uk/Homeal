@@ -173,6 +173,175 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/orders/batch - place multiple orders (multi-vendor cart)
+router.post("/batch", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { orders: orderRequests } = req.body;
+
+    if (!Array.isArray(orderRequests) || orderRequests.length === 0) {
+      res.status(400).json({ success: false, error: "orders array is required" });
+      return;
+    }
+
+    if (orderRequests.length > 3) {
+      res.status(400).json({ success: false, error: "Maximum 3 orders at a time" });
+      return;
+    }
+
+    const createdOrders: Array<{ id: string }> = [];
+
+    // Process each order in a transaction
+    await prisma.$transaction(async (tx) => {
+      for (const orderReq of orderRequests) {
+        const { chefId, addressId, items, specialInstructions, paymentMethod, deliveryMethod } = orderReq;
+        const isPickup = deliveryMethod === "pickup";
+
+        if (!chefId || !items?.length) {
+          throw new Error("Each order must have chefId and items");
+        }
+        if (!isPickup && !addressId) {
+          throw new Error("Delivery address is required for delivery orders");
+        }
+
+        const chef = await tx.chef.findUnique({ where: { id: chefId } });
+        if (!chef) {
+          throw new Error(`Chef not found: ${chefId}`);
+        }
+
+        // Check vacation
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10);
+        const today = new Date(todayStr + "T00:00:00.000Z");
+        if (chef.vacationStart && chef.vacationEnd && today >= chef.vacationStart && today <= chef.vacationEnd) {
+          throw new Error(`${chef.kitchenName} is currently on holiday`);
+        }
+
+        // Check order cutoff time
+        if (chef.orderCutoffTime) {
+          const [cutH, cutM] = chef.orderCutoffTime.split(":").map(Number);
+          const ukHour = now.getUTCHours();
+          const ukMin = now.getUTCMinutes();
+          if (ukHour > cutH || (ukHour === cutH && ukMin >= cutM)) {
+            throw new Error(`Ordering closed for ${chef.kitchenName}. Cutoff time is ${chef.orderCutoffTime}.`);
+          }
+        }
+
+        // Check daily order cap
+        if (chef.dailyOrderCap) {
+          const todayStart = new Date(todayStr + "T00:00:00.000Z");
+          const todayEnd = new Date(todayStr + "T23:59:59.999Z");
+          const todayOrderCount = await tx.order.count({
+            where: {
+              chefId,
+              createdAt: { gte: todayStart, lte: todayEnd },
+              status: { notIn: ["CANCELLED", "REJECTED"] },
+            },
+          });
+          if (todayOrderCount >= chef.dailyOrderCap) {
+            throw new Error(`${chef.kitchenName} has reached its daily order limit`);
+          }
+        }
+
+        // Calculate totals
+        const menuItems = await tx.menuItem.findMany({
+          where: { id: { in: items.map((i: { menuItemId: string }) => i.menuItemId) } },
+        });
+
+        // Validate stock
+        for (const item of items as Array<{ menuItemId: string; quantity: number }>) {
+          const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+          if (!menuItem) throw new Error(`Item not found: ${item.menuItemId}`);
+          if (!menuItem.isAvailable) throw new Error(`"${menuItem.name}" is no longer available`);
+          if (menuItem.stockCount !== null && menuItem.stockCount < item.quantity) {
+            throw new Error(`"${menuItem.name}" only has ${menuItem.stockCount} left in stock`);
+          }
+        }
+
+        let subtotal = 0;
+        const orderItems = items.map((item: { menuItemId: string; quantity: number; notes?: string }) => {
+          const menuItem = menuItems.find((m: (typeof menuItems)[number]) => m.id === item.menuItemId);
+          const price = menuItem?.price || 0;
+          subtotal += price * item.quantity;
+          return { menuItemId: item.menuItemId, quantity: item.quantity, price, notes: item.notes };
+        });
+
+        const deliveryFee = isPickup ? 0 : 0.30;
+        const orderTotal = subtotal + deliveryFee;
+        const commissionRate = (chef.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
+        const platformFee = Math.round(orderTotal * commissionRate * 100) / 100;
+        const chefPayout = Math.round((orderTotal - platformFee) * 100) / 100;
+
+        const order = await tx.order.create({
+          data: {
+            userId: req.user!.userId,
+            chefId,
+            addressId: addressId || null,
+            subtotal,
+            deliveryFee,
+            total: orderTotal,
+            specialInstructions,
+            deliveryMethod: isPickup ? "PICKUP" : "DELIVERY",
+            items: { create: orderItems },
+            payment: {
+              create: {
+                chefId,
+                amount: orderTotal,
+                platformFee,
+                chefPayout,
+                method: paymentMethod === "COD" ? "COD" : "CARD",
+                status: "PENDING",
+              },
+            },
+          },
+        });
+
+        // Decrement stock counts
+        for (const item of items as Array<{ menuItemId: string; quantity: number }>) {
+          const menuItem = menuItems.find((m) => m.id === item.menuItemId);
+          if (menuItem?.stockCount !== null && menuItem?.stockCount !== undefined) {
+            const newCount = Math.max(0, menuItem.stockCount - item.quantity);
+            await tx.menuItem.update({
+              where: { id: item.menuItemId },
+              data: {
+                stockCount: newCount,
+                ...(newCount === 0 ? { isAvailable: false } : {}),
+              },
+            });
+          }
+        }
+
+        createdOrders.push({ id: order.id });
+
+        // Notify chef via Socket.IO (outside transaction, fire and forget)
+        setTimeout(() => {
+          notifyChefNewOrder(chefId, { orderId: order.id, order });
+        }, 0);
+
+        // Auto-reject timer
+        setTimeout(async () => {
+          const current = await prisma.order.findUnique({ where: { id: order.id } });
+          if (current?.status === "PLACED") {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { status: "REJECTED" },
+            });
+            notifyOrderUpdate(req.user!.userId, {
+              orderId: order.id,
+              status: "REJECTED",
+              reason: "Auto-rejected: Chef did not respond",
+            });
+          }
+        }, ORDER_AUTO_REJECT_MINUTES * 60 * 1000);
+      }
+    });
+
+    res.status(201).json({ success: true, data: createdOrders });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to place orders";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
 // GET /api/v1/orders - list user orders
 router.get("/", authenticate, async (req: Request, res: Response) => {
   try {

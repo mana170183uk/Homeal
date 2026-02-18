@@ -182,6 +182,7 @@ router.post("/chefs/:id/approve", async (req: Request, res: Response) => {
       where: { id },
       data: {
         isVerified: true,
+        isOnline: true,
         approvedAt: now,
         rejectedAt: null,
         rejectionReason: null,

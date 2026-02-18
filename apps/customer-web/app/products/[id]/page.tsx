@@ -109,13 +109,11 @@ export default function ProductDetailPage({
 
     let currentCart = getCart();
 
-    // Single-chef policy
-    if (currentCart.length > 0 && currentCart[0].chefId !== product.chef.id) {
-      const confirmed = window.confirm(
-        `Your cart has items from "${currentCart[0].chefName}". Adding items from "${product.chef.kitchenName}" will clear your current cart. Continue?`
-      );
-      if (!confirmed) return;
-      currentCart = [];
+    // Max 3 vendor policy
+    const vendorIds = new Set(currentCart.map((c) => c.chefId));
+    if (!vendorIds.has(product.chef.id) && vendorIds.size >= 3) {
+      window.alert("You can order from up to 3 kitchens at a time. Remove items from an existing kitchen to add from a new one.");
+      return;
     }
 
     const existing = currentCart.find((c) => c.id === product.id);

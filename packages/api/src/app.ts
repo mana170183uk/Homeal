@@ -16,6 +16,9 @@ import reviewRoutes from "./routes/reviews";
 import followRoutes from "./routes/follows";
 import notificationRoutes from "./routes/notifications";
 import templateRoutes from "./routes/templates";
+import subscriptionRoutes from "./routes/subscriptions";
+import stripeRoutes from "./routes/stripe";
+import categoryRoutes from "./routes/categories";
 import prisma from "@homeal/db";
 import { errorHandler } from "./middleware/errorHandler";
 
@@ -44,6 +47,9 @@ app.use(
     legacyHeaders: false,
   })
 );
+
+// Stripe webhook must be mounted BEFORE JSON body parser (needs raw body)
+app.use(`${API_PREFIX}/stripe`, stripeRoutes);
 
 // Body parsing
 app.use(express.json({ limit: "10mb" }));
@@ -80,6 +86,8 @@ app.use(`${API_PREFIX}/reviews`, reviewRoutes);
 app.use(`${API_PREFIX}/follows`, followRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/templates`, templateRoutes);
+app.use(`${API_PREFIX}/subscriptions`, subscriptionRoutes);
+app.use(`${API_PREFIX}/categories`, categoryRoutes);
 
 // 404 catch-all (return JSON, not Express default HTML)
 app.use((_req, res) => {

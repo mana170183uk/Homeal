@@ -75,6 +75,7 @@ router.get("/", async (req: Request, res: Response) => {
         where: { id: chefId },
         data: {
           isVerified: true,
+          isOnline: true,
           approvedAt: now,
           rejectedAt: null,
           rejectionReason: null,

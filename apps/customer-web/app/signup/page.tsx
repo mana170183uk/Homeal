@@ -19,7 +19,7 @@ import {
   Cherry,
   Sparkles,
   Cake,
-  CookingPot,
+  MapPin,
 } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile, deleteUser, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
@@ -27,12 +27,11 @@ import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
 
 type Role = "CUSTOMER" | "CHEF";
-type SellerType = "KITCHEN" | "CAKE" | "BAKERY" | "OTHER";
+type SellerType = "KITCHEN" | "CAKE_BAKERY" | "OTHER";
 
 const SELLER_TYPE_OPTIONS: { value: SellerType; label: string; icon: typeof UtensilsCrossed; placeholder: string }[] = [
   { value: "KITCHEN", label: "Kitchen", icon: UtensilsCrossed, placeholder: "e.g. Priya's Kitchen" },
-  { value: "CAKE", label: "Cake", icon: Cake, placeholder: "e.g. Sarah's Cake Studio" },
-  { value: "BAKERY", label: "Bakery", icon: CookingPot, placeholder: "e.g. Fresh Bakes" },
+  { value: "CAKE_BAKERY", label: "Cake & Bakery", icon: Cake, placeholder: "e.g. Sweet Treats Bakery" },
   { value: "OTHER", label: "Other", icon: Store, placeholder: "e.g. Food by Maria" },
 ];
 
@@ -47,6 +46,8 @@ function SignupContent() {
     phone: "",
     password: "",
     businessName: "",
+    address: "",
+    postcode: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -88,6 +89,14 @@ function SignupContent() {
       setError("Please enter your business name.");
       return;
     }
+    if (role === "CHEF" && !form.postcode) {
+      setError("Please enter your kitchen postcode.");
+      return;
+    }
+    if (role === "CHEF" && form.postcode && !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(form.postcode.trim())) {
+      setError("Please enter a valid UK postcode (e.g. SW1A 1AA).");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -112,7 +121,7 @@ function SignupContent() {
             phone: form.phone,
             firebaseUid: credential.user.uid,
             role,
-            ...(role === "CHEF" ? { kitchenName: form.businessName, sellerType, businessName: form.businessName } : {}),
+            ...(role === "CHEF" ? { kitchenName: form.businessName, sellerType, businessName: form.businessName, address: form.address, postcode: form.postcode } : {}),
           }),
         }
       );
@@ -292,6 +301,14 @@ function SignupContent() {
       setError("Please enter your business name.");
       return;
     }
+    if (!form.postcode) {
+      setError("Please enter your kitchen postcode.");
+      return;
+    }
+    if (!/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(form.postcode.trim())) {
+      setError("Please enter a valid UK postcode (e.g. SW1A 1AA).");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -310,6 +327,8 @@ function SignupContent() {
             kitchenName: form.businessName,
             sellerType,
             businessName: form.businessName,
+            address: form.address,
+            postcode: form.postcode,
           }),
         }
       );
@@ -420,6 +439,30 @@ function SignupContent() {
                   value={form.businessName}
                   onChange={(e) => updateField("businessName", e.target.value)}
                   placeholder={selectedOption.placeholder}
+                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                />
+              </div>
+
+              {/* Address */}
+              <div className="relative group mb-4">
+                <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                <textarea
+                  value={form.address}
+                  onChange={(e) => updateField("address", e.target.value)}
+                  placeholder="Kitchen address (street, city)"
+                  rows={2}
+                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                />
+              </div>
+
+              {/* Postcode */}
+              <div className="relative group mb-4">
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                <input
+                  type="text"
+                  value={form.postcode}
+                  onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                  placeholder="Postcode (e.g. WD17 4BX)"
                   className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
                 />
               </div>
@@ -830,16 +873,38 @@ function SignupContent() {
 
                 {/* Business Name (Chef only) */}
                 {role === "CHEF" && (
-                  <div className="relative group">
-                    <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
-                    <input
-                      type="text"
-                      value={form.businessName}
-                      onChange={(e) => updateField("businessName", e.target.value)}
-                      placeholder={SELLER_TYPE_OPTIONS.find((o) => o.value === sellerType)?.placeholder || "Business name"}
-                      className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
-                    />
-                  </div>
+                  <>
+                    <div className="relative group">
+                      <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                      <input
+                        type="text"
+                        value={form.businessName}
+                        onChange={(e) => updateField("businessName", e.target.value)}
+                        placeholder={SELLER_TYPE_OPTIONS.find((o) => o.value === sellerType)?.placeholder || "Business name"}
+                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                      />
+                    </div>
+                    <div className="relative group">
+                      <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                      <textarea
+                        value={form.address}
+                        onChange={(e) => updateField("address", e.target.value)}
+                        placeholder="Kitchen address (street, city)"
+                        rows={2}
+                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                      />
+                    </div>
+                    <div className="relative group">
+                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                      <input
+                        type="text"
+                        value={form.postcode}
+                        onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                        placeholder="Postcode (e.g. WD17 4BX)"
+                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* Error */}

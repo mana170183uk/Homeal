@@ -280,6 +280,11 @@ export default function SuperAdminPage() {
   const [categoryForm, setCategoryForm] = useState({ name: '', icon: '', sortOrder: 0, type: 'FOOD' as 'FOOD' | 'PRODUCT' });
   const [editingCategory, setEditingCategory] = useState<any>(null);
 
+  // Category suggestions state
+  const [categorySuggestions, setCategorySuggestions] = useState<any[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionActionLoading, setSuggestionActionLoading] = useState<string | null>(null);
+
   // Promos state
   const [promos, setPromos] = useState<any[]>([]);
   const [promoStats, setPromoStats] = useState<any>({});
@@ -579,6 +584,44 @@ export default function SuperAdminPage() {
     }
   }
 
+  // Fetch category suggestions
+  async function fetchCategorySuggestions() {
+    if (!authToken) return;
+    setSuggestionsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/categories/suggestions`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await safeJson(res);
+      if (data.success) setCategorySuggestions(data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch category suggestions:", err);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }
+
+  async function handleSuggestionAction(id: string, status: "APPROVED" | "REJECTED") {
+    if (!authToken) return;
+    setSuggestionActionLoading(`${id}-${status}`);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/categories/suggestions/${id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await safeJson(res);
+      if (data.success) {
+        fetchCategorySuggestions();
+        if (status === "APPROVED") fetchCategories();
+      }
+    } catch (err) {
+      console.error("Failed to update suggestion:", err);
+    } finally {
+      setSuggestionActionLoading(null);
+    }
+  }
+
   // Fetch promos
   async function fetchPromos() {
     if (!authToken) return;
@@ -806,7 +849,7 @@ export default function SuperAdminPage() {
   // Fetch categories when on categories page
   useEffect(() => {
     if (!authToken) return;
-    if (activePage === "categories") fetchCategories();
+    if (activePage === "categories") { fetchCategories(); fetchCategorySuggestions(); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, authToken]);
 
@@ -3241,6 +3284,82 @@ export default function SuperAdminPage() {
                   <p className="text-sm font-semibold text-[var(--text)]">Categories help customers discover chefs and products</p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">Food categories are assigned to dishes, product categories to homemade items like pickles, papads, and sweets. Customers browse by category to find what they want.</p>
                 </div>
+              </div>
+
+              {/* Chef Category Suggestions */}
+              <div className="glass-card rounded-2xl px-4 sm:px-5 py-4 mt-6 animate-fade-in-up">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(245,158,11,0.15)" }}>
+                      <Sparkles size={20} style={{ color: "#F59E0B" }} />
+                    </div>
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[var(--text)]">Chef Suggestions</h3>
+                      <p className="text-xs text-[var(--text-muted)]">Categories suggested by chefs — approve to add to the platform</p>
+                    </div>
+                  </div>
+                  <button onClick={() => fetchCategorySuggestions()} className="w-9 h-9 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <RefreshCw size={16} className={`text-[var(--text-muted)] ${suggestionsLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+
+                {suggestionsLoading && categorySuggestions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <RefreshCw size={24} className="mx-auto mb-2 animate-spin text-[var(--text-muted)]" />
+                    <p className="text-xs text-[var(--text-muted)]">Loading suggestions...</p>
+                  </div>
+                ) : categorySuggestions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-[var(--text-muted)]">No suggestions from chefs yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {categorySuggestions.map((s: any) => (
+                      <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[var(--border)]" style={{ background: "var(--input)" }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-[var(--text)]">{s.name}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              s.status === "PENDING" ? "text-amber-600 bg-amber-100" :
+                              s.status === "APPROVED" ? "text-emerald-600 bg-emerald-100" :
+                              "text-red-600 bg-red-100"
+                            }`}>
+                              {s.status}
+                            </span>
+                          </div>
+                          {s.description && <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-1">{s.description}</p>}
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                            by <span className="font-medium">{s.chef?.user?.name || "Unknown"}</span>
+                            {s.chef?.kitchenName && <> &middot; {s.chef.kitchenName}</>}
+                            {s.createdAt && <> &middot; {new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</>}
+                          </p>
+                        </div>
+                        {s.status === "PENDING" && (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => handleSuggestionAction(s.id, "APPROVED")}
+                              disabled={suggestionActionLoading === `${s.id}-APPROVED`}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                              style={{ background: "#10B981" }}
+                              title="Approve — creates category & awards badge"
+                            >
+                              {suggestionActionLoading === `${s.id}-APPROVED` ? <RefreshCw size={12} className="animate-spin" /> : <><Check size={12} className="inline mr-1" />Approve</>}
+                            </button>
+                            <button
+                              onClick={() => handleSuggestionAction(s.id, "REJECTED")}
+                              disabled={suggestionActionLoading === `${s.id}-REJECTED`}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition hover:opacity-90 disabled:opacity-50"
+                              style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}
+                              title="Reject suggestion"
+                            >
+                              {suggestionActionLoading === `${s.id}-REJECTED` ? <RefreshCw size={12} className="animate-spin" /> : <><X size={12} className="inline mr-1" />Reject</>}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Category Modal */}

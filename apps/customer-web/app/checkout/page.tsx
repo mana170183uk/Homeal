@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   MapPin,
@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Truck,
   Package,
+  Store,
 } from "lucide-react";
 import Header from "../components/Header";
 import { api } from "../lib/api";
@@ -28,6 +29,13 @@ interface CartItem {
   quantity: number;
   chefId: string;
   chefName: string;
+}
+
+interface VendorGroup {
+  chefId: string;
+  chefName: string;
+  items: CartItem[];
+  subtotal: number;
 }
 
 function getCart(): CartItem[] {
@@ -64,9 +72,6 @@ export default function CheckoutPage() {
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
 
-  // Chef info for pickup address
-  const [chefInfo, setChefInfo] = useState<{ kitchenName: string; description: string | null } | null>(null);
-
   // Order state
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -86,16 +91,22 @@ export default function CheckoutPage() {
     setCart(getCart());
     setMounted(true);
     fetchAddresses(token);
-
-    // Fetch chef info for pickup address display
-    const currentCart = getCart();
-    if (currentCart.length > 0) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "https://api.homeal.uk"}/api/v1/chefs/${currentCart[0].chefId}`)
-        .then(r => r.json())
-        .then(d => { if (d.success && d.data) setChefInfo(d.data); })
-        .catch(() => {});
-    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Group items by vendor
+  const vendorGroups: VendorGroup[] = useMemo(() => {
+    const map = new Map<string, VendorGroup>();
+    for (const item of cart) {
+      let group = map.get(item.chefId);
+      if (!group) {
+        group = { chefId: item.chefId, chefName: item.chefName, items: [], subtotal: 0 };
+        map.set(item.chefId, group);
+      }
+      group.items.push(item);
+      group.subtotal += item.price * item.quantity;
+    }
+    return Array.from(map.values());
+  }, [cart]);
 
   async function fetchAddresses(token: string) {
     setLoadingAddresses(true);
@@ -196,29 +207,50 @@ export default function CheckoutPage() {
     try {
       const token = localStorage.getItem("homeal_token")!;
 
-      const res = await api<{ id: string }>("/orders", {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          chefId: cart[0].chefId,
-          addressId: deliveryMethod === "delivery" ? selectedAddressId : undefined,
-          deliveryMethod,
-          items: cart.map((item) => ({
-            menuItemId: item.id,
-            quantity: item.quantity,
-          })),
-          specialInstructions: specialInstructions.trim() || undefined,
-          paymentMethod: "COD",
-        }),
-      });
+      // Build separate orders per vendor
+      const orders = vendorGroups.map((group) => ({
+        chefId: group.chefId,
+        addressId: deliveryMethod === "delivery" ? selectedAddressId : undefined,
+        deliveryMethod,
+        items: group.items.map((item) => ({
+          menuItemId: item.id,
+          quantity: item.quantity,
+        })),
+        specialInstructions: specialInstructions.trim() || undefined,
+        paymentMethod: "COD",
+      }));
 
-      if (res.success && res.data) {
-        // Clear cart
-        localStorage.removeItem("homeal_cart");
-        window.dispatchEvent(new Event("cart-updated"));
-        router.push(`/orders/${res.data.id}`);
+      // If single vendor, use existing endpoint for backward compatibility
+      if (orders.length === 1) {
+        const res = await api<{ id: string }>("/orders", {
+          method: "POST",
+          token,
+          body: JSON.stringify(orders[0]),
+        });
+
+        if (res.success && res.data) {
+          localStorage.removeItem("homeal_cart");
+          window.dispatchEvent(new Event("cart-updated"));
+          router.push(`/orders/${res.data.id}`);
+        } else {
+          setOrderError(res.error || "Failed to place order. Please try again.");
+        }
       } else {
-        setOrderError(res.error || "Failed to place order. Please try again.");
+        // Multi-vendor: use batch endpoint
+        const res = await api<{ id: string }[]>("/orders/batch", {
+          method: "POST",
+          token,
+          body: JSON.stringify({ orders }),
+        });
+
+        if (res.success && res.data) {
+          localStorage.removeItem("homeal_cart");
+          window.dispatchEvent(new Event("cart-updated"));
+          // Redirect to orders list since there are multiple orders
+          router.push("/orders?placed=multi");
+        } else {
+          setOrderError(res.error || "Failed to place orders. Please try again.");
+        }
       }
     } catch {
       setOrderError("Something went wrong. Please try again.");
@@ -228,8 +260,8 @@ export default function CheckoutPage() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const deliveryFee = deliveryMethod === "pickup" ? 0 : DELIVERY_FEE;
-  const total = cart.length > 0 ? subtotal + deliveryFee : 0;
+  const totalDeliveryFee = deliveryMethod === "pickup" ? 0 : DELIVERY_FEE * vendorGroups.length;
+  const total = cart.length > 0 ? subtotal + totalDeliveryFee : 0;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   if (!mounted) {
@@ -306,6 +338,16 @@ export default function CheckoutPage() {
         </h1>
 
         <div className="space-y-6">
+          {/* Multi-vendor notice */}
+          {vendorGroups.length > 1 && (
+            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-primary/5 border border-primary/10 rounded-xl px-3 py-2">
+              <Store className="w-4 h-4 text-primary shrink-0" />
+              <span>
+                This will create <span className="font-semibold text-[var(--text)]">{vendorGroups.length} separate orders</span> — one for each kitchen.
+              </span>
+            </div>
+          )}
+
           {/* Delivery Method Toggle */}
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -341,13 +383,8 @@ export default function CheckoutPage() {
             {deliveryMethod === "pickup" && (
               <div className="mt-3 text-center">
                 <p className="text-xs text-[var(--text-muted)]">
-                  You&apos;ll collect your order directly from the seller. No delivery fee applies.
+                  You&apos;ll collect your order directly from the seller{vendorGroups.length > 1 ? "s" : ""}. No delivery fee applies.
                 </p>
-                {chefInfo && (
-                  <p className="text-sm font-semibold text-[var(--text)] mt-2">
-                    Pickup from: {chefInfo.kitchenName}
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -554,7 +591,7 @@ export default function CheckoutPage() {
             />
           </div>
 
-          {/* Order Summary */}
+          {/* Order Summary — grouped by vendor */}
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <ShoppingBag className="w-5 h-5 text-primary" />
@@ -563,33 +600,62 @@ export default function CheckoutPage() {
               </h2>
             </div>
 
-            <div className="space-y-2 mb-4">
-              {cart.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-6 h-6 rounded-full bg-[var(--input)] flex items-center justify-center text-xs font-bold text-[var(--text-soft)]">
-                      {item.quantity}
-                    </span>
-                    <span className="text-[var(--text)] truncate">{item.name}</span>
+            <div className="space-y-4">
+              {vendorGroups.map((group) => (
+                <div key={group.chefId}>
+                  {/* Vendor header */}
+                  {vendorGroups.length > 1 && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <UtensilsCrossed className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-xs font-semibold text-[var(--text)]">{group.chefName}</span>
+                    </div>
+                  )}
+
+                  {/* Items */}
+                  <div className="space-y-1.5">
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-6 h-6 rounded-full bg-[var(--input)] flex items-center justify-center text-xs font-bold text-[var(--text-soft)]">
+                            {item.quantity}
+                          </span>
+                          <span className="text-[var(--text)] truncate">{item.name}</span>
+                        </div>
+                        <span className="text-[var(--text-soft)] shrink-0 ml-2">
+                          &pound;{(item.price * item.quantity).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <span className="text-[var(--text-soft)] shrink-0 ml-2">
-                    &pound;{(item.price * item.quantity).toFixed(2)}
-                  </span>
+
+                  {/* Per-vendor subtotal for multi-vendor */}
+                  {vendorGroups.length > 1 && (
+                    <div className="flex justify-between text-xs text-[var(--text-muted)] mt-1.5 pt-1.5 border-t border-[var(--border)]/50">
+                      <span>Subtotal</span>
+                      <span>&pound;{group.subtotal.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-[var(--border)] pt-3 space-y-2 text-sm">
+            <div className="border-t border-[var(--border)] mt-4 pt-3 space-y-2 text-sm">
               <div className="flex justify-between text-[var(--text-soft)]">
                 <span>Subtotal ({itemCount} item{itemCount !== 1 ? "s" : ""})</span>
                 <span>&pound;{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[var(--text-soft)]">
-                <span>{deliveryMethod === "pickup" ? "Pick up" : "Delivery fee"}</span>
-                <span>{deliveryMethod === "pickup" ? "Free" : `£${deliveryFee.toFixed(2)}`}</span>
+                <span>
+                  {deliveryMethod === "pickup"
+                    ? "Pick up"
+                    : vendorGroups.length > 1
+                      ? `Delivery fee (${vendorGroups.length} × £${DELIVERY_FEE.toFixed(2)})`
+                      : "Delivery fee"}
+                </span>
+                <span>{deliveryMethod === "pickup" ? "Free" : `£${totalDeliveryFee.toFixed(2)}`}</span>
               </div>
               <div className="border-t border-[var(--border)] pt-2 flex justify-between font-bold text-[var(--text)]">
                 <span>Total</span>
@@ -639,11 +705,11 @@ export default function CheckoutPage() {
             {placing ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Placing Order...
+                Placing Order{vendorGroups.length > 1 ? "s" : ""}...
               </>
             ) : (
               <>
-                Place Order - &pound;{total.toFixed(2)}
+                Place Order{vendorGroups.length > 1 ? "s" : ""} - &pound;{total.toFixed(2)}
               </>
             )}
           </button>

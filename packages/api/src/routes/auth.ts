@@ -23,7 +23,7 @@ function signToken(payload: object, secret: string, expiresIn: string): string {
 // POST /api/v1/auth/register
 router.post("/register", async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, firebaseUid, role, kitchenName, sellerType, businessName } = req.body;
+    const { name, email, phone, firebaseUid, role, kitchenName, sellerType, businessName, address, postcode } = req.body;
 
     // Convert empty phone to null to avoid unique constraint collisions
     const cleanPhone = phone && phone.trim() ? phone.trim() : null;
@@ -48,14 +48,34 @@ router.post("/register", async (req: Request, res: Response) => {
     // If registering as CHEF, create Chef record (pending approval)
     let chef = null;
     if (user.role === "CHEF") {
+      // Geocode postcode if provided
+      let latitude: number | undefined;
+      let longitude: number | undefined;
+      if (postcode) {
+        try {
+          const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.replace(/\s+/g, ""))}`);
+          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number } };
+          if (geoData.status === 200 && geoData.result) {
+            latitude = geoData.result.latitude;
+            longitude = geoData.result.longitude;
+          }
+        } catch (err) {
+          console.warn("[Register] Postcode geocoding failed:", err);
+        }
+      }
+
       chef = await prisma.chef.create({
         data: {
           userId: user.id,
           kitchenName: kitchenName || businessName || `${name}'s Kitchen`,
           businessName: businessName || null,
           sellerType: sellerType || "KITCHEN",
-          cakeEnabled: sellerType === "CAKE",
-          bakeryEnabled: sellerType === "BAKERY" || sellerType === "CAKE",
+          cakeEnabled: sellerType === "CAKE_BAKERY" || sellerType === "CAKE",
+          bakeryEnabled: sellerType === "CAKE_BAKERY" || sellerType === "BAKERY" || sellerType === "CAKE",
+          address: address || null,
+          postcode: postcode || null,
+          latitude,
+          longitude,
           isVerified: false,
         },
       });

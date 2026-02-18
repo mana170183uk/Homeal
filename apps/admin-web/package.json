@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@homeal/shared": "*",
+    "browser-image-compression": "^2.0.2",
     "firebase": "^11.10.0",
     "lucide-react": "^0.469.0",
     "next": "^15.1.0",

@@ -77,6 +77,15 @@ router.get("/", async (req: Request, res: Response) => {
           include: { items: { where: { isAvailable: true }, take: 5 } },
           take: 1,
         },
+        badges: {
+          where: {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } },
+            ],
+          },
+          select: { type: true, label: true },
+        },
       },
       take: 50,
     });
@@ -121,6 +130,15 @@ router.get("/:id", async (req: Request, res: Response) => {
           take: 10,
         },
         services: { where: { isActive: true } },
+        badges: {
+          where: {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } },
+            ],
+          },
+          select: { type: true, label: true },
+        },
       },
     });
     if (!chef) {
@@ -162,6 +180,7 @@ const ALLOWED_CHEF_FIELDS = [
   "kitchenName", "description", "cuisineTypes", "bannerImage", "latitude", "longitude",
   "deliveryRadius", "isOnline", "operatingHours", "bankDetails", "sellerType", "businessName",
   "cakeEnabled", "bakeryEnabled", "dailyOrderCap", "orderCutoffTime", "vacationStart", "vacationEnd",
+  "address", "postcode",
 ];
 
 router.patch(
@@ -183,6 +202,18 @@ router.patch(
           }
         }
       }
+      // Auto-geocode if postcode changed
+      if (data.postcode && typeof data.postcode === "string") {
+        try {
+          const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent((data.postcode as string).replace(/\s+/g, ""))}`);
+          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number } };
+          if (geoData.status === 200 && geoData.result) {
+            data.latitude = geoData.result.latitude;
+            data.longitude = geoData.result.longitude;
+          }
+        } catch { /* geocode failed — skip */ }
+      }
+
       const chef = await prisma.chef.update({
         where: { userId: req.user!.userId },
         data,

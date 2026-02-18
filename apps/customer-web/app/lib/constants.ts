@@ -5,8 +5,9 @@ export const POPULAR_CUISINES = [
   { name: "Italian", emoji: "\uD83C\uDDEE\uD83C\uDDF9", gradient: "from-green-500 to-teal-500" },
   { name: "Caribbean", emoji: "\uD83C\uDF34", gradient: "from-yellow-400 to-orange-500" },
   { name: "Middle Eastern", emoji: "\uD83E\uDDC6", gradient: "from-amber-400 to-orange-500" },
-  { name: "South Indian", emoji: "\uD83C\uDF5B", gradient: "from-yellow-500 to-red-400" },
+  { name: "Mexican", emoji: "\uD83C\uDDF2\uD83C\uDDFD", gradient: "from-green-500 to-red-500" },
   { name: "Japanese", emoji: "\uD83C\uDDEF\uD83C\uDDF5", gradient: "from-rose-400 to-red-500" },
+  { name: "British", emoji: "\uD83C\uDDEC\uD83C\uDDE7", gradient: "from-blue-400 to-red-400" },
 ];
 
 export const RADIUS_OPTIONS = [5, 10, 15, 20, 30] as const;

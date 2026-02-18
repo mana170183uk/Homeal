@@ -68,6 +68,7 @@ enum SellerType {
   KITCHEN
   CAKE
   BAKERY
+  CAKE_BAKERY
   OTHER
 }
 
@@ -134,6 +135,8 @@ model Chef {
   stripeAccountId String?    @db.VarChar(191)
   sellerType      SellerType @default(KITCHEN)
   businessName    String?    @db.VarChar(255)
+  address         String?    @db.Text
+  postcode        String?    @db.VarChar(10)
   cakeEnabled     Boolean    @default(false)
   bakeryEnabled   Boolean    @default(false)
   paymentConfig   String?    @db.Text
@@ -144,17 +147,22 @@ model Chef {
   createdAt       DateTime   @default(now()) @db.DateTime(3)
   updatedAt       DateTime   @updatedAt @db.DateTime(3)
 
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  menus     Menu[]
-  orders    Order[]
-  reviews   Review[]
-  services  Service[]
-  payments  Payment[]
-  followers ChefFollow[]
-  templates MenuTemplate[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menus         Menu[]
+  orders        Order[]
+  reviews       Review[]
+  services      Service[]
+  payments      Payment[]
+  followers     ChefFollow[]
+  templates     MenuTemplate[]
+  tiffinPlans   TiffinPlan[]
+  subscriptions Subscription[]
+  badges        ChefBadge[]
+  categorySuggestions CategorySuggestion[]
 
   @@index([latitude, longitude])
   @@index([isOnline])
+  @@index([postcode])
 }
 
 model Menu {
@@ -286,22 +294,52 @@ model Service {
 }
 
 model Subscription {
-  id        String             @id @default(uuid()) @db.VarChar(36)
-  userId    String             @db.VarChar(36)
-  name      String             @db.VarChar(255)
-  plan      String             @db.VarChar(100)
-  price     Float
-  startDate DateTime           @db.Date
-  endDate   DateTime           @db.Date
-  status    SubscriptionStatus @default(ACTIVE)
-  meals     String?            @db.Text
-  createdAt DateTime           @default(now()) @db.DateTime(3)
-  updatedAt DateTime           @updatedAt @db.DateTime(3)
+  id                   String             @id @default(uuid()) @db.VarChar(36)
+  userId               String             @db.VarChar(36)
+  chefId               String?            @db.VarChar(36)
+  tiffinPlanId         String?            @db.VarChar(36)
+  name                 String             @db.VarChar(255)
+  plan                 String             @db.VarChar(100)
+  price                Float
+  startDate            DateTime           @db.Date
+  endDate              DateTime           @db.Date
+  status               SubscriptionStatus @default(ACTIVE)
+  meals                String?            @db.Text
+  frequency            String?            @db.VarChar(20)
+  nextDelivery         DateTime?          @db.Date
+  stripeSubscriptionId String?            @db.VarChar(255)
+  stripeCustomerId     String?            @db.VarChar(255)
+  createdAt            DateTime           @default(now()) @db.DateTime(3)
+  updatedAt            DateTime           @updatedAt @db.DateTime(3)
 
-  user User @relation(fields: [userId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  chef       Chef?       @relation(fields: [chefId], references: [id])
+  tiffinPlan TiffinPlan? @relation(fields: [tiffinPlanId], references: [id])
 
   @@index([userId])
+  @@index([chefId])
   @@index([status])
+}
+
+model TiffinPlan {
+  id              String   @id @default(uuid()) @db.VarChar(36)
+  chefId          String   @db.VarChar(36)
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  frequency       String   @db.VarChar(20)
+  price           Float
+  mealsPerDay     Int      @default(1)
+  isVeg           Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  stripePriceId   String?  @db.VarChar(255)
+  stripeProductId String?  @db.VarChar(255)
+  createdAt       DateTime @default(now()) @db.DateTime(3)
+  updatedAt       DateTime @updatedAt @db.DateTime(3)
+
+  chef          Chef           @relation(fields: [chefId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@index([chefId])
 }
 
 model Review {
@@ -468,6 +506,34 @@ model MenuTemplate {
   items     String   @db.Text
   createdAt DateTime @default(now()) @db.DateTime(3)
   updatedAt DateTime @updatedAt @db.DateTime(3)
+
+  chef Chef @relation(fields: [chefId], references: [id], onDelete: Cascade)
+
+  @@index([chefId])
+}
+
+model CategorySuggestion {
+  id                 String   @id @default(uuid()) @db.VarChar(36)
+  chefId             String   @db.VarChar(36)
+  name               String   @db.VarChar(255)
+  description        String?  @db.Text
+  status             String   @default("PENDING") @db.VarChar(20)
+  approvedCategoryId String?  @db.VarChar(36)
+  createdAt          DateTime @default(now()) @db.DateTime(3)
+
+  chef Chef @relation(fields: [chefId], references: [id], onDelete: Cascade)
+
+  @@index([chefId])
+  @@index([status])
+}
+
+model ChefBadge {
+  id        String    @id @default(uuid()) @db.VarChar(36)
+  chefId    String    @db.VarChar(36)
+  type      String    @db.VarChar(50)
+  label     String    @db.VarChar(100)
+  awardedAt DateTime  @default(now()) @db.DateTime(3)
+  expiresAt DateTime? @db.DateTime(3)
 
   chef Chef @relation(fields: [chefId], references: [id], onDelete: Cascade)
 

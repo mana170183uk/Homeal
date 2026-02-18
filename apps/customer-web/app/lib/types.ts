@@ -17,6 +17,11 @@ export interface ChefMenu {
   items: ChefMenuItem[];
 }
 
+export interface ChefBadge {
+  type: string;
+  label: string;
+}
+
 export interface Chef {
   id: string;
   kitchenName: string;
@@ -33,6 +38,7 @@ export interface Chef {
   longitude?: number | null;
   user: { name: string; avatar: string | null };
   menus: ChefMenu[];
+  badges?: ChefBadge[];
 }
 
 export interface Address {

@@ -129,7 +129,7 @@ export default function SearchControls({
               setLocationHint(false);
             }
           }}
-          className="text-xs font-medium bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-full px-3 py-1.5 outline-none focus:border-primary transition cursor-pointer shrink-0"
+          className="text-xs font-medium bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-full px-3 py-1.5 outline-none focus:border-primary transition cursor-pointer shrink-0 [&>option]:text-gray-900 [&>option]:bg-white"
         >
           <option value={0}>All UK</option>
           {RADIUS_OPTIONS.map((r) => (

@@ -1,4 +1,4 @@
-import { MapPin, Star, UtensilsCrossed, Tag } from "lucide-react";
+import { MapPin, Star, UtensilsCrossed, Tag, Award } from "lucide-react";
 import { Chef } from "../lib/types";
 import { parseCuisineTypes } from "../lib/utils";
 
@@ -117,7 +117,7 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
         </div>
 
         {/* Bottom badges row */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 flex-wrap">
           {/* Price badge */}
           {minPrice != null && (
             <span className="badge-gradient text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
@@ -132,6 +132,17 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
               Offers
             </span>
           )}
+
+          {/* Chef badges (e.g. Menu Innovator) */}
+          {chef.badges && chef.badges.length > 0 && chef.badges.map((b) => (
+            <span
+              key={b.type}
+              className="flex items-center gap-1 bg-purple-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm"
+            >
+              <Award className="w-3 h-3" />
+              {b.label}
+            </span>
+          ))}
         </div>
       </div>
 

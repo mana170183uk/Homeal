@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Bell,
   BellOff,
+  Repeat,
+  Loader2,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { parseCuisineTypes } from "../../lib/utils";
@@ -165,6 +167,8 @@ export default function ChefProfilePage({
   const [dateMenuClosed, setDateMenuClosed] = useState(false);
   const [isOnVacation, setIsOnVacation] = useState(false);
   const [pastCutoff, setPastCutoff] = useState(false);
+  const [tiffinPlans, setTiffinPlans] = useState<any[]>([]);
+  const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
 
   // Public page — no login required. Guests can browse chef profiles freely.
 
@@ -190,6 +194,44 @@ export default function ChefProfilePage({
     }
     fetchChef();
   }, [id]);
+
+  // Fetch tiffin plans for this chef
+  useEffect(() => {
+    async function fetchPlans() {
+      try {
+        const res = await api<any[]>(`/subscriptions/plans/${id}`);
+        if (res.success && res.data) setTiffinPlans(res.data);
+      } catch { /* no plans available */ }
+    }
+    fetchPlans();
+  }, [id]);
+
+  async function handleSubscribe(planId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) {
+      router.push(`/login?redirect=/chef/${id}`);
+      return;
+    }
+    setSubscribingPlanId(planId);
+    try {
+      const res = await api<{ url: string }>("/subscriptions/checkout", {
+        method: "POST",
+        token,
+        body: JSON.stringify({ planId }),
+      });
+      if (res.success && res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        setToast(res.error || "Failed to start subscription.");
+        setTimeout(() => setToast(""), 3000);
+      }
+    } catch {
+      setToast("Something went wrong. Please try again.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setSubscribingPlanId(null);
+    }
+  }
 
   // Fetch date-specific menu when date changes
   useEffect(() => {
@@ -305,13 +347,11 @@ export default function ChefProfilePage({
 
     let currentCart = getCart();
 
-    // Single-chef policy
-    if (currentCart.length > 0 && currentCart[0].chefId !== chef.id) {
-      const confirmed = window.confirm(
-        `Your cart has items from "${currentCart[0].chefName}". Adding items from "${chef.kitchenName}" will clear your current cart. Continue?`
-      );
-      if (!confirmed) return;
-      currentCart = [];
+    // Max 3 vendor policy
+    const vendorIds = new Set(currentCart.map((c) => c.chefId));
+    if (!vendorIds.has(chef.id) && vendorIds.size >= 3) {
+      window.alert("You can order from up to 3 kitchens at a time. Remove items from an existing kitchen to add from a new one.");
+      return;
     }
 
     const effectivePrice =
@@ -878,6 +918,52 @@ export default function ChefProfilePage({
                       {service.description}
                     </p>
                   )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Tiffin Subscription Plans */}
+        {tiffinPlans.length > 0 && (
+          <section className="mb-10">
+            <h2 className="font-display text-2xl font-bold text-[var(--text)] mb-5 flex items-center gap-2">
+              <Repeat className="w-6 h-6 text-primary" />
+              Tiffin Plans
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {tiffinPlans.map((plan: any) => (
+                <div
+                  key={plan.id}
+                  className="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-[var(--text)]">{plan.name}</h3>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {plan.mealsPerDay} meal{plan.mealsPerDay > 1 ? "s" : ""}/day · {plan.frequency === "WEEKLY" ? "Weekly" : "Monthly"}
+                        {plan.isVeg && <span className="ml-1 text-green-600">· Veg</span>}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-primary">£{plan.price.toFixed(2)}</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">/{plan.frequency === "WEEKLY" ? "week" : "month"}</p>
+                    </div>
+                  </div>
+                  {plan.description && (
+                    <p className="text-sm text-[var(--text-soft)] mb-4">{plan.description}</p>
+                  )}
+                  <button
+                    onClick={() => handleSubscribe(plan.id)}
+                    disabled={subscribingPlanId === plan.id}
+                    className="w-full btn-premium py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {subscribingPlanId === plan.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting...</>
+                    ) : (
+                      <><Repeat className="w-4 h-4" /> Subscribe</>
+                    )}
+                  </button>
                 </div>
               ))}
             </div>

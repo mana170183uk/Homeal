@@ -183,7 +183,10 @@ function DiscoverContent() {
       result = result.filter((chef) => {
         if (!chef.cuisineTypes) return false;
         const types = parseCuisineTypes(chef.cuisineTypes).map((t) => t.toLowerCase());
-        return selectedCuisines.some((c) => types.includes(c.toLowerCase()));
+        return selectedCuisines.some((c) => {
+          const cl = c.toLowerCase();
+          return types.some((t) => t.includes(cl) || cl.includes(t));
+        });
       });
     }
 

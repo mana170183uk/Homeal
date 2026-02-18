@@ -41,46 +41,63 @@ jobs:
           mkdir -p deploy
           cp -r packages/api/dist deploy/
           # Copy workspace packages that the API depends on
-          cp -r packages/db deploy/packages-db
-          cp -r packages/shared deploy/packages-shared
-          # Copy node_modules following symlinks so workspace packages are resolved
-          cp -rL node_modules/. deploy/node_modules/
+          mkdir -p deploy/node_modules/@homeal
+          cp -r packages/db deploy/node_modules/@homeal/db
+          cp -r packages/shared deploy/node_modules/@homeal/shared
+          # Copy all node_modules (following symlinks) — includes Prisma generated client
+          cp -rL node_modules/.prisma deploy/node_modules/.prisma
+          cp -rL node_modules/@prisma deploy/node_modules/@prisma
+          # Copy runtime dependencies (not the entire monorepo node_modules)
+          for dep in express cors helmet jsonwebtoken multer sharp socket.io stripe zod ioredis firebase-admin express-rate-limit; do
+            if [ -d "node_modules/$dep" ]; then
+              cp -rL "node_modules/$dep" "deploy/node_modules/$dep"
+            fi
+          done
+          # Copy all scoped packages we need (@azure, @firebase, etc.)
+          for scope in @azure @firebase @google-cloud @grpc @protobufjs @types @fastify @socket.io @mapbox @img undici; do
+            if [ -d "node_modules/$scope" ]; then
+              cp -rL "node_modules/$scope" "deploy/node_modules/$scope"
+            fi
+          done
+          # Copy remaining transitive deps by letting node resolve them
+          # Simpler approach: just copy everything except huge dev-only tools
+          rsync -a --exclude='.cache' --exclude='typescript' --exclude='eslint*' --exclude='prettier' \
+            --exclude='@next' --exclude='next' --exclude='react' --exclude='react-dom' \
+            --exclude='@swc' --exclude='turbo*' --exclude='webpack*' --exclude='.bin' \
+            node_modules/ deploy/node_modules/ 2>/dev/null || true
           # Create entry point
           cat > deploy/server.js << 'ENTRY'
           require('./dist/server.js');
           ENTRY
-          # Override stale oryx-manifest.toml — prevents Azure runtime from
-          # extracting a compressed node_modules.tar.gz over our pre-built modules
-          echo '' > deploy/oryx-manifest.toml
-          # Create package.json with real dependencies (including @prisma/client)
+          # Create package.json
           node -e "
-            const pkg = require('./packages/api/package.json');
-            const deps = {...pkg.dependencies};
-            delete deps['@homeal/db'];
-            delete deps['@homeal/shared'];
             const out = {
               name: 'homeal-api-deploy',
               version: '1.0.0',
               main: 'server.js',
-              scripts: { start: 'node server.js' },
-              dependencies: deps
+              scripts: { start: 'node server.js' }
             };
             require('fs').writeFileSync('deploy/package.json', JSON.stringify(out, null, 2));
           "
+          # Show deploy size
+          du -sh deploy/
+          du -sh deploy/node_modules/
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Disable Oryx build (we ship pre-built with node_modules)
+      - name: Configure app settings
         run: |
-          az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false
+          az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false WEBSITE_RUN_FROM_PACKAGE=1
 
       - name: Deploy to Azure Web App
         run: |
           cd deploy && zip -r -q ../deploy.zip . && cd ..
-          az webapp deploy --resource-group rg-visualstudio-lab-mana --name homeal-api --src-path deploy.zip --type zip --async false
+          az webapp deploy --resource-group rg-visualstudio-lab-mana --name homeal-api \
+            --src-path deploy.zip --type zip --clean true --async false
 
       - name: Configure startup
         run: |

@@ -54,6 +54,15 @@ jobs:
             "scripts": { "start": "node server.js" }
           }
           PKG
+          # Create startup script that cleans Oryx artifacts before running
+          cat > deploy/startup.sh << 'STARTUP'
+          #!/bin/bash
+          # Remove Oryx artifacts that corrupt node_modules on container restart
+          rm -f /home/site/wwwroot/node_modules.tar.gz /home/site/wwwroot/oryx-manifest.toml
+          rm -rf /home/site/wwwroot/_del_node_modules
+          exec node /home/site/wwwroot/server.js
+          STARTUP
+          chmod +x deploy/startup.sh
           # Zip for deployment
           cd deploy && zip -r -q ../deploy.zip . && cd ..
           ls -lh deploy.zip
@@ -68,17 +77,42 @@ jobs:
           az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana \
             --settings \
             SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-            ENABLE_ORYX_BUILD=false \
-            WEBSITE_RUN_FROM_PACKAGE=1
+            ENABLE_ORYX_BUILD=false
+          # Remove WEBSITE_RUN_FROM_PACKAGE if set
+          az webapp config appsettings delete --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
+
+      - name: Clean stale Oryx artifacts
+        run: |
+          CREDS=$(az webapp deployment list-publishing-credentials \
+            --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --query "{user:publishingUserName, pass:publishingPassword}" -o json)
+          KUDU_USER=$(echo "$CREDS" | jq -r '.user')
+          KUDU_PASS=$(echo "$CREDS" | jq -r '.pass')
+          curl -s -X POST "https://homeal-api.scm.azurewebsites.net/api/command" \
+            -u "$KUDU_USER:$KUDU_PASS" \
+            -H "Content-Type: application/json" \
+            -d '{"command":"rm -rf /home/site/wwwroot/node_modules.tar.gz /home/site/wwwroot/oryx-manifest.toml /home/site/wwwroot/_del_node_modules /home/data/SitePackages","dir":"/home"}' || true
 
       - name: Deploy zip to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: homeal-api
-          package: deploy.zip
+        run: |
+          az webapp deploy --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --src-path deploy.zip --type zip --clean true --async true
 
       - name: Configure startup and restart
         run: |
+          # Use startup.sh which cleans Oryx artifacts before starting node
           az webapp config set --name homeal-api --resource-group rg-visualstudio-lab-mana \
-            --startup-file "node server.js"
+            --startup-file "/home/site/wwwroot/startup.sh"
+          sleep 30
           az webapp restart --name homeal-api --resource-group rg-visualstudio-lab-mana
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting 90 seconds for app to start..."
+          sleep 90
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.homeal.uk/health)
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" = "503" ]; then
+            echo "::warning::API returned 503 - check container logs"
+          fi

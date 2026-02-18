@@ -3197,11 +3197,37 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Kitchen Name</label>
-                    <input type="text" value={chefProfile?.kitchenName || ""} readOnly className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text-muted)] outline-none cursor-not-allowed" />
+                    <input
+                      type="text"
+                      defaultValue={chefProfile?.kitchenName || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || !e.target.value.trim() || e.target.value === (chefProfile?.kitchenName || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ kitchenName: e.target.value.trim() }) });
+                          showToast("Kitchen name updated");
+                        } catch { showToast("Failed to update kitchen name", "error"); }
+                      }}
+                      placeholder="Your kitchen name"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Business Name</label>
-                    <input type="text" value={chefProfile?.businessName || ""} readOnly className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text-muted)] outline-none cursor-not-allowed" />
+                    <input
+                      type="text"
+                      defaultValue={chefProfile?.businessName || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || e.target.value === (chefProfile?.businessName || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ businessName: e.target.value.trim() || null }) });
+                          showToast("Business name updated");
+                        } catch { showToast("Failed to update business name", "error"); }
+                      }}
+                      placeholder="Legal business name (optional)"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Address</label>
@@ -3240,8 +3266,72 @@ export default function DashboardPage() {
                     />
                   </div>
                   <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">City / Town</label>
+                    <input
+                      type="text"
+                      defaultValue={chefProfile?.city || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || e.target.value === (chefProfile?.city || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ city: e.target.value.trim() }) });
+                          showToast("City updated");
+                        } catch { showToast("Failed to update city", "error"); }
+                      }}
+                      placeholder="e.g. Watford"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">County</label>
+                    <input
+                      type="text"
+                      defaultValue={chefProfile?.county || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || e.target.value === (chefProfile?.county || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ county: e.target.value.trim() }) });
+                          showToast("County updated");
+                        } catch { showToast("Failed to update county", "error"); }
+                      }}
+                      placeholder="e.g. Hertfordshire"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Contact Person</label>
+                    <input
+                      type="text"
+                      defaultValue={chefProfile?.contactPerson || chefProfile?.user?.name || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || e.target.value === (chefProfile?.contactPerson || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ contactPerson: e.target.value.trim() }) });
+                          showToast("Contact person updated");
+                        } catch { showToast("Failed to update", "error"); }
+                      }}
+                      placeholder="Contact person name"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-xs font-semibold text-[var(--text)] mb-1.5">Contact Phone</label>
-                    <input type="text" value={chefProfile?.user?.phone || ""} readOnly className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text-muted)] outline-none cursor-not-allowed" />
+                    <input
+                      type="tel"
+                      defaultValue={chefProfile?.contactPhone || chefProfile?.user?.phone || ""}
+                      onBlur={async (e) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token || e.target.value === (chefProfile?.contactPhone || "")) return;
+                        try {
+                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ contactPhone: e.target.value.trim() }) });
+                          showToast("Contact phone updated");
+                        } catch { showToast("Failed to update", "error"); }
+                      }}
+                      placeholder="+44 7700 900123"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
                   </div>
                 </div>
                 {!chefProfile?.postcode && (

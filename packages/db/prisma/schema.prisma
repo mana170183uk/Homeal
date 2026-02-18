@@ -136,7 +136,11 @@ model Chef {
   sellerType      SellerType @default(KITCHEN)
   businessName    String?    @db.VarChar(255)
   address         String?    @db.Text
+  city            String?    @db.VarChar(100)
+  county          String?    @db.VarChar(100)
   postcode        String?    @db.VarChar(10)
+  contactPhone    String?    @db.VarChar(20)
+  contactPerson   String?    @db.VarChar(255)
   cakeEnabled     Boolean    @default(false)
   bakeryEnabled   Boolean    @default(false)
   paymentConfig   String?    @db.Text

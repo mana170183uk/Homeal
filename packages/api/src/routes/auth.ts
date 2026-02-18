@@ -51,13 +51,17 @@ router.post("/register", async (req: Request, res: Response) => {
       // Geocode postcode if provided
       let latitude: number | undefined;
       let longitude: number | undefined;
+      let geoCity: string | undefined;
+      let geoCounty: string | undefined;
       if (postcode) {
         try {
           const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.replace(/\s+/g, ""))}`);
-          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number } };
+          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number; admin_district: string | null; admin_county: string | null } };
           if (geoData.status === 200 && geoData.result) {
             latitude = geoData.result.latitude;
             longitude = geoData.result.longitude;
+            if (geoData.result.admin_district) geoCity = geoData.result.admin_district;
+            if (geoData.result.admin_county) geoCounty = geoData.result.admin_county;
           }
         } catch (err) {
           console.warn("[Register] Postcode geocoding failed:", err);
@@ -74,6 +78,10 @@ router.post("/register", async (req: Request, res: Response) => {
           bakeryEnabled: sellerType === "CAKE_BAKERY" || sellerType === "BAKERY" || sellerType === "CAKE",
           address: address || null,
           postcode: postcode || null,
+          city: geoCity || null,
+          county: geoCounty || null,
+          contactPhone: phone || null,
+          contactPerson: name || null,
           latitude,
           longitude,
           isVerified: false,

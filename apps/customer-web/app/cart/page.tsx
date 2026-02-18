@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ShoppingBag,
@@ -10,7 +10,6 @@ import {
   UtensilsCrossed,
   ArrowRight,
   Search,
-  Store,
 } from "lucide-react";
 import Header from "../components/Header";
 
@@ -22,13 +21,6 @@ interface CartItem {
   quantity: number;
   chefId: string;
   chefName: string;
-}
-
-interface VendorGroup {
-  chefId: string;
-  chefName: string;
-  items: CartItem[];
-  subtotal: number;
 }
 
 function getCart(): CartItem[] {
@@ -77,36 +69,16 @@ export default function CartPage() {
     setCart([...current]);
   }
 
-  function removeVendor(chefId: string) {
-    const current = getCart().filter((c) => c.chefId !== chefId);
-    saveCart(current);
-    setCart([...current]);
-  }
-
   function clearCart() {
     saveCart([]);
     setCart([]);
   }
 
-  // Group items by vendor
-  const vendorGroups: VendorGroup[] = useMemo(() => {
-    const map = new Map<string, VendorGroup>();
-    for (const item of cart) {
-      let group = map.get(item.chefId);
-      if (!group) {
-        group = { chefId: item.chefId, chefName: item.chefName, items: [], subtotal: 0 };
-        map.set(item.chefId, group);
-      }
-      group.items.push(item);
-      group.subtotal += item.price * item.quantity;
-    }
-    return Array.from(map.values());
-  }, [cart]);
-
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const totalDeliveryFee = vendorGroups.length > 0 ? DELIVERY_FEE * vendorGroups.length : 0;
+  const totalDeliveryFee = cart.length > 0 ? DELIVERY_FEE : 0;
   const total = cart.length > 0 ? subtotal + totalDeliveryFee : 0;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const kitchenName = cart.length > 0 ? cart[0].chefName : "";
 
   if (!mounted) {
     return (
@@ -166,106 +138,75 @@ export default function CartPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Multi-vendor info */}
-            {vendorGroups.length > 1 && (
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-primary/5 border border-primary/10 rounded-xl px-3 py-2">
-                <Store className="w-4 h-4 text-primary shrink-0" />
-                <span>
-                  Ordering from <span className="font-semibold text-[var(--text)]">{vendorGroups.length} kitchens</span> — each kitchen is a separate order with its own delivery fee.
-                </span>
-              </div>
-            )}
+            {/* Kitchen name header */}
+            <div className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+              <UtensilsCrossed className="w-4 h-4 text-primary" />
+              <span>
+                Items from <span className="font-semibold text-[var(--text)]">{kitchenName}</span>
+              </span>
+            </div>
 
-            {/* Vendor groups */}
-            {vendorGroups.map((group) => (
-              <div key={group.chefId} className="space-y-3">
-                {/* Vendor header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-                    <UtensilsCrossed className="w-4 h-4 text-primary" />
-                    <span>
-                      Items from <span className="font-semibold text-[var(--text)]">{group.chefName}</span>
-                    </span>
-                  </div>
-                  {vendorGroups.length > 1 && (
-                    <button
-                      onClick={() => removeVendor(group.chefId)}
-                      className="text-xs font-medium text-[var(--text-muted)] hover:text-alert transition px-2 py-1 rounded-lg hover:bg-alert/5"
-                    >
-                      Remove all
-                    </button>
+            {/* Items list */}
+            <div className="space-y-3">
+              {cart.map((item) => (
+                <div
+                  key={item.id}
+                  className="glass-card rounded-2xl p-4 flex gap-4 animate-fade-in-up"
+                >
+                  {/* Image */}
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-20 h-20 rounded-xl object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 badge-gradient opacity-20 rounded-xl flex items-center justify-center shrink-0">
+                      <UtensilsCrossed className="w-8 h-8 text-white opacity-60" />
+                    </div>
                   )}
-                </div>
 
-                {/* Items for this vendor */}
-                {group.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="glass-card rounded-2xl p-4 flex gap-4 animate-fade-in-up"
-                  >
-                    {/* Image */}
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-20 h-20 rounded-xl object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 badge-gradient opacity-20 rounded-xl flex items-center justify-center shrink-0">
-                        <UtensilsCrossed className="w-8 h-8 text-white opacity-60" />
-                      </div>
-                    )}
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-[var(--text)] truncate">
+                        {item.name}
+                      </h3>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-alert hover:bg-alert/5 transition shrink-0"
+                        aria-label="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-[var(--text)] truncate">
-                          {item.name}
-                        </h3>
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-alert hover:bg-alert/5 transition shrink-0"
-                          aria-label="Remove item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <p className="text-primary font-bold mt-1">
+                      &pound;{(item.price * item.quantity).toFixed(2)}
+                    </p>
 
-                      <p className="text-primary font-bold mt-1">
-                        &pound;{(item.price * item.quantity).toFixed(2)}
-                      </p>
-
-                      {/* Quantity controls */}
-                      <div className="flex items-center gap-3 mt-2">
-                        <button
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="w-8 h-8 rounded-full bg-[var(--input)] border border-[var(--border)] flex items-center justify-center text-[var(--text)] hover:bg-primary/10 transition"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-sm font-bold text-[var(--text)] w-6 text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="w-8 h-8 rounded-full badge-gradient flex items-center justify-center text-white hover:opacity-90 transition"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                    {/* Quantity controls */}
+                    <div className="flex items-center gap-3 mt-2">
+                      <button
+                        onClick={() => updateQuantity(item.id, -1)}
+                        className="w-8 h-8 rounded-full bg-[var(--input)] border border-[var(--border)] flex items-center justify-center text-[var(--text)] hover:bg-primary/10 transition"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-sm font-bold text-[var(--text)] w-6 text-center">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(item.id, 1)}
+                        className="w-8 h-8 rounded-full badge-gradient flex items-center justify-center text-white hover:opacity-90 transition"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                ))}
-
-                {/* Per-vendor subtotal */}
-                {vendorGroups.length > 1 && (
-                  <div className="flex justify-between text-sm px-2 text-[var(--text-soft)]">
-                    <span>{group.chefName} subtotal</span>
-                    <span>&pound;{group.subtotal.toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
 
             {/* Order summary */}
             <div className="glass-card rounded-2xl p-5 space-y-3">
@@ -278,9 +219,7 @@ export default function CartPage() {
                   <span>&pound;{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-[var(--text-soft)]">
-                  <span>
-                    Delivery fee{vendorGroups.length > 1 ? ` (${vendorGroups.length} kitchens × £${DELIVERY_FEE.toFixed(2)})` : ""}
-                  </span>
+                  <span>Delivery fee</span>
                   <span>&pound;{totalDeliveryFee.toFixed(2)}</span>
                 </div>
                 <div className="border-t border-[var(--border)] pt-2 flex justify-between font-bold text-[var(--text)]">

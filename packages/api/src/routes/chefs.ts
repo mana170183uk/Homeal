@@ -180,7 +180,7 @@ const ALLOWED_CHEF_FIELDS = [
   "kitchenName", "description", "cuisineTypes", "bannerImage", "latitude", "longitude",
   "deliveryRadius", "isOnline", "operatingHours", "bankDetails", "sellerType", "businessName",
   "cakeEnabled", "bakeryEnabled", "dailyOrderCap", "orderCutoffTime", "vacationStart", "vacationEnd",
-  "address", "postcode",
+  "address", "city", "county", "postcode", "contactPhone", "contactPerson",
 ];
 
 router.patch(
@@ -206,10 +206,12 @@ router.patch(
       if (data.postcode && typeof data.postcode === "string") {
         try {
           const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent((data.postcode as string).replace(/\s+/g, ""))}`);
-          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number } };
+          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number; admin_district: string | null; admin_county: string | null } };
           if (geoData.status === 200 && geoData.result) {
             data.latitude = geoData.result.latitude;
             data.longitude = geoData.result.longitude;
+            if (geoData.result.admin_district && !data.city) data.city = geoData.result.admin_district;
+            if (geoData.result.admin_county && !data.county) data.county = geoData.result.admin_county;
           }
         } catch { /* geocode failed — skip */ }
       }

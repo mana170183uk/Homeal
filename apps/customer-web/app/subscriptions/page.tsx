@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Repeat,
@@ -31,6 +31,14 @@ interface Subscription {
 }
 
 export default function SubscriptionsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+      <SubscriptionsContent />
+    </Suspense>
+  );
+}
+
+function SubscriptionsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);

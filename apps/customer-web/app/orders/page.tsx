@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ClipboardList,
@@ -30,6 +30,14 @@ function getStatusConfig(status: string) {
 }
 
 export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+      <OrdersContent />
+    </Suspense>
+  );
+}
+
+function OrdersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);

@@ -135,11 +135,7 @@ function SignupContent() {
         localStorage.setItem("homeal_user_role", res.data.user?.role || role);
       }
 
-      // Send branded verification email via API
-      api("/auth/send-verification", {
-        method: "POST",
-        body: JSON.stringify({ email: form.email }),
-      }).catch(() => {});
+      // Verification email is now sent server-side during registration
 
       if (role === "CHEF") {
         setChefSubmitted(true);
@@ -184,7 +180,7 @@ function SignupContent() {
             localStorage.setItem("homeal_user_name", res.data.user?.name || form.name);
             localStorage.setItem("homeal_user_role", res.data.user?.role || role);
 
-            api("/auth/send-verification", { method: "POST", body: JSON.stringify({ email: form.email }) }).catch(() => {});
+            // Verification email is now sent server-side during registration
 
             if (role === "CHEF") {
               setChefSubmitted(true);
@@ -536,6 +532,19 @@ function SignupContent() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-8">
           <div className="max-w-md w-full animate-slide-up" style={{ opacity: 0, animationFillMode: "forwards" }}>
             <div className="glass-card rounded-3xl p-6 sm:p-8 text-center">
+              {/* Homeal Logo */}
+              <a href="/" className="inline-flex items-center gap-1.5 mb-6" aria-label="Homeal - Home">
+                <img src="/chef-icon.png" alt="" className="h-10 sm:h-11 w-auto shrink-0" />
+                <div className="flex flex-col leading-none text-left">
+                  <span className="text-xl sm:text-2xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+                    <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+                    <span className="text-[#FF8800]">me</span>
+                    <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-[var(--text-soft)]">Where Every Meal Feels Like Home</span>
+                </div>
+              </a>
+
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-accent/10 flex items-center justify-center">
                 <CheckCircle className="w-10 h-10 text-accent" />
               </div>

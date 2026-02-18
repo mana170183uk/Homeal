@@ -71,6 +71,16 @@ router.post("/register", async (req: Request, res: Response) => {
       }
     }
 
+    // Send verification email server-side (more reliable than client-side fire-and-forget)
+    if (email) {
+      sendVerificationEmail({ email, userName: name || "there" })
+        .then((sent) => {
+          if (sent) console.log(`[Register] Verification email sent to ${email}`);
+          else console.warn(`[Register] Failed to send verification email to ${email}`);
+        })
+        .catch((err) => console.error("[Register] Verification email error:", err));
+    }
+
     const tokenPayload = { userId: user.id, role: user.role };
     const token = signToken(tokenPayload, process.env.JWT_SECRET || "dev-secret", JWT_EXPIRY);
     const refreshToken = signToken(tokenPayload, process.env.JWT_REFRESH_SECRET || "dev-refresh-secret", JWT_REFRESH_EXPIRY);

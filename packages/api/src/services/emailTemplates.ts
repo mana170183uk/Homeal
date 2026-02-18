@@ -10,6 +10,7 @@ export function newChefNotificationHtml(params: {
 <body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:block;margin:0 auto 8px;" />
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
@@ -46,6 +47,7 @@ export function chefApprovedHtml(params: {
 <body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:block;margin:0 auto 8px;" />
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
@@ -92,6 +94,7 @@ export function adminAccessRequestHtml(params: {
 <body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:block;margin:0 auto 8px;" />
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
@@ -126,6 +129,7 @@ export function adminAccessApprovedHtml(params: {
 <body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:block;margin:0 auto 8px;" />
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
@@ -153,6 +157,7 @@ export function adminAccessRejectedHtml(params: {
 <body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:block;margin:0 auto 8px;" />
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>
@@ -279,6 +284,7 @@ export function chefRejectedHtml(params: {
 <body style="margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#FFF0F3;">
   <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:32px;border:1px solid #FFD6E0;">
     <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://homeal.uk/chef-icon.png" alt="Homeal" width="48" height="48" style="display:block;margin:0 auto 8px;" />
       <h1 style="margin:0;font-size:28px;">
         <span style="color:#00B341;">Ho</span><span style="color:#FF5A1F;">me</span><span style="color:#00B341;">al</span>
       </h1>

@@ -136,7 +136,8 @@ jobs:
           az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana \
             --settings \
             SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-            ENABLE_ORYX_BUILD=true
+            ENABLE_ORYX_BUILD=true \
+            ORYX_NODE_MODULES_COMPRESSION=none
           # Remove any run-from-package setting that bypasses extraction
           az webapp config appsettings delete --name homeal-api --resource-group rg-visualstudio-lab-mana \
             --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true

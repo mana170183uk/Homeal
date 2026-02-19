@@ -1,0 +1,46 @@
+# ---------- build ----------
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+
+# Copy workspace root files first (better layer cache)
+COPY package.json package-lock.json ./
+COPY packages/api/package.json packages/api/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/shared/package.json packages/shared/package.json
+
+# Install all dependencies (including devDependencies for building)
+RUN npm ci
+
+# Copy source for workspace packages
+COPY packages ./packages
+
+# Build shared → db → api (same as npm run build:api)
+RUN npm run build:api
+
+# Generate Prisma client for Linux (explicit, in case build:api already did it)
+RUN npx prisma generate --schema=packages/db/prisma/schema.prisma
+
+# ---------- runtime ----------
+FROM node:20-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Copy node_modules (includes generated Prisma client with Linux binaries)
+COPY --from=build /app/node_modules ./node_modules
+
+# Copy built workspace packages
+COPY --from=build /app/packages/api/dist ./packages/api/dist
+COPY --from=build /app/packages/api/package.json ./packages/api/package.json
+COPY --from=build /app/packages/db/dist ./packages/db/dist
+COPY --from=build /app/packages/db/package.json ./packages/db/package.json
+COPY --from=build /app/packages/db/prisma/schema.prisma ./packages/db/prisma/schema.prisma
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+
+# Copy root package.json (needed for workspace resolution)
+COPY --from=build /app/package.json ./package.json
+
+# Azure App Service injects PORT env var; server already reads process.env.PORT
+EXPOSE 8080
+
+CMD ["node", "packages/api/dist/server.js"]

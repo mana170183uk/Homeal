@@ -28,8 +28,8 @@ FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# OpenSSL is needed by Prisma at runtime
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# OpenSSL + CA certs needed by Prisma at runtime (SSL connection to Azure MySQL)
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy node_modules (includes generated Prisma client with Linux binaries)
 COPY --from=build /app/node_modules ./node_modules

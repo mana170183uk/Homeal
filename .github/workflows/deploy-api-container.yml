@@ -39,10 +39,14 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/homeal-api:latest
             ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }}
 
-      - name: Azure login
-        uses: azure/login@v2
+      - name: Setup Node.js (for DB migrations)
+        uses: actions/setup-node@v4
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies (for Prisma CLI)
+        run: npm ci
 
       - name: Push DB schema & seed test users
         continue-on-error: true
@@ -51,6 +55,11 @@ jobs:
           npx tsx packages/db/prisma/seed.ts || echo "Seed skipped (users may already exist)"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Configure Web App to run container
         run: |

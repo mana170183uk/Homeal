@@ -56,6 +56,24 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      - name: Smoke-test container locally
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }}"
+          echo "=== File structure ==="
+          docker run --rm "$IMAGE" ls -la /app/
+          echo ""
+          echo "=== packages/api/dist ==="
+          docker run --rm "$IMAGE" ls -la /app/packages/api/dist/ || true
+          echo ""
+          echo "=== node_modules/@homeal ==="
+          docker run --rm "$IMAGE" ls -la /app/node_modules/@homeal/ || true
+          echo ""
+          echo "=== node_modules/.prisma/client ==="
+          docker run --rm "$IMAGE" ls /app/node_modules/.prisma/client/index.js || true
+          echo ""
+          echo "=== Try running server (capture crash output) ==="
+          docker run --rm -e PORT=8080 -e NODE_ENV=production "$IMAGE" node packages/api/dist/server.js 2>&1 || true
+
       - name: Azure login
         uses: azure/login@v2
         with:

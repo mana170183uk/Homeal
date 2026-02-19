@@ -1,11 +1,22 @@
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2025-01-27.acacia" as Stripe.LatestApiVersion,
-});
+let _stripe: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error("STRIPE_SECRET_KEY is not set");
+    }
+    _stripe = new Stripe(key, {
+      apiVersion: "2025-01-27.acacia" as Stripe.LatestApiVersion,
+    });
+  }
+  return _stripe;
+}
 
 export async function createStripeProduct(name: string, description?: string) {
-  return stripe.products.create({
+  return getStripe().products.create({
     name,
     description: description || undefined,
     metadata: { source: "homeal" },
@@ -17,7 +28,7 @@ export async function createStripePrice(
   unitAmount: number, // in pence
   interval: "week" | "month"
 ) {
-  return stripe.prices.create({
+  return getStripe().prices.create({
     product: productId,
     unit_amount: unitAmount,
     currency: "gbp",
@@ -40,7 +51,7 @@ export async function createCheckoutSession({
   cancelUrl: string;
   metadata?: Record<string, string>;
 }) {
-  return stripe.checkout.sessions.create({
+  return getStripe().checkout.sessions.create({
     mode: "subscription",
     ...(customerId ? { customer: customerId } : { customer_email: customerEmail }),
     line_items: [{ price: priceId, quantity: 1 }],
@@ -51,23 +62,23 @@ export async function createCheckoutSession({
 }
 
 export async function cancelStripeSubscription(subscriptionId: string) {
-  return stripe.subscriptions.cancel(subscriptionId);
+  return getStripe().subscriptions.cancel(subscriptionId);
 }
 
 export async function pauseStripeSubscription(subscriptionId: string) {
-  return stripe.subscriptions.update(subscriptionId, {
+  return getStripe().subscriptions.update(subscriptionId, {
     pause_collection: { behavior: "void" },
   });
 }
 
 export async function resumeStripeSubscription(subscriptionId: string) {
-  return stripe.subscriptions.update(subscriptionId, {
+  return getStripe().subscriptions.update(subscriptionId, {
     pause_collection: null as unknown as Stripe.SubscriptionUpdateParams.PauseCollection,
   });
 }
 
 export function constructWebhookEvent(body: Buffer, signature: string) {
-  return stripe.webhooks.constructEvent(
+  return getStripe().webhooks.constructEvent(
     body,
     signature,
     process.env.STRIPE_WEBHOOK_SECRET || ""
@@ -75,7 +86,7 @@ export function constructWebhookEvent(body: Buffer, signature: string) {
 }
 
 export async function deactivateStripeProduct(productId: string) {
-  return stripe.products.update(productId, { active: false });
+  return getStripe().products.update(productId, { active: false });
 }
 
-export default stripe;
+export default getStripe;

@@ -59,9 +59,6 @@ jobs:
       - name: Smoke-test container structure
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }}"
-          echo "=== Verify entry point exists ==="
-          docker run --rm "$IMAGE" node -e "require('./packages/api/dist/server.js')" 2>&1 && echo "OK" || echo "Entry point check failed (expected — no env vars in CI)"
-          echo ""
           echo "=== Verify critical modules resolve ==="
           docker run --rm "$IMAGE" node -e "require('express'); require('cors'); require('@prisma/client'); console.log('All critical modules OK')"
 

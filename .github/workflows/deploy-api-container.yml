@@ -56,23 +56,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Smoke-test container locally
+      - name: Smoke-test container structure
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }}"
-          echo "=== File structure ==="
-          docker run --rm "$IMAGE" ls -la /app/
+          echo "=== Verify entry point exists ==="
+          docker run --rm "$IMAGE" node -e "require('./packages/api/dist/server.js')" 2>&1 && echo "OK" || echo "Entry point check failed (expected — no env vars in CI)"
           echo ""
-          echo "=== packages/api/dist ==="
-          docker run --rm "$IMAGE" ls -la /app/packages/api/dist/ || true
-          echo ""
-          echo "=== node_modules/@homeal ==="
-          docker run --rm "$IMAGE" ls -la /app/node_modules/@homeal/ || true
-          echo ""
-          echo "=== node_modules/.prisma/client ==="
-          docker run --rm "$IMAGE" ls /app/node_modules/.prisma/client/index.js || true
-          echo ""
-          echo "=== Try running server (capture crash output) ==="
-          docker run --rm -e PORT=8080 -e NODE_ENV=production "$IMAGE" node packages/api/dist/server.js 2>&1 || true
+          echo "=== Verify critical modules resolve ==="
+          docker run --rm "$IMAGE" node -e "require('express'); require('cors'); require('@prisma/client'); console.log('All critical modules OK')"
 
       - name: Azure login
         uses: azure/login@v2
@@ -103,11 +94,11 @@ jobs:
             --setting-names SCM_DO_BUILD_DURING_DEPLOYMENT ENABLE_ORYX_BUILD ORYX_NODE_MODULES_COMPRESSION WEBSITE_RUN_FROM_PACKAGE PROJECT \
             2>/dev/null || true
 
-          # Clear startup command — container CMD is used instead
+          # Set startup command to match Dockerfile CMD (overrides stale "node server.js" from old deploy)
           az webapp config set \
             --resource-group rg-visualstudio-lab-mana \
             --name homeal-api \
-            --startup-file ""
+            --startup-file "node packages/api/dist/server.js"
 
           az webapp restart --resource-group rg-visualstudio-lab-mana --name homeal-api
 

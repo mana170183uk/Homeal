@@ -1,9 +1,18 @@
-name: Backup Sync (6-hour)
+name: Backup Sync (Daily)
 
 on:
   schedule:
-    # Every 6 hours: midnight, 6am, noon, 6pm UTC
-    - cron: "0 */6 * * *"
+    # Once daily at midnight UTC
+    - cron: "0 0 * * *"
+  # Also trigger after any production deploy succeeds
+  workflow_run:
+    workflows:
+      - "Deploy Homeal API (Container)"
+      - "Deploy Homeal Admin Panel to Azure"
+      - "Deploy Homeal Super Admin to Azure"
+      - "Deploy Homeal Customer Web to Azure"
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       sync_db:
@@ -14,12 +23,15 @@ on:
         description: "Sync app deployments"
         type: boolean
         default: true
+      force:
+        description: "Force sync even if no changes detected"
+        type: boolean
+        default: false
 
 env:
   RESOURCE_GROUP: rg-visualstudio-lab-mana
   MYSQL_HOST: restrovision-mysql.mysql.database.azure.com
   MYSQL_USER: restrovision_admin
-  MYSQL_PASS: Homeal2026Db
   PROD_DB: homeal_db
   BACKUP_DB: homeal_db_backup
 
@@ -27,13 +39,18 @@ jobs:
   sync-database:
     name: Sync Production DB → Backup DB
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'schedule' || github.event.inputs.sync_db == 'true' }}
+    # Run on schedule, manual trigger, or after a successful deploy
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_db == 'true') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Install MySQL client
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-client
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client > /dev/null 2>&1
+          echo "MySQL client installed: $(mysql --version)"
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -61,35 +78,88 @@ jobs:
 
       - name: Test MySQL connection
         env:
-          MYSQL_PWD: ${{ env.MYSQL_PASS }}
+          MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
-          echo "=== Connection Test ==="
-          echo "Host: ${{ env.MYSQL_HOST }}"
-          echo "User: ${{ env.MYSQL_USER }}"
-          echo "Password length: $(echo -n '${{ env.MYSQL_PASS }}' | wc -c) chars"
-
-          # Retry connection up to 3 times with 10s wait
           for i in 1 2 3; do
-            echo "Attempt $i/3..."
+            echo "Connection attempt $i/3..."
             if mysql \
               --host=${{ env.MYSQL_HOST }} \
               --user=${{ env.MYSQL_USER }} \
               --ssl-mode=REQUIRED \
               --connect-timeout=10 \
-              -e "SELECT 'Connection OK' AS status; SHOW DATABASES;" 2>&1; then
-              echo "Connection successful on attempt $i"
+              -e "SELECT 'Connection OK' AS status;" 2>&1; then
+              echo "Connected successfully"
               exit 0
-            else
-              echo "Attempt $i failed, waiting 10s..."
-              sleep 10
             fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
-          echo "ERROR: All 3 connection attempts failed"
+          echo "::error::All 3 MySQL connection attempts failed"
           exit 1
 
-      - name: Dump production database
+      - name: Check for changes between production and backup
+        id: check_changes
         env:
-          MYSQL_PWD: ${{ env.MYSQL_PASS }}
+          MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
+        run: |
+          FORCE="${{ github.event.inputs.force || 'false' }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "Force sync requested, skipping change detection"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # If triggered by a deploy workflow, always sync
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "Triggered by deployment (${{ github.event.workflow_run.name }}), syncing"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Comparing production and backup databases..."
+          MYSQL_OPTS="--host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N"
+
+          # Compare total row counts across all tables
+          PROD_ROWS=$(mysql $MYSQL_OPTS -e "
+            SELECT COALESCE(SUM(TABLE_ROWS), 0)
+            FROM information_schema.tables
+            WHERE table_schema='${{ env.PROD_DB }}' AND table_type='BASE TABLE'
+          " 2>/dev/null | tr -d '[:space:]')
+
+          BACKUP_ROWS=$(mysql $MYSQL_OPTS -e "
+            SELECT COALESCE(SUM(TABLE_ROWS), 0)
+            FROM information_schema.tables
+            WHERE table_schema='${{ env.BACKUP_DB }}' AND table_type='BASE TABLE'
+          " 2>/dev/null | tr -d '[:space:]')
+
+          # Compare table counts
+          PROD_TABLES=$(mysql $MYSQL_OPTS -e "
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema='${{ env.PROD_DB }}' AND table_type='BASE TABLE'
+          " 2>/dev/null | tr -d '[:space:]')
+
+          BACKUP_TABLES=$(mysql $MYSQL_OPTS -e "
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema='${{ env.BACKUP_DB }}' AND table_type='BASE TABLE'
+          " 2>/dev/null | tr -d '[:space:]')
+
+          echo "Production: $PROD_TABLES tables, ~$PROD_ROWS rows"
+          echo "Backup:     $BACKUP_TABLES tables, ~$BACKUP_ROWS rows"
+
+          if [ "$PROD_TABLES" != "$BACKUP_TABLES" ] || [ "$PROD_ROWS" != "$BACKUP_ROWS" ]; then
+            echo "Changes detected — will sync"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes detected — skipping sync"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Dump production database
+        if: steps.check_changes.outputs.has_changes == 'true'
+        env:
+          MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
           echo "Starting mysqldump of ${{ env.PROD_DB }}..."
           mysqldump \
@@ -105,8 +175,9 @@ jobs:
           echo "Dump completed at $(date -u)"
 
       - name: Restore to backup database
+        if: steps.check_changes.outputs.has_changes == 'true'
         env:
-          MYSQL_PWD: ${{ env.MYSQL_PASS }}
+          MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
           echo "Restoring to ${{ env.BACKUP_DB }}..."
           mysql \
@@ -117,15 +188,17 @@ jobs:
           echo "Database sync completed at $(date -u)"
 
       - name: Verify backup
+        if: steps.check_changes.outputs.has_changes == 'true'
         env:
-          MYSQL_PWD: ${{ env.MYSQL_PASS }}
+          MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
-          PROD_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
-          BACKUP_TABLES=$(mysql --host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
+          MYSQL_OPTS="--host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N"
+          PROD_TABLES=$(mysql $MYSQL_OPTS -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
+          BACKUP_TABLES=$(mysql $MYSQL_OPTS -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
           echo "Production tables: $PROD_TABLES"
           echo "Backup tables: $BACKUP_TABLES"
           if [ "$PROD_TABLES" != "$BACKUP_TABLES" ]; then
-            echo "WARNING: Table count mismatch!"
+            echo "::error::Table count mismatch after restore!"
             exit 1
           fi
           echo "Backup verified successfully"
@@ -142,7 +215,10 @@ jobs:
   sync-apps:
     name: Sync App Deployments to Backup
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'schedule' || github.event.inputs.sync_apps == 'true' }}
+    # Only sync apps after a deploy or manual trigger — not on daily schedule
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_apps == 'true') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - uses: actions/checkout@v4
@@ -268,7 +344,7 @@ jobs:
             if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "200" ]; then
               echo "  $APP: deployed (HTTP $HTTP_CODE) in $((END-START))s"
             else
-              echo "  ERROR: $APP failed (HTTP $HTTP_CODE) in $((END-START))s"
+              echo "::error::$APP deploy failed (HTTP $HTTP_CODE) in $((END-START))s"
               cat /tmp/deploy-response.txt 2>/dev/null
               echo ""
               return 1

@@ -4,7 +4,7 @@ import prisma from "@homeal/db";
 import { initSocketIO } from "./services/socket";
 import { deleteFirebaseUser } from "./lib/firebaseAdmin";
 
-const PORT = process.env.PORT || 5200;
+const PORT = process.env.PORT || 3203;
 
 const server = http.createServer(app);
 

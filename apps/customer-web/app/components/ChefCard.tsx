@@ -109,9 +109,9 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
 
           {/* Distance badge */}
           {showDistance && chef.distance != null && (
-            <span className="flex items-center gap-1 bg-white/90 dark:bg-black/60 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+            <span className="flex items-center gap-1 bg-white dark:bg-gray-900 backdrop-blur-sm text-xs font-semibold px-2.5 py-1 rounded-full shadow-md border border-gray-200 dark:border-gray-700">
               <MapPin className="w-3 h-3 text-primary" />
-              <span className="text-[var(--text)]">{chef.distance} mi</span>
+              <span className="text-gray-800 dark:text-gray-100">{chef.distance} mi</span>
             </span>
           )}
         </div>

@@ -131,7 +131,6 @@ model Chef {
   plan            String     @default("UNLIMITED") @db.VarChar(50)
   operatingHours  String?  @db.Text
   bankDetails     String?  @db.Text
-  commissionRate  Float    @default(15.0)
   stripeAccountId String?    @db.VarChar(191)
   sellerType      SellerType @default(KITCHEN)
   businessName    String?    @db.VarChar(255)

@@ -198,7 +198,7 @@ const BADGE_SYSTEM = [
   { name: "Local Hero", icon: MapPin, color: "#8B5CF6", description: "Top Home Maker in their locality with 200+ orders/month" },
 ];
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3100";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3203";
 
 // Safe JSON parser: prevents SyntaxError when API returns HTML (e.g. 404 pages)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -225,7 +225,6 @@ interface ChefData {
   avgRating: number;
   totalReviews: number;
   deliveryRadius: number;
-  commissionRate: number;
   createdAt: string;
   user: { id: string; name: string; email: string | null; phone: string | null; createdAt: string };
   _count: { orders: number; menus: number; reviews: number };
@@ -301,9 +300,6 @@ export default function SuperAdminPage() {
   const [revenueStats, setRevenueStats] = useState<any>(null);
   const [revenueLoading, setRevenueLoading] = useState(false);
 
-  // Commission editing state
-  const [editingCommission, setEditingCommission] = useState<string | null>(null);
-  const [commissionValue, setCommissionValue] = useState('');
 
   // Notification state
   interface NotifItem { id: string; type: string; title: string; message: string; time: string; actionId?: string }
@@ -741,28 +737,6 @@ export default function SuperAdminPage() {
     }
   }
 
-  // Update chef commission rate
-  async function handleUpdateCommission(chefId: string, rate: number) {
-    if (!authToken) return;
-    setChefActionLoading(chefId);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/admin/chefs/${chefId}/commission`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ commissionRate: rate }),
-      });
-      const data = await safeJson(res);
-      if (data.success) {
-        setEditingCommission(null);
-        setCommissionValue('');
-        fetchChefs();
-      }
-    } catch (err) {
-      console.error("Failed to update commission:", err);
-    } finally {
-      setChefActionLoading(null);
-    }
-  }
 
   // Fetch super admins
   async function fetchSuperAdmins() {
@@ -795,11 +769,11 @@ export default function SuperAdminPage() {
   }
 
   function downloadChefsCSV() {
-    const headers = ["Name", "Email", "Phone", "Kitchen Name", "Cuisine Types", "Status", "Plan", "Commission %", "Avg Rating", "Orders", "Menus", "Reviews", "Delivery Radius", "Joined"];
+    const headers = ["Name", "Email", "Phone", "Kitchen Name", "Cuisine Types", "Status", "Plan", "Avg Rating", "Orders", "Menus", "Reviews", "Delivery Radius", "Joined"];
     const rows = chefs.map(c => [
       c.user.name, c.user.email || "", c.user.phone || "", c.kitchenName, c.cuisineTypes || "",
       c.isVerified ? "Approved" : c.rejectedAt ? "Rejected" : "Pending",
-      c.plan, String(c.commissionRate), String(c.avgRating), String(c._count.orders), String(c._count.menus), String(c._count.reviews),
+      c.plan, String(c.avgRating), String(c._count.orders), String(c._count.menus), String(c._count.reviews),
       `${c.deliveryRadius} miles`,
       c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-GB") : "",
     ]);
@@ -1681,7 +1655,6 @@ export default function SuperAdminPage() {
                   { name: "Promotional Tools", values: ["\u2014", "Yes", "Yes"] },
                   { name: "Account Manager", values: ["\u2014", "\u2014", "Dedicated"] },
                   { name: "Support", values: ["Email", "Priority Email", "24/7 Priority"] },
-                  { name: "Platform Commission", values: ["15%", "10%", "5%"] },
                 ];
                 return (
                   <>
@@ -1950,39 +1923,6 @@ export default function SuperAdminPage() {
                                           <p className="text-[10px] text-[var(--text-muted)]">{stat.label}</p>
                                         </div>
                                       ))}
-                                      {/* Commission - editable */}
-                                      <div className="glass-card rounded-lg p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                                        {editingCommission === c.id ? (
-                                          <div className="flex items-center justify-center gap-1">
-                                            <input
-                                              type="number"
-                                              value={commissionValue}
-                                              onChange={(e) => setCommissionValue(e.target.value)}
-                                              className="w-14 text-center text-sm font-bold rounded-md border border-[var(--border)] py-0.5"
-                                              style={{ background: "var(--input)", color: "#EF4444" }}
-                                              min="0"
-                                              max="100"
-                                              autoFocus
-                                              onKeyDown={(e) => {
-                                                if (e.key === "Enter") handleUpdateCommission(c.id, parseFloat(commissionValue) || 0);
-                                                if (e.key === "Escape") { setEditingCommission(null); setCommissionValue(''); }
-                                              }}
-                                            />
-                                            <span className="text-sm font-bold" style={{ color: "#EF4444" }}>%</span>
-                                            <button onClick={() => handleUpdateCommission(c.id, parseFloat(commissionValue) || 0)} className="ml-1 p-0.5 rounded" style={{ background: "rgba(16,185,129,0.15)" }} disabled={chefActionLoading === c.id}>
-                                              <Check size={12} style={{ color: "#10B981" }} />
-                                            </button>
-                                            <button onClick={() => { setEditingCommission(null); setCommissionValue(''); }} className="p-0.5 rounded" style={{ background: "rgba(239,68,68,0.15)" }}>
-                                              <X size={12} style={{ color: "#EF4444" }} />
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <div className="cursor-pointer group" onClick={() => { setEditingCommission(c.id); setCommissionValue(String(c.commissionRate || 15)); }}>
-                                            <p className="text-lg font-bold group-hover:underline" style={{ color: "#EF4444" }}>{c.commissionRate || 15}%</p>
-                                            <p className="text-[10px] text-[var(--text-muted)] flex items-center justify-center gap-1">Commission <Edit3 size={8} className="opacity-0 group-hover:opacity-100 transition" /></p>
-                                          </div>
-                                        )}
-                                      </div>
                                     </div>
                                   </div>
                                   {/* Plan & Status */}
@@ -2137,37 +2077,6 @@ export default function SuperAdminPage() {
                                 <div className="text-xs space-y-1">
                                   <p className="text-[var(--text-muted)]">Phone: <span className="text-[var(--text)]">{c.user.phone || "\u2014"}</span></p>
                                   <p className="text-[var(--text-muted)]">Radius: <span className="text-[var(--text)]">{c.deliveryRadius} miles</span></p>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[var(--text-muted)]">Commission:</span>
-                                    {editingCommission === c.id ? (
-                                      <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                          type="number"
-                                          value={commissionValue}
-                                          onChange={(e) => setCommissionValue(e.target.value)}
-                                          className="w-12 text-center text-xs font-bold rounded border border-[var(--border)] py-0.5"
-                                          style={{ background: "var(--input)", color: "#EF4444" }}
-                                          min="0" max="100" autoFocus
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter") handleUpdateCommission(c.id, parseFloat(commissionValue) || 0);
-                                            if (e.key === "Escape") { setEditingCommission(null); setCommissionValue(''); }
-                                          }}
-                                        />
-                                        <span style={{ color: "#EF4444" }}>%</span>
-                                        <button onClick={(e) => { e.stopPropagation(); handleUpdateCommission(c.id, parseFloat(commissionValue) || 0); }} className="p-0.5 rounded" style={{ background: "rgba(16,185,129,0.15)" }}>
-                                          <Check size={10} style={{ color: "#10B981" }} />
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingCommission(null); setCommissionValue(''); }} className="p-0.5 rounded" style={{ background: "rgba(239,68,68,0.15)" }}>
-                                          <X size={10} style={{ color: "#EF4444" }} />
-                                        </button>
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); setEditingCommission(c.id); setCommissionValue(String(c.commissionRate || 15)); }}>
-                                        <span style={{ color: "#EF4444" }} className="font-semibold">{c.commissionRate || 15}%</span>
-                                        <Edit3 size={10} className="text-[var(--text-muted)]" />
-                                      </span>
-                                    )}
-                                  </div>
                                   <p className="text-[var(--text-muted)]">Registered: <span className="text-[var(--text)]">{new Date(c.user.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span></p>
                                   <p className="text-[var(--text-muted)]">Status: <span className={c.isOnline ? "text-emerald-500" : "text-gray-400"}>{c.isOnline ? "Online" : "Offline"}</span></p>
                                   {c.description && <p className="text-[var(--text-muted)]">Bio: <span className="text-[var(--text)]">{c.description}</span></p>}
@@ -3594,7 +3503,7 @@ export default function SuperAdminPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                     {[
                       { label: "Today's Revenue", value: `£${(today.revenue || 0).toFixed(2)}`, sub: `${today.orders || 0} orders`, icon: PoundSterling, color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
-                      { label: "Platform Fee (Today)", value: `£${(today.platformFee || 0).toFixed(2)}`, sub: "Commission earned", icon: Wallet, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                      { label: "Platform Fee (Today)", value: `£${(today.platformFee || 0).toFixed(2)}`, sub: "Platform earnings", icon: Wallet, color: "#10B981", bg: "rgba(16,185,129,0.12)" },
                       { label: "Home Maker Payouts (Today)", value: `£${(today.chefPayout || 0).toFixed(2)}`, sub: "Home Maker earnings", icon: TrendingUp, color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
                       { label: "Total Revenue", value: `£${(total.revenue || 0).toFixed(2)}`, sub: `${total.orders || 0} total orders`, icon: Crown, color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
                     ].map((s, i) => {
@@ -3696,7 +3605,7 @@ export default function SuperAdminPage() {
                                   <span className="text-[var(--text)]">{tx.chefName || tx.chef?.kitchenName || "Unknown"}</span>
                                 </td>
                                 <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">£{parseFloat(tx.amount || tx.total || 0).toFixed(2)}</td>
-                                <td className="px-4 py-3 text-center font-semibold" style={{ color: "#10B981" }}>£{parseFloat(tx.platformFee || tx.commission || 0).toFixed(2)}</td>
+                                <td className="px-4 py-3 text-center font-semibold" style={{ color: "#10B981" }}>£{parseFloat(tx.platformFee || 0).toFixed(2)}</td>
                                 <td className="px-4 py-3 text-center font-semibold" style={{ color: "#3B82F6" }}>£{parseFloat(tx.chefPayout || 0).toFixed(2)}</td>
                                 <td className="px-4 py-3 text-center text-[var(--text-muted)]">
                                   {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "\u2014"}
@@ -3714,7 +3623,7 @@ export default function SuperAdminPage() {
                               </div>
                               <p className="text-[11px] text-[var(--text-muted)]">{tx.chefName || tx.chef?.kitchenName || "Unknown"}</p>
                               <div className="flex items-center justify-between text-[11px] mt-1.5">
-                                <span className="text-[var(--text-muted)]">Fee: <span style={{ color: "#10B981" }}>£{parseFloat(tx.platformFee || tx.commission || 0).toFixed(2)}</span></span>
+                                <span className="text-[var(--text-muted)]">Fee: <span style={{ color: "#10B981" }}>£{parseFloat(tx.platformFee || 0).toFixed(2)}</span></span>
                                 <span className="text-[var(--text-muted)]">Payout: <span style={{ color: "#3B82F6" }}>£{parseFloat(tx.chefPayout || 0).toFixed(2)}</span></span>
                                 <span className="text-[var(--text-muted)]">{tx.createdAt ? new Date(tx.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}</span>
                               </div>
@@ -3755,7 +3664,7 @@ export default function SuperAdminPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
                 {[
                   { name: "Chef Performance Report", desc: "Detailed overview of each chef's orders, revenue, ratings and delivery/pickup stats", icon: ChefHat, color: "#8B5CF6" },
-                  { name: "Revenue Report", desc: "Platform revenue breakdown by service type, commission earned, and chef payouts", icon: PoundSterling, color: "#10B981" },
+                  { name: "Revenue Report", desc: "Platform revenue breakdown by service type and home maker payouts", icon: PoundSterling, color: "#10B981" },
                   { name: "Customer Report", desc: "Customer acquisition, retention, order frequency and location distribution", icon: Users, color: "#3B82F6" },
                   { name: "Delivery & Pickup Report", desc: "Fulfilment method analytics — delivery vs pickup split, average radius, completion rates", icon: Truck, color: "#F59E0B" },
                 ].map((report, i) => {

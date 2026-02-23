@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import imageCompression from "browser-image-compression";
+import { authFetch } from "./lib/api";
 import {
   LayoutDashboard, ClipboardList, Package, Bell, UtensilsCrossed,
   PlusCircle, PoundSterling, Star, BarChart3, Sun, Moon, Settings,
@@ -234,7 +235,7 @@ const CAKE_CATEGORIES = [
   { name: "Custom Cakes", icon: "🎨", count: 0, color: "#3B82F6" },
 ];
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3100";
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3203";
 
 export default function DashboardPage() {
   const [darkMode, setDarkMode] = useState(false);
@@ -361,7 +362,7 @@ export default function DashboardPage() {
 
     async function checkApproval() {
       try {
-        const res = await fetch(`${ADMIN_API_URL}/api/v1/users/me`, {
+        const res = await authFetch(`${ADMIN_API_URL}/api/v1/users/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -436,7 +437,7 @@ export default function DashboardPage() {
     if (!token) return;
     setOrderLoading(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/orders`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/orders`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -461,7 +462,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/orders/${orderId}/status`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/orders/${orderId}/status`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -510,7 +511,7 @@ export default function DashboardPage() {
     if (!token) return;
     setMenuLoading(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/my`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -540,7 +541,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/products/categories`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/products/categories`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -557,7 +558,7 @@ export default function DashboardPage() {
     if (!token) return;
     setEarningsLoading(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/orders/earnings`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/orders/earnings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -577,10 +578,10 @@ export default function DashboardPage() {
     setTiffinLoading(true);
     try {
       const [plansRes, subsRes] = await Promise.all([
-        fetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans/mine`, {
+        authFetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans/mine`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${ADMIN_API_URL}/api/v1/subscriptions/subscribers`, {
+        authFetch(`${ADMIN_API_URL}/api/v1/subscriptions/subscribers`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -600,7 +601,7 @@ export default function DashboardPage() {
     if (!token || !suggestCategoryName.trim()) return;
     setSuggestingCategory(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/categories/suggest`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/categories/suggest`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name: suggestCategoryName.trim(), description: suggestCategoryDesc.trim() || undefined }),
@@ -630,7 +631,7 @@ export default function DashboardPage() {
     }
     setCreatingPlan(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -662,7 +663,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans/${planId}`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/subscriptions/plans/${planId}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ isActive }),
@@ -683,12 +684,12 @@ export default function DashboardPage() {
     setReviewsLoading(true);
     try {
       // First get chef profile to get the chef ID
-      const meRes = await fetch(`${ADMIN_API_URL}/api/v1/users/me`, {
+      const meRes = await authFetch(`${ADMIN_API_URL}/api/v1/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const meData = await meRes.json();
       if (meData.success && meData.data?.chefId) {
-        const chefRes = await fetch(`${ADMIN_API_URL}/api/v1/chefs/${meData.data.chefId}`);
+        const chefRes = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/${meData.data.chefId}`);
         const chefData = await chefRes.json();
         if (chefData.success && chefData.data?.reviews) {
           setReviews(chefData.data.reviews);
@@ -706,12 +707,12 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const meRes = await fetch(`${ADMIN_API_URL}/api/v1/users/me`, {
+      const meRes = await authFetch(`${ADMIN_API_URL}/api/v1/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const meData = await meRes.json();
       if (meData.success && meData.data?.chefId) {
-        const chefRes = await fetch(`${ADMIN_API_URL}/api/v1/chefs/${meData.data.chefId}`);
+        const chefRes = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/${meData.data.chefId}`);
         const chefData = await chefRes.json();
         if (chefData.success && chefData.data) {
           const chef = chefData.data;
@@ -740,7 +741,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}/toggle`, {
+      await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}/toggle`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -756,7 +757,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+      await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -780,7 +781,7 @@ export default function DashboardPage() {
       let menuId = chefMenuId;
       // Create menu if none exists
       if (!menuId) {
-        const menuRes = await fetch(`${ADMIN_API_URL}/api/v1/menus`, {
+        const menuRes = await authFetch(`${ADMIN_API_URL}/api/v1/menus`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ name: "Menu", date: new Date().toISOString().split('T')[0] }),
@@ -813,13 +814,13 @@ export default function DashboardPage() {
 
       let res;
       if (editingItem) {
-        res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${editingItem.menuId}/items/${editingItem.id}`, {
+        res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/${editingItem.menuId}/items/${editingItem.id}`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items`, {
+        res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -873,7 +874,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -896,7 +897,7 @@ export default function DashboardPage() {
     const reply = replyTexts[reviewId];
     if (!reply?.trim()) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/reviews/${reviewId}/reply`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/reviews/${reviewId}/reply`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ reply }),
@@ -920,7 +921,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -940,7 +941,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(configData),
@@ -963,7 +964,7 @@ export default function DashboardPage() {
     if (!token) return;
     setPaymentTestResult(null);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config/test`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me/payment-config/test`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ provider }),
@@ -987,7 +988,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/chefs/me/stripe-connect`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me/stripe-connect`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1013,7 +1014,7 @@ export default function DashboardPage() {
       if (expiresIn < 120_000) {
         const refreshToken = localStorage.getItem("homeal_refresh_token");
         if (refreshToken) {
-          const res = await fetch(`${ADMIN_API_URL}/api/v1/auth/refresh`, {
+          const res = await authFetch(`${ADMIN_API_URL}/api/v1/auth/refresh`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ refreshToken }),
@@ -1058,7 +1059,7 @@ export default function DashboardPage() {
       // Upload with XHR for progress tracking
       return await new Promise<string | null>((resolve) => {
         const formData = new FormData();
-        formData.append("file", compressed, compressed.name || "image.webp");
+        formData.append("image", compressed, compressed.name || "image.webp");
 
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${ADMIN_API_URL}/api/v1/upload`);
@@ -1122,7 +1123,7 @@ export default function DashboardPage() {
     setScheduleLoading(true);
     try {
       const { from, to } = getScheduleRange();
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/my/schedule?from=${from}&to=${to}`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/my/schedule?from=${from}&to=${to}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -1157,7 +1158,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/templates`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/templates`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -1190,7 +1191,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${dateStr}/close`, {
+      await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${dateStr}/close`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1221,7 +1222,7 @@ export default function DashboardPage() {
       if (schedulerNewItem.allergens) body.allergens = schedulerNewItem.allergens;
       if (schedulerNewItem.categoryId) body.categoryId = schedulerNewItem.categoryId;
       if (schedulerNewItem.eggOption) body.eggOption = schedulerNewItem.eggOption;
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/items`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/items`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1264,7 +1265,7 @@ export default function DashboardPage() {
       if (dish.eggOption) body.eggOption = dish.eggOption;
       if (dish.calories) body.calories = dish.calories;
       if (dish.ingredients) body.ingredients = dish.ingredients;
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/items`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/items`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1289,7 +1290,7 @@ export default function DashboardPage() {
     if (!token || schedulerCopyTarget.length === 0) return;
     setSchedulerSaving(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/copy`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/copy`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ targetDates: schedulerCopyTarget }),
@@ -1317,7 +1318,7 @@ export default function DashboardPage() {
     setSchedulerSaving(true);
     try {
       const { from } = getScheduleRange();
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/copy-week`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/copy-week`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ sourceWeekStart: from }),
@@ -1356,7 +1357,7 @@ export default function DashboardPage() {
         offerPrice: item.offerPrice,
         eggOption: item.eggOption,
       }));
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/templates`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/templates`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name: schedulerTemplateName, items }),
@@ -1383,7 +1384,7 @@ export default function DashboardPage() {
     if (!token || !schedulerApplyTemplateId) return;
     setSchedulerSaving(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/templates/${schedulerApplyTemplateId}/apply`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/templates/${schedulerApplyTemplateId}/apply`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ dates: [selectedDate] }),
@@ -1413,7 +1414,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await fetch(`${ADMIN_API_URL}/api/v1/templates/${templateId}`, {
+      await authFetch(`${ADMIN_API_URL}/api/v1/templates/${templateId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1429,7 +1430,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${dateStr}`, {
+      await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${dateStr}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ notes }),
@@ -1445,7 +1446,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+      await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1482,7 +1483,7 @@ export default function DashboardPage() {
       if (schedulerEditForm.description) body.description = schedulerEditForm.description;
       if (schedulerEditForm.stockCount) body.stockCount = parseInt(schedulerEditForm.stockCount);
       if (schedulerEditForm.image) body.image = schedulerEditForm.image;
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1507,7 +1508,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}/toggle`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}/toggle`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1529,7 +1530,7 @@ export default function DashboardPage() {
     if (!token) return;
     setSchedulerSaving(true);
     try {
-      const res = await fetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/bulk-price`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/schedule/${selectedDate}/bulk-price`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ type, value }),
@@ -1751,7 +1752,7 @@ export default function DashboardPage() {
           </div>
           <div className="px-2.5 py-2">
             <p className="text-xs text-[var(--sidebar-muted)]">Welcome back</p>
-            <p className="text-sm font-semibold text-[var(--sidebar-text)]">{chefName || "Home Maker Dashboard"}</p>
+            <p className="text-sm font-semibold text-[var(--sidebar-text)]">{chefProfile?.kitchenName || chefName || "Home Maker Dashboard"}</p>
           </div>
         </div>
 
@@ -3204,7 +3205,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || !e.target.value.trim() || e.target.value === (chefProfile?.kitchenName || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ kitchenName: e.target.value.trim() }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ kitchenName: e.target.value.trim() }) });
                           showToast("Kitchen name updated");
                         } catch { showToast("Failed to update kitchen name", "error"); }
                       }}
@@ -3221,7 +3222,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || e.target.value === (chefProfile?.businessName || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ businessName: e.target.value.trim() || null }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ businessName: e.target.value.trim() || null }) });
                           showToast("Business name updated");
                         } catch { showToast("Failed to update business name", "error"); }
                       }}
@@ -3237,7 +3238,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || e.target.value === (chefProfile?.address || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ address: e.target.value }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ address: e.target.value }) });
                           showToast("Address updated");
                         } catch { showToast("Failed to update address", "error"); }
                       }}
@@ -3257,7 +3258,7 @@ export default function DashboardPage() {
                         if (!token || val === (chefProfile?.postcode || "")) return;
                         if (val && !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(val)) { showToast("Invalid UK postcode", "error"); return; }
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ postcode: val }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ postcode: val }) });
                           showToast("Postcode updated — location recalculated");
                         } catch { showToast("Failed to update postcode", "error"); }
                       }}
@@ -3274,7 +3275,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || e.target.value === (chefProfile?.city || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ city: e.target.value.trim() }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ city: e.target.value.trim() }) });
                           showToast("City updated");
                         } catch { showToast("Failed to update city", "error"); }
                       }}
@@ -3291,7 +3292,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || e.target.value === (chefProfile?.county || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ county: e.target.value.trim() }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ county: e.target.value.trim() }) });
                           showToast("County updated");
                         } catch { showToast("Failed to update county", "error"); }
                       }}
@@ -3308,7 +3309,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || e.target.value === (chefProfile?.contactPerson || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ contactPerson: e.target.value.trim() }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ contactPerson: e.target.value.trim() }) });
                           showToast("Contact person updated");
                         } catch { showToast("Failed to update", "error"); }
                       }}
@@ -3325,7 +3326,7 @@ export default function DashboardPage() {
                         const token = localStorage.getItem("homeal_token");
                         if (!token || e.target.value === (chefProfile?.contactPhone || "")) return;
                         try {
-                          await fetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ contactPhone: e.target.value.trim() }) });
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ contactPhone: e.target.value.trim() }) });
                           showToast("Contact phone updated");
                         } catch { showToast("Failed to update", "error"); }
                       }}

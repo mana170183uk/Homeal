@@ -19,6 +19,7 @@ import templateRoutes from "./routes/templates";
 import subscriptionRoutes from "./routes/subscriptions";
 import stripeRoutes from "./routes/stripe";
 import categoryRoutes from "./routes/categories";
+import addressLookupRoutes from "./routes/address-lookup";
 import prisma from "@homeal/db";
 import { errorHandler } from "./middleware/errorHandler";
 
@@ -29,10 +30,12 @@ app.use(helmet());
 app.use(
   cors({
     origin: process.env.CORS_ORIGINS?.split(",") || [
-      "http://localhost:3000",
       "http://localhost:3200",
       "http://localhost:3201",
+      "http://localhost:3202",
       "https://homeal.uk",
+      "https://admin.homeal.uk",
+      "https://superadmin.homeal.uk",
     ],
     credentials: true,
   })
@@ -88,6 +91,7 @@ app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/templates`, templateRoutes);
 app.use(`${API_PREFIX}/subscriptions`, subscriptionRoutes);
 app.use(`${API_PREFIX}/categories`, categoryRoutes);
+app.use(`${API_PREFIX}/address-lookup`, addressLookupRoutes);
 
 // 404 catch-all (return JSON, not Express default HTML)
 app.use((_req, res) => {

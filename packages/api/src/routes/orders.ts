@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import prisma from "@homeal/db";
 import { authenticate, authorize } from "../middleware/auth";
 import { notifyChefNewOrder, notifyOrderUpdate } from "../services/socket";
-import { ORDER_AUTO_REJECT_MINUTES, COMMISSION_RATE_DEFAULT } from "@homeal/shared";
+import { ORDER_AUTO_REJECT_MINUTES } from "@homeal/shared";
 
 const router = Router();
 
@@ -98,10 +98,6 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
     const deliveryFee = isPickup ? 0 : 0.30;
     const total = subtotal + deliveryFee;
 
-    const commissionRate = (chef.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
-    const platformFee = Math.round(total * commissionRate * 100) / 100;
-    const chefPayout = Math.round((total - platformFee) * 100) / 100;
-
     const order = await prisma.order.create({
       data: {
         userId: req.user!.userId,
@@ -117,8 +113,8 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
           create: {
             chefId,
             amount: total,
-            platformFee,
-            chefPayout,
+            platformFee: 0,
+            chefPayout: total,
             method: paymentMethod === "COD" ? "COD" : "CARD",
             status: paymentMethod === "COD" ? "PENDING" : "PENDING",
           },
@@ -267,10 +263,6 @@ router.post("/batch", authenticate, async (req: Request, res: Response) => {
 
         const deliveryFee = isPickup ? 0 : 0.30;
         const orderTotal = subtotal + deliveryFee;
-        const commissionRate = (chef.commissionRate ?? COMMISSION_RATE_DEFAULT) / 100;
-        const platformFee = Math.round(orderTotal * commissionRate * 100) / 100;
-        const chefPayout = Math.round((orderTotal - platformFee) * 100) / 100;
-
         const order = await tx.order.create({
           data: {
             userId: req.user!.userId,
@@ -286,8 +278,8 @@ router.post("/batch", authenticate, async (req: Request, res: Response) => {
               create: {
                 chefId,
                 amount: orderTotal,
-                platformFee,
-                chefPayout,
+                platformFee: 0,
+                chefPayout: orderTotal,
                 method: paymentMethod === "COD" ? "COD" : "CARD",
                 status: "PENDING",
               },

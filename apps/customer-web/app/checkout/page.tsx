@@ -17,6 +17,7 @@ import {
   Package,
 } from "lucide-react";
 import Header from "../components/Header";
+import PostcodeLookup from "../components/PostcodeLookup";
 import { api } from "../lib/api";
 import type { Address } from "../lib/types";
 
@@ -60,6 +61,8 @@ export default function CheckoutPage() {
   const [newPostcode, setNewPostcode] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState("");
+  const [checkoutResolvedGeo, setCheckoutResolvedGeo] = useState<{ lat: number; lng: number } | null>(null);
+  const [checkoutManualEntry, setCheckoutManualEntry] = useState(false);
 
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
@@ -118,20 +121,21 @@ export default function CheckoutPage() {
     try {
       const token = localStorage.getItem("homeal_token")!;
 
-      // Geocode postcode
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-
-      try {
-        const geoRes = await api<{ lat: number; lng: number; area: string }>(
-          `/chefs/geocode?postcode=${encodeURIComponent(newPostcode.trim())}`
-        );
-        if (geoRes.success && geoRes.data) {
-          latitude = geoRes.data.lat;
-          longitude = geoRes.data.lng;
+      // Use pre-resolved geo from PostcodeLookup, or fall back to geocode API
+      let latitude: number | undefined = checkoutResolvedGeo?.lat;
+      let longitude: number | undefined = checkoutResolvedGeo?.lng;
+      if (!latitude || !longitude) {
+        try {
+          const geoRes = await api<{ lat: number; lng: number; area: string }>(
+            `/chefs/geocode?postcode=${encodeURIComponent(newPostcode.trim())}`
+          );
+          if (geoRes.success && geoRes.data) {
+            latitude = geoRes.data.lat;
+            longitude = geoRes.data.lng;
+          }
+        } catch {
+          // proceed without geocode
         }
-      } catch {
-        // proceed without geocode
       }
 
       const res = await api<Address>("/users/addresses", {
@@ -158,6 +162,8 @@ export default function CheckoutPage() {
         setNewLine2("");
         setNewCity("");
         setNewPostcode("");
+        setCheckoutResolvedGeo(null);
+        setCheckoutManualEntry(false);
       } else {
         setAddressError(res.error || "Failed to save address.");
       }
@@ -426,6 +432,25 @@ export default function CheckoutPage() {
                         className="premium-input w-full px-3 py-2.5 rounded-xl outline-none text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]"
                       />
                     </div>
+                    {/* Postcode lookup */}
+                    {!checkoutManualEntry && (
+                      <PostcodeLookup
+                        initialPostcode={newPostcode}
+                        onAddressSelected={(addr) => {
+                          setNewLine1(addr.line1);
+                          setNewLine2(addr.line2);
+                          setNewCity(addr.city);
+                          setNewPostcode(addr.postcode);
+                          setCheckoutResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                        }}
+                        onPostcodeResolved={(data) => {
+                          setNewPostcode(data.postcode);
+                          setCheckoutResolvedGeo({ lat: data.latitude, lng: data.longitude });
+                        }}
+                        onManualEntry={() => setCheckoutManualEntry(true)}
+                      />
+                    )}
+
                     <div>
                       <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">
                         Address Line 1 *

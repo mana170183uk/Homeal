@@ -16,6 +16,7 @@ import {
   Building2,
 } from "lucide-react";
 import Header from "../components/Header";
+import PostcodeLookup from "../components/PostcodeLookup";
 import { api } from "../lib/api";
 import type { Address } from "../lib/types";
 
@@ -46,6 +47,8 @@ export default function AddressesPage() {
   const [formDefault, setFormDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [resolvedGeo, setResolvedGeo] = useState<{ lat: number; lng: number } | null>(null);
+  const [manualEntry, setManualEntry] = useState(false);
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -85,6 +88,8 @@ export default function AddressesPage() {
     setFormPostcode("");
     setFormDefault(false);
     setFormError("");
+    setResolvedGeo(null);
+    setManualEntry(false);
   }
 
   function startEdit(addr: Address) {
@@ -111,19 +116,21 @@ export default function AddressesPage() {
     try {
       const token = localStorage.getItem("homeal_token")!;
 
-      // Geocode postcode
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-      try {
-        const geoRes = await api<{ lat: number; lng: number; area: string }>(
-          `/chefs/geocode?postcode=${encodeURIComponent(formPostcode.trim())}`
-        );
-        if (geoRes.success && geoRes.data) {
-          latitude = geoRes.data.lat;
-          longitude = geoRes.data.lng;
+      // Use pre-resolved geo from PostcodeLookup, or fall back to geocode API
+      let latitude: number | undefined = resolvedGeo?.lat;
+      let longitude: number | undefined = resolvedGeo?.lng;
+      if (!latitude || !longitude) {
+        try {
+          const geoRes = await api<{ lat: number; lng: number; area: string }>(
+            `/chefs/geocode?postcode=${encodeURIComponent(formPostcode.trim())}`
+          );
+          if (geoRes.success && geoRes.data) {
+            latitude = geoRes.data.lat;
+            longitude = geoRes.data.lng;
+          }
+        } catch {
+          // proceed without geocode
         }
-      } catch {
-        // proceed without geocode
       }
 
       const body = {
@@ -291,6 +298,26 @@ export default function AddressesPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Postcode lookup */}
+              {!manualEntry && !editingId && (
+                <PostcodeLookup
+                  initialPostcode={formPostcode}
+                  onAddressSelected={(addr) => {
+                    setFormLine1(addr.line1);
+                    setFormLine2(addr.line2);
+                    setFormCity(addr.city);
+                    setFormPostcode(addr.postcode);
+                    setResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                  }}
+                  onPostcodeResolved={(data) => {
+                    setFormPostcode(data.postcode);
+                    setResolvedGeo({ lat: data.latitude, lng: data.longitude });
+                  }}
+                  onManualEntry={() => setManualEntry(true)}
+                  className="mb-4"
+                />
+              )}
 
               {/* Address fields */}
               <div className="space-y-3">

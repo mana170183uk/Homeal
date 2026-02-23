@@ -64,6 +64,7 @@ export default function ProductDetailPage({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [toast, setToast] = useState("");
+  const [vendorSwitchModal, setVendorSwitchModal] = useState<{ existingChefName: string } | null>(null);
 
   // Auth gate
   useEffect(() => {
@@ -104,20 +105,16 @@ export default function ProductDetailPage({
     setTimeout(() => setToast(""), 2000);
   }
 
-  function addToCart() {
+  function addToCart(clearExisting = false) {
     if (!product) return;
 
-    let currentCart = getCart();
+    let currentCart = clearExisting ? [] : getCart();
 
     // Single-vendor policy: only one kitchen at a time
     const existingChefId = currentCart.length > 0 ? currentCart[0].chefId : null;
     if (existingChefId && existingChefId !== product.chef.id) {
-      const existingChefName = currentCart[0].chefName;
-      const confirmed = window.confirm(
-        `Your cart has items from ${existingChefName}. Adding this item will clear your cart. Continue?`
-      );
-      if (!confirmed) return;
-      currentCart = [];
+      setVendorSwitchModal({ existingChefName: currentCart[0].chefName });
+      return;
     }
 
     const existing = currentCart.find((c) => c.id === product.id);
@@ -349,7 +346,7 @@ export default function ProductDetailPage({
 
               {/* Add to cart button */}
               <button
-                onClick={addToCart}
+                onClick={() => addToCart()}
                 className="btn-premium flex-1 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 text-base hover:opacity-90 transition"
               >
                 <ShoppingBag className="w-5 h-5" />
@@ -463,6 +460,40 @@ export default function ProductDetailPage({
           </section>
         )}
       </div>
+
+      {/* Vendor Switch Modal */}
+      {vendorSwitchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setVendorSwitchModal(null)} />
+          <div className="relative bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-2xl max-w-sm w-full p-6 animate-fade-in-up">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+              </div>
+              <h3 className="font-display text-lg font-bold text-[var(--text)]">
+                Replace cart items?
+              </h3>
+            </div>
+            <p className="text-sm text-[var(--text-soft)] mb-6">
+              Your cart has items from <span className="font-semibold text-[var(--text)]">{vendorSwitchModal.existingChefName}</span>. Adding this item will clear your current cart and start fresh.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setVendorSwitchModal(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--text)] hover:bg-[var(--input)] transition"
+              >
+                Keep cart
+              </button>
+              <button
+                onClick={() => { setVendorSwitchModal(null); addToCart(true); }}
+                className="flex-1 px-4 py-2.5 rounded-xl btn-premium text-white text-sm font-semibold hover:opacity-90 transition"
+              >
+                Clear &amp; add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

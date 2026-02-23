@@ -7,8 +7,9 @@ export function initSocketIO(server: HttpServer) {
   io = new Server(server, {
     cors: {
       origin: process.env.CORS_ORIGINS?.split(",") || [
-        "http://localhost:3000",
-        "http://localhost:3001",
+        "http://localhost:3200",
+        "http://localhost:3201",
+        "http://localhost:3202",
       ],
       methods: ["GET", "POST"],
     },

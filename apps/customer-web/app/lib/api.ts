@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3203";
 
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = localStorage.getItem("homeal_refresh_token");

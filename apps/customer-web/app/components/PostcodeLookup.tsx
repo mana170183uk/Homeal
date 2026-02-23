@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { Search, Loader2, AlertCircle, MapPin, ChevronDown } from "lucide-react";
+import { Search, Loader2, AlertCircle, MapPin, ChevronDown, CheckCircle2 } from "lucide-react";
 import { api } from "../lib/api";
 
 // UK postcode regex (loose validation — checks format, not existence)
@@ -19,6 +19,7 @@ interface LookupData {
   postcode: string;
   latitude: number;
   longitude: number;
+  city: string;
   addresses: AddressResult[];
 }
 
@@ -32,7 +33,7 @@ interface PostcodeLookupProps {
   /** Called when user selects an address from the dropdown */
   onAddressSelected: (address: SelectedAddress) => void;
   /** Called when postcode is resolved (provides lat/lng even before address selection) */
-  onPostcodeResolved?: (data: { postcode: string; latitude: number; longitude: number }) => void;
+  onPostcodeResolved?: (data: { postcode: string; latitude: number; longitude: number; city: string }) => void;
   /** Called when user clicks "Enter manually" */
   onManualEntry?: () => void;
   /** Initial postcode value (for edit mode) */
@@ -41,6 +42,8 @@ interface PostcodeLookupProps {
   placeholder?: string;
   /** CSS class for the outer wrapper */
   className?: string;
+  /** Compact mode for signup forms */
+  compact?: boolean;
 }
 
 export default function PostcodeLookup({
@@ -50,6 +53,7 @@ export default function PostcodeLookup({
   initialPostcode = "",
   placeholder = "Enter your postcode",
   className = "",
+  compact = false,
 }: PostcodeLookupProps) {
   const [postcode, setPostcode] = useState(initialPostcode);
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
@@ -57,6 +61,7 @@ export default function PostcodeLookup({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [validated, setValidated] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleLookup = useCallback(async () => {
@@ -74,28 +79,37 @@ export default function PostcodeLookup({
     setError("");
     setAddresses([]);
     setHasSearched(true);
+    setValidated(false);
 
     try {
       const res = await api<LookupData>(
         `/address-lookup/find/${encodeURIComponent(trimmed)}`
       );
       if (res.success && res.data) {
-        setAddresses(res.data.addresses);
         setLookupData(res.data);
+        setValidated(true);
         onPostcodeResolved?.({
           postcode: res.data.postcode,
           latitude: res.data.latitude,
           longitude: res.data.longitude,
+          city: res.data.city,
         });
+
+        if (res.data.addresses && res.data.addresses.length > 0) {
+          setAddresses(res.data.addresses);
+        } else {
+          // No individual addresses (no paid API key) — trigger manual entry with pre-filled data
+          onManualEntry?.();
+        }
       } else {
-        setError((res as any).error || "Postcode not found");
+        setError((res as any).error || "Postcode not found. Please check and try again.");
       }
     } catch {
-      setError("Failed to look up postcode. You can enter your address manually.");
+      setError("Failed to look up postcode. Please try again or enter your address manually.");
     } finally {
       setLoading(false);
     }
-  }, [postcode, onPostcodeResolved]);
+  }, [postcode, onPostcodeResolved, onManualEntry]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -125,10 +139,12 @@ export default function PostcodeLookup({
     <div className={`space-y-3 ${className}`}>
       {/* Postcode input + Find Address button */}
       <div>
-        <label className="block text-sm font-medium text-[var(--text-soft)] mb-1">
-          <MapPin className="w-3.5 h-3.5 inline mr-1" />
-          Postcode Lookup
-        </label>
+        {!compact && (
+          <label className="block text-sm font-medium text-[var(--text-soft)] mb-1">
+            <MapPin className="w-3.5 h-3.5 inline mr-1" />
+            Postcode Lookup
+          </label>
+        )}
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -140,11 +156,15 @@ export default function PostcodeLookup({
                 setHasSearched(false);
                 setAddresses([]);
                 setError("");
+                setValidated(false);
               }
             }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="flex-1 px-3 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-xl text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 uppercase tracking-wide"
+            className={compact
+              ? "flex-1 premium-input pl-4 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] uppercase tracking-wide"
+              : "flex-1 px-3 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-xl text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 uppercase tracking-wide"
+            }
           />
           <button
             type="button"
@@ -167,6 +187,16 @@ export default function PostcodeLookup({
         <div className="flex items-center gap-2 text-alert text-sm bg-alert/5 border border-alert/20 rounded-xl px-3 py-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Validated postcode confirmation (when no address list returned) */}
+      {validated && addresses.length === 0 && !error && (
+        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm bg-green-500/5 border border-green-500/20 rounded-xl px-3 py-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>
+            {lookupData?.postcode} verified — {lookupData?.city || "UK"}. Please enter your address below.
+          </span>
         </div>
       )}
 
@@ -197,7 +227,7 @@ export default function PostcodeLookup({
       )}
 
       {/* Manual entry fallback */}
-      {hasSearched && (
+      {hasSearched && addresses.length > 0 && (
         <button
           type="button"
           onClick={onManualEntry}

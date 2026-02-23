@@ -309,9 +309,11 @@ export default function AddressesPage() {
                     setFormCity(addr.city);
                     setFormPostcode(addr.postcode);
                     setResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                    setManualEntry(true);
                   }}
                   onPostcodeResolved={(data) => {
                     setFormPostcode(data.postcode);
+                    if (data.city) setFormCity(data.city);
                     setResolvedGeo({ lat: data.latitude, lng: data.longitude });
                   }}
                   onManualEntry={() => setManualEntry(true)}

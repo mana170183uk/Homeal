@@ -25,6 +25,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithP
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 import ThemeToggle from "../components/ThemeToggle";
+import PostcodeLookup from "../components/PostcodeLookup";
 
 type Role = "CUSTOMER" | "CHEF";
 type SellerType = "KITCHEN" | "CAKE_BAKERY" | "OTHER";
@@ -67,6 +68,8 @@ function SignupContent() {
     email: string;
     phone: string;
   } | null>(null);
+  const [resolvedGeo, setResolvedGeo] = useState<{ lat: number; lng: number } | null>(null);
+  const [manualEntry, setManualEntry] = useState(false);
 
   useEffect(() => {
     const roleParam = searchParams.get("role");
@@ -501,29 +504,50 @@ function SignupContent() {
                 </p>
               </div>
 
-              {/* Address */}
-              <div className="relative group mb-4">
-                <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
-                <textarea
-                  value={form.address}
-                  onChange={(e) => updateField("address", e.target.value)}
-                  placeholder="Your address (street, city)"
-                  rows={2}
-                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+              {/* Postcode Lookup */}
+              <div className="mb-4">
+                <PostcodeLookup
+                  compact
+                  placeholder="Your postcode (e.g. WD17 4BX)"
+                  onAddressSelected={(addr) => {
+                    updateField("address", [addr.line1, addr.line2].filter(Boolean).join(", "));
+                    updateField("postcode", addr.postcode);
+                    setResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                    setManualEntry(true);
+                  }}
+                  onPostcodeResolved={(data) => {
+                    updateField("postcode", data.postcode);
+                    setResolvedGeo({ lat: data.latitude, lng: data.longitude });
+                  }}
+                  onManualEntry={() => setManualEntry(true)}
                 />
               </div>
 
-              {/* Postcode */}
-              <div className="relative group mb-4">
-                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
-                <input
-                  type="text"
-                  value={form.postcode}
-                  onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
-                  placeholder="Postcode (e.g. WD17 4BX)"
-                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
-                />
-              </div>
+              {manualEntry && (
+                <>
+                  <div className="relative group mb-4">
+                    <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                    <textarea
+                      value={form.address}
+                      onChange={(e) => updateField("address", e.target.value)}
+                      placeholder="Your address (street, city)"
+                      rows={2}
+                      className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                    />
+                  </div>
+
+                  <div className="relative group mb-4">
+                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                    <input
+                      type="text"
+                      value={form.postcode}
+                      onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                      placeholder="Postcode (e.g. WD17 4BX)"
+                      className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                    />
+                  </div>
+                </>
+              )}
 
               {error && (
                 <div className="animate-fade-in-up mb-4">
@@ -644,29 +668,50 @@ function SignupContent() {
                 />
               </div>
 
-              {/* Address */}
-              <div className="relative group mb-4">
-                <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
-                <textarea
-                  value={form.address}
-                  onChange={(e) => updateField("address", e.target.value)}
-                  placeholder="Kitchen address (street, city)"
-                  rows={2}
-                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+              {/* Postcode Lookup */}
+              <div className="mb-4">
+                <PostcodeLookup
+                  compact
+                  placeholder="Kitchen postcode (e.g. WD17 4BX)"
+                  onAddressSelected={(addr) => {
+                    updateField("address", [addr.line1, addr.line2].filter(Boolean).join(", "));
+                    updateField("postcode", addr.postcode);
+                    setResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                    setManualEntry(true);
+                  }}
+                  onPostcodeResolved={(data) => {
+                    updateField("postcode", data.postcode);
+                    setResolvedGeo({ lat: data.latitude, lng: data.longitude });
+                  }}
+                  onManualEntry={() => setManualEntry(true)}
                 />
               </div>
 
-              {/* Postcode */}
-              <div className="relative group mb-4">
-                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
-                <input
-                  type="text"
-                  value={form.postcode}
-                  onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
-                  placeholder="Postcode (e.g. WD17 4BX)"
-                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
-                />
-              </div>
+              {manualEntry && (
+                <>
+                  <div className="relative group mb-4">
+                    <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                    <textarea
+                      value={form.address}
+                      onChange={(e) => updateField("address", e.target.value)}
+                      placeholder="Kitchen address (street, city)"
+                      rows={2}
+                      className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                    />
+                  </div>
+
+                  <div className="relative group mb-4">
+                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                    <input
+                      type="text"
+                      value={form.postcode}
+                      onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                      placeholder="Postcode (e.g. WD17 4BX)"
+                      className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Error */}
               {error && (
@@ -1043,26 +1088,45 @@ function SignupContent() {
                 {/* Address + Postcode (Customer only) */}
                 {role === "CUSTOMER" && (
                   <>
-                    <div className="relative group">
-                      <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
-                      <textarea
-                        value={form.address}
-                        onChange={(e) => updateField("address", e.target.value)}
-                        placeholder="Your address (street, city)"
-                        rows={2}
-                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
-                      />
-                    </div>
-                    <div className="relative group">
-                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
-                      <input
-                        type="text"
-                        value={form.postcode}
-                        onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
-                        placeholder="Postcode (e.g. WD17 4BX)"
-                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
-                      />
-                    </div>
+                    <PostcodeLookup
+                      compact
+                      placeholder="Your postcode (e.g. WD17 4BX)"
+                      onAddressSelected={(addr) => {
+                        updateField("address", [addr.line1, addr.line2].filter(Boolean).join(", "));
+                        updateField("postcode", addr.postcode);
+                        setResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                        setManualEntry(true);
+                      }}
+                      onPostcodeResolved={(data) => {
+                        updateField("postcode", data.postcode);
+                        setResolvedGeo({ lat: data.latitude, lng: data.longitude });
+                      }}
+                      onManualEntry={() => setManualEntry(true)}
+                    />
+                    {manualEntry && (
+                      <>
+                        <div className="relative group">
+                          <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                          <textarea
+                            value={form.address}
+                            onChange={(e) => updateField("address", e.target.value)}
+                            placeholder="Your address (street, city)"
+                            rows={2}
+                            className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                          />
+                        </div>
+                        <div className="relative group">
+                          <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                          <input
+                            type="text"
+                            value={form.postcode}
+                            onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                            placeholder="Postcode (e.g. WD17 4BX)"
+                            className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -1111,26 +1175,45 @@ function SignupContent() {
                         className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
                       />
                     </div>
-                    <div className="relative group">
-                      <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
-                      <textarea
-                        value={form.address}
-                        onChange={(e) => updateField("address", e.target.value)}
-                        placeholder="Kitchen address (street, city)"
-                        rows={2}
-                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
-                      />
-                    </div>
-                    <div className="relative group">
-                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
-                      <input
-                        type="text"
-                        value={form.postcode}
-                        onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
-                        placeholder="Postcode (e.g. WD17 4BX)"
-                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
-                      />
-                    </div>
+                    <PostcodeLookup
+                      compact
+                      placeholder="Kitchen postcode (e.g. WD17 4BX)"
+                      onAddressSelected={(addr) => {
+                        updateField("address", [addr.line1, addr.line2].filter(Boolean).join(", "));
+                        updateField("postcode", addr.postcode);
+                        setResolvedGeo({ lat: addr.latitude, lng: addr.longitude });
+                        setManualEntry(true);
+                      }}
+                      onPostcodeResolved={(data) => {
+                        updateField("postcode", data.postcode);
+                        setResolvedGeo({ lat: data.latitude, lng: data.longitude });
+                      }}
+                      onManualEntry={() => setManualEntry(true)}
+                    />
+                    {manualEntry && (
+                      <>
+                        <div className="relative group">
+                          <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                          <textarea
+                            value={form.address}
+                            onChange={(e) => updateField("address", e.target.value)}
+                            placeholder="Kitchen address (street, city)"
+                            rows={2}
+                            className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                          />
+                        </div>
+                        <div className="relative group">
+                          <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-accent transition-colors" />
+                          <input
+                            type="text"
+                            value={form.postcode}
+                            onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                            placeholder="Postcode (e.g. WD17 4BX)"
+                            className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 

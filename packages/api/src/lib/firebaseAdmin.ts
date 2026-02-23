@@ -53,3 +53,30 @@ export async function deleteFirebaseUserByEmail(email: string): Promise<boolean>
     throw err;
   }
 }
+
+/**
+ * Set custom claims on a Firebase user (role + super_admin flag).
+ */
+export async function setFirebaseCustomClaims(
+  uid: string,
+  claims: { role: string; super_admin?: boolean }
+): Promise<void> {
+  await firebaseAdminAuth.setCustomUserClaims(uid, claims);
+  console.log(`[Firebase] Set custom claims for UID ${uid}:`, claims);
+}
+
+/**
+ * Get Firebase custom claims for a user by UID. Returns null if user not found.
+ */
+export async function getFirebaseCustomClaims(
+  uid: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    const user = await firebaseAdminAuth.getUser(uid);
+    return user.customClaims || null;
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === "auth/user-not-found") return null;
+    throw err;
+  }
+}

@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
 import { sendChefApprovalEmail, sendChefRejectionEmail, sendAdminAccessApprovedEmail, sendAdminAccessRejectedEmail } from "../services/email";
+import { firebaseAdminAuth, setFirebaseCustomClaims } from "../lib/firebaseAdmin";
 
 const router = Router();
 
@@ -150,17 +151,26 @@ router.get("/", async (req: Request, res: Response) => {
         return;
       }
 
-      // Create the user with ADMIN role (SUPER_ADMIN is reserved for the platform owner)
+      // Grant SUPER_ADMIN role (this flow is for super admin access requests)
       await prisma.user.upsert({
         where: { firebaseUid: request.firebaseUid },
-        update: { role: "ADMIN" },
+        update: { role: "SUPER_ADMIN" },
         create: {
           name: request.name,
           email: request.email,
           firebaseUid: request.firebaseUid,
-          role: "ADMIN",
+          role: "SUPER_ADMIN",
         },
       });
+
+      // Set Firebase custom claims for the newly approved super admin
+      try {
+        const fbUser = await firebaseAdminAuth.getUser(request.firebaseUid);
+        await setFirebaseCustomClaims(fbUser.uid, { role: "SUPER_ADMIN", super_admin: true });
+        console.log(`[Audit] Super admin access approved via email link: ${request.email} at ${new Date().toISOString()}`);
+      } catch (err) {
+        console.error(`[ApproveAction] Failed to set Firebase claims for ${request.email}:`, err);
+      }
 
       await prisma.adminAccessRequest.update({
         where: { id: requestId },

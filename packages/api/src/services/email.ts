@@ -68,13 +68,14 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       body: JSON.stringify({ from, to: [to], subject, html }),
     });
 
+    const body = await res.json().catch(() => null) as { id?: string; message?: string } | null;
+
     if (!res.ok) {
-      const body = await res.text();
-      console.error(`[Email] Resend API error ${res.status}: ${body}`);
+      console.error(`[Email] Resend API error ${res.status}:`, JSON.stringify(body));
       return false;
     }
 
-    console.log(`[Email] Sent "${subject}" to ${to}`);
+    console.log(`[Email] Sent "${subject}" to ${to} (messageId: ${body?.id || "unknown"})`);
     return true;
   } catch (err) {
     console.error("[Email] Failed to send:", err);

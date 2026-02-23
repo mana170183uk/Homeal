@@ -61,6 +61,12 @@ function SignupContent() {
     email: string;
     phone: string;
   } | null>(null);
+  const [pendingGoogleCustomer, setPendingGoogleCustomer] = useState<{
+    firebaseUid: string;
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null);
 
   useEffect(() => {
     const roleParam = searchParams.get("role");
@@ -83,6 +89,18 @@ function SignupContent() {
     }
     if (form.password.length < 6) {
       setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (role === "CUSTOMER" && !form.address) {
+      setError("Please enter your address.");
+      return;
+    }
+    if (role === "CUSTOMER" && !form.postcode) {
+      setError("Please enter your postcode.");
+      return;
+    }
+    if (role === "CUSTOMER" && form.postcode && !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(form.postcode.trim())) {
+      setError("Please enter a valid UK postcode (e.g. SW1A 1AA).");
       return;
     }
     if (role === "CHEF" && !form.businessName) {
@@ -122,6 +140,7 @@ function SignupContent() {
             firebaseUid: credential.user.uid,
             role,
             ...(role === "CHEF" ? { kitchenName: form.businessName, sellerType, businessName: form.businessName, address: form.address, postcode: form.postcode } : {}),
+            ...(role === "CUSTOMER" ? { address: form.address, postcode: form.postcode } : {}),
           }),
         }
       );
@@ -226,6 +245,18 @@ function SignupContent() {
       // If signing up as a chef, collect seller type + business name first
       if (role === "CHEF") {
         setPendingGoogleChef({
+          firebaseUid: user.uid,
+          name: googleName,
+          email: user.email || "",
+          phone: user.phoneNumber || "",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // If signing up as a customer, collect address + postcode first
+      if (role === "CUSTOMER" || !role) {
+        setPendingGoogleCustomer({
           firebaseUid: user.uid,
           name: googleName,
           email: user.email || "",
@@ -352,6 +383,176 @@ function SignupContent() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleGoogleCustomerComplete() {
+    if (!pendingGoogleCustomer) return;
+    if (!form.address) {
+      setError("Please enter your address.");
+      return;
+    }
+    if (!form.postcode) {
+      setError("Please enter your postcode.");
+      return;
+    }
+    if (!/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(form.postcode.trim())) {
+      setError("Please enter a valid UK postcode (e.g. SW1A 1AA).");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
+        "/auth/register",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: pendingGoogleCustomer.name,
+            email: pendingGoogleCustomer.email,
+            phone: pendingGoogleCustomer.phone,
+            firebaseUid: pendingGoogleCustomer.firebaseUid,
+            role: "CUSTOMER",
+            address: form.address,
+            postcode: form.postcode,
+          }),
+        }
+      );
+
+      if (!res.success) {
+        // Try login if already registered
+        const loginRes = await api<{ user: { id: string; role: string; name: string }; token: string; refreshToken: string }>(
+          "/auth/login",
+          {
+            method: "POST",
+            body: JSON.stringify({ firebaseUid: pendingGoogleCustomer.firebaseUid, emailVerified: true }),
+          }
+        );
+        if (loginRes.success && loginRes.data) {
+          localStorage.setItem("homeal_token", loginRes.data.token);
+          localStorage.setItem("homeal_refresh_token", loginRes.data.refreshToken);
+          if (loginRes.data.user.name) localStorage.setItem("homeal_user_name", loginRes.data.user.name);
+          localStorage.setItem("homeal_user_role", loginRes.data.user.role);
+          router.push("/search");
+          return;
+        }
+        setError(res.error || "Registration failed. Please try again.");
+        return;
+      }
+
+      if (res.data?.token) {
+        localStorage.setItem("homeal_token", res.data.token);
+        localStorage.setItem("homeal_refresh_token", res.data.refreshToken);
+        localStorage.setItem("homeal_user_name", res.data.user?.name || pendingGoogleCustomer.name);
+        localStorage.setItem("homeal_user_role", res.data.user?.role || "CUSTOMER");
+      }
+
+      router.push("/search");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Registration failed";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Google customer pending: collect address + postcode
+  if (pendingGoogleCustomer) {
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-gradient-to-br from-[var(--badge-from)] to-[var(--badge-to)] opacity-[0.07] blur-3xl animate-glow-pulse" />
+          <div className="absolute top-1/3 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-[var(--badge-to)] to-[var(--accent)] opacity-[0.05] blur-3xl animate-glow-pulse" style={{ animationDelay: "1.5s" }} />
+          <div className="absolute -bottom-20 right-1/4 w-72 h-72 rounded-full bg-gradient-to-br from-[var(--badge-from)] to-[var(--primary)] opacity-[0.06] blur-3xl animate-glow-pulse" style={{ animationDelay: "3s" }} />
+        </div>
+
+        <header className="relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3">
+          <button onClick={() => setPendingGoogleCustomer(null)} className="flex items-center text-[var(--text-soft)] hover:text-primary transition">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <a href="/" className="flex items-center gap-1.5" aria-label="Homeal - Home">
+            <img src="/chef-icon.png" alt="" className="h-10 lg:h-12 w-auto shrink-0" />
+            <div className="flex flex-col leading-none">
+              <span className="text-xl lg:text-2xl font-bold tracking-tight font-[family-name:var(--font-fredoka)]">
+                <span className="text-[#278848] dark:text-[#2EA855]">Ho</span>
+                <span className="text-[#FF8800]">me</span>
+                <span className="text-[#278848] dark:text-[#2EA855]">al</span>
+              </span>
+              <span className="text-[10px] lg:text-[11px] text-[var(--text-soft)] tracking-wide whitespace-nowrap">Where Every Meal Feels Like Home</span>
+            </div>
+          </a>
+          <div className="flex-1" />
+          <ThemeToggle />
+        </header>
+
+        <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-8">
+          <div className="max-w-md w-full animate-slide-up" style={{ opacity: 0, animationFillMode: "forwards" }}>
+            <div className="glass-card rounded-3xl p-6 sm:p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[var(--badge-from)] to-[var(--badge-to)] flex items-center justify-center">
+                  <MapPin className="w-8 h-8 text-white" />
+                </div>
+                <h1 className="font-display text-2xl font-bold text-[var(--text)] mb-2">
+                  Almost there, {pendingGoogleCustomer.name.split(" ")[0]}!
+                </h1>
+                <p className="text-[var(--text-soft)] text-sm">
+                  Please provide your delivery address to complete registration.
+                </p>
+              </div>
+
+              {/* Address */}
+              <div className="relative group mb-4">
+                <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                <textarea
+                  value={form.address}
+                  onChange={(e) => updateField("address", e.target.value)}
+                  placeholder="Your address (street, city)"
+                  rows={2}
+                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                />
+              </div>
+
+              {/* Postcode */}
+              <div className="relative group mb-4">
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                <input
+                  type="text"
+                  value={form.postcode}
+                  onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                  placeholder="Postcode (e.g. WD17 4BX)"
+                  className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                />
+              </div>
+
+              {error && (
+                <div className="animate-fade-in-up mb-4">
+                  <p className="text-alert text-sm bg-alert/5 border border-alert/20 rounded-xl px-4 py-2.5">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleGoogleCustomerComplete}
+                disabled={loading}
+                className="btn-premium w-full font-semibold py-3.5 rounded-xl text-white disabled:opacity-50 disabled:transform-none"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Creating account...
+                  </span>
+                ) : (
+                  "Complete Registration"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Google chef pending: collect seller type + business name
@@ -838,6 +1039,32 @@ function SignupContent() {
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
+
+                {/* Address + Postcode (Customer only) */}
+                {role === "CUSTOMER" && (
+                  <>
+                    <div className="relative group">
+                      <MapPin className="absolute left-3.5 top-3.5 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                      <textarea
+                        value={form.address}
+                        onChange={(e) => updateField("address", e.target.value)}
+                        placeholder="Your address (street, city)"
+                        rows={2}
+                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)] resize-none"
+                      />
+                    </div>
+                    <div className="relative group">
+                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] group-focus-within:text-[var(--badge-to)] transition-colors" />
+                      <input
+                        type="text"
+                        value={form.postcode}
+                        onChange={(e) => updateField("postcode", e.target.value.toUpperCase())}
+                        placeholder="Postcode (e.g. WD17 4BX)"
+                        className="premium-input w-full pl-12 pr-4 py-3.5 rounded-xl outline-none text-[var(--text)] placeholder:text-[var(--text-muted)]"
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* Seller Type Picker (Chef only) */}
                 {role === "CHEF" && (

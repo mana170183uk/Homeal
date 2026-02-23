@@ -1,18 +1,18 @@
 import { Router, Request, Response } from "express";
 import prisma from "@homeal/db";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorizeSuperAdmin } from "../middleware/auth";
 import {
   sendChefApprovalEmail,
   sendChefRejectionEmail,
   sendAdminAccessApprovedEmail,
   sendAdminAccessRejectedEmail,
 } from "../services/email";
-import { firebaseAdminAuth, deleteFirebaseUserByEmail } from "../lib/firebaseAdmin";
+import { firebaseAdminAuth, deleteFirebaseUserByEmail, setFirebaseCustomClaims } from "../lib/firebaseAdmin";
 
 const router = Router();
 
-// All admin routes require SUPER_ADMIN role
-router.use(authenticate, authorize("SUPER_ADMIN"));
+// All admin routes require SUPER_ADMIN role + Firebase custom claim verification
+router.use(authenticate, authorizeSuperAdmin());
 
 // GET /api/v1/admin/notifications — recent events for the bell icon
 router.get("/notifications", async (_req: Request, res: Response) => {
@@ -191,6 +191,8 @@ router.post("/chefs/:id/approve", async (req: Request, res: Response) => {
       },
     });
 
+    console.log(`[Audit] Chef approved: ${chef.kitchenName} (${chef.user.email}) by userId=${req.user!.userId} at ${new Date().toISOString()}`);
+
     // Send welcome email (fire-and-forget)
     if (chef.user.email) {
       sendChefApprovalEmail({
@@ -232,6 +234,8 @@ router.post("/chefs/:id/reject", async (req: Request, res: Response) => {
         rejectionReason: reason || null,
       },
     });
+
+    console.log(`[Audit] Chef rejected: ${chef.kitchenName} (${chef.user.email}) by userId=${req.user!.userId} reason="${reason || "none"}" at ${new Date().toISOString()}`);
 
     // Send rejection email (fire-and-forget)
     if (chef.user.email) {
@@ -321,21 +325,26 @@ router.post("/access-requests/:id/approve", async (req: Request, res: Response) 
       return;
     }
 
-    // FIX: Superadmin approval bug — previously used prisma.user.create() which threw
-    // a unique constraint error when approving a user who already existed (e.g. a customer
-    // requesting admin access). Switched to upsert so existing users get their role upgraded
-    // to ADMIN without duplicate-key failures. Role is ADMIN (not SUPER_ADMIN) because
-    // SUPER_ADMIN is reserved for the platform owner; approved requests grant ADMIN access.
+    // Grant SUPER_ADMIN role (this flow is specifically for super admin access requests)
     await prisma.user.upsert({
       where: { firebaseUid: request.firebaseUid },
-      update: { role: "ADMIN" },
+      update: { role: "SUPER_ADMIN" },
       create: {
         name: request.name,
         email: request.email,
         firebaseUid: request.firebaseUid,
-        role: "ADMIN",
+        role: "SUPER_ADMIN",
       },
     });
+
+    // Set Firebase custom claims for the newly approved super admin
+    try {
+      const fbUser = await firebaseAdminAuth.getUser(request.firebaseUid);
+      await setFirebaseCustomClaims(fbUser.uid, { role: "SUPER_ADMIN", super_admin: true });
+      console.log(`[Audit] Super admin access approved: ${request.email} by ${approver.email} at ${new Date().toISOString()}`);
+    } catch (err) {
+      console.error(`[Admin] Failed to set Firebase claims for ${request.email}:`, err);
+    }
 
     await prisma.adminAccessRequest.update({
       where: { id },
@@ -382,6 +391,8 @@ router.post("/access-requests/:id/reject", async (req: Request, res: Response) =
       where: { id },
       data: { status: "REJECTED", reviewedAt: new Date() },
     });
+
+    console.log(`[Audit] Admin access rejected: ${request.email} by ${approver.email} at ${new Date().toISOString()}`);
 
     sendAdminAccessRejectedEmail({
       email: request.email,
@@ -458,26 +469,6 @@ router.get("/dashboard-stats", async (_req: Request, res: Response) => {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch stats";
-    res.status(500).json({ success: false, error: message });
-  }
-});
-
-// PATCH /api/v1/admin/chefs/:id/commission — update commission rate
-router.patch("/chefs/:id/commission", async (req: Request, res: Response) => {
-  try {
-    const id = req.params.id as string;
-    const { commissionRate } = req.body;
-    if (commissionRate === undefined || commissionRate < 0 || commissionRate > 100) {
-      res.status(400).json({ success: false, error: "commissionRate must be 0-100" });
-      return;
-    }
-    const chef = await prisma.chef.update({
-      where: { id },
-      data: { commissionRate: parseFloat(commissionRate) },
-    });
-    res.json({ success: true, data: chef });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to update commission";
     res.status(500).json({ success: false, error: message });
   }
 });

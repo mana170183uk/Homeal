@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
 import { authenticate } from "../middleware/auth";
 import { notifySuperAdminNewChef, notifySuperAdminAccessRequest, sendVerificationEmail, sendPasswordResetEmail } from "../services/email";
+import { setFirebaseCustomClaims } from "../lib/firebaseAdmin";
 
 const router = Router();
 
@@ -28,8 +29,20 @@ router.post("/register", async (req: Request, res: Response) => {
     // Convert empty phone to null to avoid unique constraint collisions
     const cleanPhone = phone && phone.trim() ? phone.trim() : null;
 
-    // Validate SUPER_ADMIN registration: only allowed if no super admin exists yet
+    // Validate required fields for CUSTOMER
     let finalRole = role || "CUSTOMER";
+    if (finalRole === "CUSTOMER") {
+      if (!address || !address.trim()) {
+        res.status(400).json({ success: false, error: "Address is required." });
+        return;
+      }
+      if (!postcode || !postcode.trim()) {
+        res.status(400).json({ success: false, error: "Postcode is required." });
+        return;
+      }
+    }
+
+    // Validate SUPER_ADMIN registration: only allowed if no super admin exists yet
     if (finalRole === "SUPER_ADMIN" || finalRole === "ADMIN") {
       const existingSuperAdmin = await prisma.user.findFirst({
         where: { role: "SUPER_ADMIN" },
@@ -44,6 +57,14 @@ router.post("/register", async (req: Request, res: Response) => {
     const user = await prisma.user.create({
       data: { name, email, phone: cleanPhone, firebaseUid, role: finalRole },
     });
+
+    // Set Firebase custom claims for role enforcement
+    if (firebaseUid) {
+      setFirebaseCustomClaims(firebaseUid, {
+        role: finalRole,
+        ...(finalRole === "SUPER_ADMIN" ? { super_admin: true } : {}),
+      }).catch((err: unknown) => console.error("[Register] Failed to set Firebase claims:", err));
+    }
 
     // If registering as CHEF, create Chef record (pending approval)
     let chef = null;
@@ -97,6 +118,40 @@ router.post("/register", async (req: Request, res: Response) => {
           chefEmail: email,
         }).catch((err) => console.error("[Register] Failed to notify super admin:", err));
       }
+    }
+
+    // If registering as CUSTOMER, create default Address record
+    if (user.role === "CUSTOMER" && address && postcode) {
+      let custLat: number | undefined;
+      let custLng: number | undefined;
+      let custCity = "";
+      if (postcode) {
+        try {
+          const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.replace(/\s+/g, ""))}`);
+          const geoData = await geoRes.json() as { status: number; result?: { latitude: number; longitude: number; admin_district: string | null; admin_county: string | null } };
+          if (geoData.status === 200 && geoData.result) {
+            custLat = geoData.result.latitude;
+            custLng = geoData.result.longitude;
+            if (geoData.result.admin_district) custCity = geoData.result.admin_district;
+          }
+        } catch (err) {
+          console.warn("[Register] Customer postcode geocoding failed:", err);
+        }
+      }
+
+      await prisma.address.create({
+        data: {
+          userId: user.id,
+          label: "Home",
+          line1: address.trim(),
+          city: custCity || "Unknown",
+          state: "England",
+          zipCode: postcode.trim().toUpperCase(),
+          latitude: custLat,
+          longitude: custLng,
+          isDefault: true,
+        },
+      });
     }
 
     // Send verification email server-side (more reliable than client-side fire-and-forget)
@@ -166,6 +221,24 @@ router.post("/login", async (req: Request, res: Response) => {
         where: { id: user.id },
         data: { emailVerifiedAt: new Date() },
       });
+    }
+
+    // Server-side chef approval enforcement
+    if (user.role === "CHEF" && user.chef) {
+      if (user.chef.rejectedAt) {
+        res.status(403).json({
+          success: false,
+          error: "Your Home Maker application has been rejected. Please contact support@homeal.uk for more information.",
+        });
+        return;
+      }
+      if (!user.chef.isVerified) {
+        res.status(403).json({
+          success: false,
+          error: "Your Home Maker application is still pending approval. You will receive an email once approved.",
+        });
+        return;
+      }
     }
 
     const tokenPayload = { userId: user.id, role: user.role };

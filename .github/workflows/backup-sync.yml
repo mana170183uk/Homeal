@@ -386,21 +386,25 @@ jobs:
             echo "  Zip size: $(du -h "$ZIP" | cut -f1)"
             START=$(date +%s)
 
+            # Use --async true because backup apps lack runtime env vars
+            # (DATABASE_URL, etc.) so they won't start — we stop them after deploy anyway
             az webapp deploy --name "$APP" \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --src-path "$ZIP" \
               --type zip \
-              --async false
+              --async true
 
             END=$(date +%s)
-            echo "  $APP: deployed in $((END-START))s"
+            echo "  $APP: code deployed in $((END-START))s"
           }
 
           deploy_app "homeal-api-backup" "api-backup.zip"
           deploy_app "homeal-admin-backup" "admin-backup.zip"
           deploy_app "homeal-superadmin-backup" "superadmin-backup.zip"
 
-          echo ""
+          # Wait a bit for deploys to process
+          echo "Waiting 30s for deployments to finalize..."
+          sleep 30
           echo "All backup apps synced at $(date -u)"
 
       - name: Ensure backup apps are stopped

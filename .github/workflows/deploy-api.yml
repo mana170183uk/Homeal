@@ -1,0 +1,271 @@
+name: Deploy Homeal API to Azure
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/api/**", "packages/db/**", "packages/shared/**"]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema=packages/db/prisma/schema.prisma
+
+      - name: Push DB schema & seed test users
+        continue-on-error: true
+        run: |
+          npx prisma db push --schema=packages/db/prisma/schema.prisma --accept-data-loss
+          npx tsx packages/db/prisma/seed.ts || echo "Seed skipped (users may already exist)"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build all packages
+        run: npm run build:api
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy/packages-db/prisma deploy/packages-shared
+
+          # 1. API build output
+          cp -r packages/api/dist deploy/
+
+          # 2. Workspace packages (built + metadata)
+          cp -r packages/db/dist deploy/packages-db/
+          cp packages/db/package.json deploy/packages-db/
+          cp packages/db/prisma/schema.prisma deploy/packages-db/prisma/
+          cp -r packages/shared/dist deploy/packages-shared/
+          cp packages/shared/package.json deploy/packages-shared/
+
+          # 3. Entry point
+          printf "require('./dist/server.js');\n" > deploy/server.js
+
+          # 4. package.json with all runtime deps + file: refs for workspace pkgs
+          cat > deploy/package.json << 'PKG'
+          {
+            "name": "homeal-api-deploy",
+            "version": "1.0.0",
+            "main": "server.js",
+            "scripts": {
+              "start": "node server.js",
+              "postinstall": "npx prisma generate --schema=packages-db/prisma/schema.prisma"
+            },
+            "dependencies": {
+              "@homeal/db": "file:./packages-db",
+              "@homeal/shared": "file:./packages-shared",
+              "@azure/storage-blob": "^12.25.0",
+              "@prisma/client": "^6.3.0",
+              "cors": "^2.8.5",
+              "express": "^4.21.0",
+              "express-rate-limit": "^7.5.0",
+              "firebase-admin": "^13.0.0",
+              "helmet": "^8.0.0",
+              "ioredis": "^5.4.0",
+              "jsonwebtoken": "^9.0.2",
+              "multer": "^1.4.5-lts.1",
+              "prisma": "^6.3.0",
+              "sharp": "^0.33.0",
+              "socket.io": "^4.8.0",
+              "stripe": "^17.0.0",
+              "zod": "^3.24.0"
+            },
+            "engines": {
+              "node": ">=20.0.0"
+            }
+          }
+          PKG
+
+          # 5. Install node_modules in deploy dir (Linux CI matches Azure container)
+          echo "=== Installing production dependencies in deploy/ ==="
+          cd deploy
+          npm install --production
+          echo ""
+          echo "=== node_modules installed ==="
+          ls node_modules/ | head -20
+          echo "... ($(ls node_modules/ | wc -l) total packages)"
+          echo ""
+
+          # 6. Verify critical modules exist
+          for mod in express cors helmet firebase-admin @prisma/client; do
+            if [ ! -d "node_modules/$mod" ]; then
+              echo "::error::Missing node_modules/$mod after npm install"
+              exit 1
+            fi
+          done
+          echo "All critical modules verified"
+
+          # 7. Verify Prisma client was generated (postinstall should have run)
+          if [ -f "node_modules/.prisma/client/index.js" ]; then
+            echo "Prisma client generated OK"
+          else
+            echo "::warning::Prisma client not found, generating manually..."
+            npx prisma generate --schema=packages-db/prisma/schema.prisma
+          fi
+          cd ..
+
+          # 8. Zip everything INCLUDING node_modules (no Oryx needed)
+          cd deploy && zip -r -q ../deploy.zip . && cd ..
+
+          # 9. Verify artifact
+          echo ""
+          echo "=== Zip size ==="
+          ls -lh deploy.zip
+          echo ""
+          echo "=== Zip file listing (top-level) ==="
+          unzip -l deploy.zip | head -20
+
+      - name: Validate deploy artifact
+        run: |
+          if [ ! -f deploy.zip ]; then
+            echo "::error::deploy.zip not found!"
+            exit 1
+          fi
+          ZIP_SIZE=$(stat -c%s deploy.zip 2>/dev/null || stat -f%z deploy.zip)
+          echo "Zip size: $ZIP_SIZE bytes"
+          if [ "$ZIP_SIZE" -lt 1000000 ]; then
+            echo "::error::deploy.zip is suspiciously small ($ZIP_SIZE bytes) - node_modules likely missing"
+            exit 1
+          fi
+          # Check required files exist in zip
+          for f in "dist/server.js" "dist/app.js" "package.json" "server.js" "node_modules/express/package.json"; do
+            if ! unzip -l deploy.zip | grep -q "$f"; then
+              echo "::error::Missing $f in deploy.zip"
+              exit 1
+            fi
+          done
+          echo "Artifact validation passed (includes node_modules/express)"
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configure Azure (disable Oryx, set Node 20)
+        run: |
+          # Ensure Node 20 LTS runtime and startup command
+          az webapp config set --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --linux-fx-version "NODE|20-lts" \
+            --startup-file "node server.js"
+
+          # DISABLE Oryx build — we ship node_modules in the zip
+          az webapp config appsettings set --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --settings \
+            SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+            ENABLE_ORYX_BUILD=false
+
+          # Remove conflicting settings
+          az webapp config appsettings delete --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --setting-names WEBSITE_RUN_FROM_PACKAGE ORYX_NODE_MODULES_COMPRESSION 2>/dev/null || true
+
+      - name: Clean stale Oryx artifacts from wwwroot
+        run: |
+          CREDS=$(az webapp deployment list-publishing-credentials \
+            --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --query "{user:publishingUserName, pass:publishingPassword}" -o json)
+          KUDU_USER=$(echo "$CREDS" | jq -r '.user')
+          KUDU_PASS=$(echo "$CREDS" | jq -r '.pass')
+
+          # Delete Oryx manifest and tar.gz that cause extraction on startup
+          for item in oryx-manifest.toml node_modules.tar.gz __oryx_packages__ _del_node_modules; do
+            echo "Deleting $item..."
+            curl -s -X DELETE \
+              "https://homeal-api.scm.azurewebsites.net/api/vfs/site/wwwroot/${item}" \
+              -u "$KUDU_USER:$KUDU_PASS" -o /dev/null -w "HTTP %{http_code}\n" || true
+          done
+
+      - name: Deploy zip to Azure Web App
+        run: |
+          az webapp deployment source config-zip \
+            --name homeal-api \
+            --resource-group rg-visualstudio-lab-mana \
+            --src deploy.zip
+
+      - name: Restart and wait
+        run: |
+          az webapp restart --name homeal-api --resource-group rg-visualstudio-lab-mana
+          echo "Waiting 60s for app to start..."
+          sleep 60
+
+      - name: Enable application logging
+        run: |
+          az webapp log config --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --application-logging filesystem --level verbose --detailed-error-messages true
+
+      - name: Validate node_modules exists via Kudu VFS
+        run: |
+          CREDS=$(az webapp deployment list-publishing-credentials \
+            --name homeal-api --resource-group rg-visualstudio-lab-mana \
+            --query "{user:publishingUserName, pass:publishingPassword}" -o json)
+          KUDU_USER=$(echo "$CREDS" | jq -r '.user')
+          KUDU_PASS=$(echo "$CREDS" | jq -r '.pass')
+
+          # Check express exists via Kudu VFS API (file listing, not npm install)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://homeal-api.scm.azurewebsites.net/api/vfs/site/wwwroot/node_modules/express/package.json" \
+            -u "$KUDU_USER:$KUDU_PASS")
+          echo "node_modules/express/package.json -> HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "EXPRESS_FOUND - node_modules deployed correctly"
+          else
+            echo "::error::EXPRESS_MISSING (HTTP $HTTP_CODE)"
+            echo "=== wwwroot contents ==="
+            curl -s "https://homeal-api.scm.azurewebsites.net/api/vfs/site/wwwroot/" \
+              -u "$KUDU_USER:$KUDU_PASS" | jq -r '.[].name' 2>/dev/null || true
+            echo "=== checking for oryx-manifest.toml ==="
+            curl -s "https://homeal-api.scm.azurewebsites.net/api/vfs/site/wwwroot/oryx-manifest.toml" \
+              -u "$KUDU_USER:$KUDU_PASS" || true
+            exit 1
+          fi
+
+          # Check Prisma client
+          HTTP_CODE2=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://homeal-api.scm.azurewebsites.net/api/vfs/site/wwwroot/node_modules/.prisma/client/index.js" \
+            -u "$KUDU_USER:$KUDU_PASS")
+          echo "node_modules/.prisma/client/index.js -> HTTP $HTTP_CODE2"
+          if [ "$HTTP_CODE2" = "200" ]; then
+            echo "PRISMA_CLIENT_FOUND"
+          else
+            echo "::warning::Prisma client may not have been generated (HTTP $HTTP_CODE2)"
+          fi
+
+      - name: Verify deployment health
+        run: |
+          echo "=== Health check ==="
+          STATUS=$(curl -s -o /tmp/health.json -w "%{http_code}" https://api.homeal.uk/health)
+          echo "HTTP Status: $STATUS"
+          cat /tmp/health.json 2>/dev/null || true
+          echo ""
+          if [ "$STATUS" = "200" ]; then
+            echo "Health check PASSED"
+          else
+            echo "::warning::Health check returned $STATUS (expected 200)"
+          fi
+          echo ""
+          echo "=== Login endpoint smoke tests (expect 400/401, not 503) ==="
+          ALL_OK=true
+          for endpoint in "/api/v1/auth/login" "/api/v1/auth/me"; do
+            RESP=$(curl -s -o /dev/null -w "%{http_code}" "https://api.homeal.uk${endpoint}")
+            echo "$endpoint -> $RESP"
+            if [ "$RESP" = "503" ]; then
+              echo "::error::$endpoint still returning 503 - deployment failed"
+              ALL_OK=false
+            fi
+          done
+          if [ "$ALL_OK" = "false" ]; then
+            exit 1
+          fi
+          echo ""
+          echo "Deployment verification complete"

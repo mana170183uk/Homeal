@@ -1,0 +1,115 @@
+name: Deploy Homeal API (Container)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/api/**"
+      - "packages/db/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile.api"
+  workflow_dispatch:
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/homeal-api:latest
+            ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }}
+
+      - name: Setup Node.js (for DB migrations)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies (for Prisma CLI)
+        run: npm ci
+
+      - name: Push DB schema & seed test users
+        continue-on-error: true
+        run: |
+          npx prisma db push --schema=packages/db/prisma/schema.prisma --accept-data-loss
+          npx tsx packages/db/prisma/seed.ts || echo "Seed skipped (users may already exist)"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Smoke-test container structure
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }}"
+          echo "=== Verify critical modules resolve ==="
+          docker run --rm "$IMAGE" node -e "require('express'); require('cors'); require('@prisma/client'); console.log('All critical modules OK')"
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configure Web App to run container
+        run: |
+          az webapp config container set \
+            --resource-group rg-visualstudio-lab-mana \
+            --name homeal-api \
+            --docker-custom-image-name ghcr.io/${{ github.repository_owner }}/homeal-api:${{ github.sha }} \
+            --docker-registry-server-url https://ghcr.io
+
+          # Set registry credentials for private GHCR
+          az webapp config appsettings set \
+            --resource-group rg-visualstudio-lab-mana \
+            --name homeal-api \
+            --settings \
+              DOCKER_REGISTRY_SERVER_URL=https://ghcr.io \
+              DOCKER_REGISTRY_SERVER_USERNAME=${{ github.actor }} \
+              DOCKER_REGISTRY_SERVER_PASSWORD=${{ secrets.GHCR_PAT }}
+
+          # Remove Oryx / zip settings that conflict with container deployment
+          az webapp config appsettings delete \
+            --resource-group rg-visualstudio-lab-mana \
+            --name homeal-api \
+            --setting-names SCM_DO_BUILD_DURING_DEPLOYMENT ENABLE_ORYX_BUILD ORYX_NODE_MODULES_COMPRESSION WEBSITE_RUN_FROM_PACKAGE PROJECT \
+            2>/dev/null || true
+
+          # Set startup command to match Dockerfile CMD (overrides stale "node server.js" from old deploy)
+          az webapp config set \
+            --resource-group rg-visualstudio-lab-mana \
+            --name homeal-api \
+            --startup-file "node packages/api/dist/server.js"
+
+          az webapp restart --resource-group rg-visualstudio-lab-mana --name homeal-api
+
+      - name: Health gate
+        run: |
+          echo "Waiting for container to start..."
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://api.homeal.uk/health || true)
+            echo "Attempt $i/30: health=$code"
+            if [ "$code" = "200" ]; then
+              echo "Health check PASSED"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Health check failed after 5 minutes"
+          exit 1

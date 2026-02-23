@@ -7,7 +7,7 @@ on:
   # Also trigger after any production deploy succeeds
   workflow_run:
     workflows:
-      - "Deploy Homeal API (Container)"
+      - "Deploy Homeal API to Azure"
       - "Deploy Homeal Admin Panel to Azure"
       - "Deploy Homeal Super Admin to Azure"
       - "Deploy Homeal Customer Web to Azure"
@@ -232,6 +232,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema=packages/db/prisma/schema.prisma
+
       - name: Build all apps
         run: |
           echo "::group::Build API"
@@ -254,21 +257,62 @@ jobs:
 
       - name: Prepare API deployment
         run: |
-          mkdir -p deploy-api/node_modules
+          mkdir -p deploy-api/packages-db/prisma deploy-api/packages-shared
+
+          # API build output
           cp -r packages/api/dist deploy-api/
-          cp -rL node_modules/. deploy-api/node_modules/
-          cat > deploy-api/server.js << 'ENTRY'
-          require('./dist/server.js');
-          ENTRY
+
+          # Workspace packages (built + metadata)
+          cp -r packages/db/dist deploy-api/packages-db/
+          cp packages/db/package.json deploy-api/packages-db/
+          cp packages/db/prisma/schema.prisma deploy-api/packages-db/prisma/
+          cp -r packages/shared/dist deploy-api/packages-shared/
+          cp packages/shared/package.json deploy-api/packages-shared/
+
+          # Entry point
+          printf "require('./dist/server.js');\n" > deploy-api/server.js
+
+          # package.json with production deps + workspace file refs
           cat > deploy-api/package.json << 'PKG'
           {
             "name": "homeal-api-deploy",
             "version": "1.0.0",
             "main": "server.js",
-            "scripts": { "start": "node server.js" }
+            "scripts": {
+              "start": "node server.js",
+              "postinstall": "npx prisma generate --schema=packages-db/prisma/schema.prisma"
+            },
+            "dependencies": {
+              "@homeal/db": "file:./packages-db",
+              "@homeal/shared": "file:./packages-shared",
+              "@azure/storage-blob": "^12.25.0",
+              "@prisma/client": "^6.3.0",
+              "cors": "^2.8.5",
+              "express": "^4.21.0",
+              "express-rate-limit": "^7.5.0",
+              "firebase-admin": "^13.0.0",
+              "helmet": "^8.0.0",
+              "ioredis": "^5.4.0",
+              "jsonwebtoken": "^9.0.2",
+              "multer": "^1.4.5-lts.1",
+              "prisma": "^6.3.0",
+              "sharp": "^0.33.0",
+              "socket.io": "^4.8.0",
+              "stripe": "^17.0.0",
+              "zod": "^3.24.0"
+            },
+            "engines": {
+              "node": ">=20.0.0"
+            }
           }
           PKG
-          echo "API deploy size: $(du -sh deploy-api | cut -f1)"
+
+          # Install production deps (Linux CI = Linux Azure)
+          cd deploy-api
+          npm install --production
+          echo "API deploy size: $(du -sh . | cut -f1)"
+          echo "node_modules: $(ls node_modules/ | wc -l) packages"
+          cd ..
 
       - name: Prepare Admin deployment
         run: |
@@ -297,20 +341,32 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Configure backup apps (disable build-on-deploy)
+      - name: Configure backup apps
         run: |
           for APP in homeal-api-backup homeal-admin-backup homeal-superadmin-backup; do
             echo "Configuring $APP..."
             az webapp config appsettings set --name $APP \
               --resource-group ${{ env.RESOURCE_GROUP }} \
-              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false \
               --output none
             az webapp config set --name $APP \
               --resource-group ${{ env.RESOURCE_GROUP }} \
+              --linux-fx-version "NODE|20-lts" \
               --startup-file "node server.js" \
               --output none
+            # Remove any stale Docker settings
+            az webapp config appsettings delete --name $APP \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --setting-names DOCKER_REGISTRY_SERVER_URL DOCKER_REGISTRY_SERVER_USERNAME DOCKER_REGISTRY_SERVER_PASSWORD 2>/dev/null || true
             echo "  Done: $APP"
           done
+
+      - name: Start backup apps for deployment
+        run: |
+          for APP in homeal-api-backup homeal-admin-backup homeal-superadmin-backup; do
+            az webapp start --name $APP --resource-group ${{ env.RESOURCE_GROUP }} --output none 2>/dev/null || true
+          done
+          echo "Backup apps started for deployment"
 
       - name: Create deployment zips
         run: |
@@ -321,10 +377,8 @@ jobs:
           cd deploy-super-admin && zip -qr ../superadmin-backup.zip . && cd ..
           echo "Super Admin zip: $(du -h superadmin-backup.zip | cut -f1)"
 
-      - name: Deploy backup apps via Kudu API (async)
+      - name: Deploy backup apps
         run: |
-          TOKEN=$(az account get-access-token --query accessToken -o tsv)
-
           deploy_app() {
             local APP=$1
             local ZIP=$2
@@ -332,23 +386,14 @@ jobs:
             echo "  Zip size: $(du -h "$ZIP" | cut -f1)"
             START=$(date +%s)
 
-            HTTP_CODE=$(curl -s -o /tmp/deploy-response.txt -w "%{http_code}" \
-              -X POST "https://${APP}.scm.azurewebsites.net/api/zipdeploy?isAsync=true" \
-              -H "Authorization: Bearer $TOKEN" \
-              -H "Content-Type: application/zip" \
-              --data-binary @"$ZIP" \
-              --max-time 600)
+            az webapp deploy --name "$APP" \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --src-path "$ZIP" \
+              --type zip \
+              --async false
 
             END=$(date +%s)
-
-            if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "200" ]; then
-              echo "  $APP: deployed (HTTP $HTTP_CODE) in $((END-START))s"
-            else
-              echo "::error::$APP deploy failed (HTTP $HTTP_CODE) in $((END-START))s"
-              cat /tmp/deploy-response.txt 2>/dev/null
-              echo ""
-              return 1
-            fi
+            echo "  $APP: deployed in $((END-START))s"
           }
 
           deploy_app "homeal-api-backup" "api-backup.zip"

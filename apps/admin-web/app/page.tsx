@@ -2048,7 +2048,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Dashboard</h2>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Welcome back, Managobinda Sethi</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Welcome back, {chefProfile?.user?.name || chefName || "Chef"}</p>
                   </div>
                 </div>
                 <button

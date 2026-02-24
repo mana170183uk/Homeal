@@ -299,8 +299,8 @@ export default function AddressesPage() {
                 </div>
               </div>
 
-              {/* Postcode lookup */}
-              {!manualEntry && !editingId && (
+              {/* Postcode lookup — always visible for new addresses */}
+              {!editingId && (
                 <PostcodeLookup
                   initialPostcode={formPostcode}
                   onAddressSelected={(addr) => {
@@ -321,8 +321,8 @@ export default function AddressesPage() {
                 />
               )}
 
-              {/* Address fields */}
-              <div className="space-y-3">
+              {/* Address fields — shown after postcode validation or when editing */}
+              {(manualEntry || editingId) && <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-soft)] mb-1">
                     Address Line 1 *
@@ -386,32 +386,34 @@ export default function AddressesPage() {
                     Set as default address
                   </span>
                 </label>
-              </div>
+              </div>}
 
               {formError && (
                 <p className="text-red-500 text-sm mt-3">{formError}</p>
               )}
 
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent/90 transition disabled:opacity-50"
-                >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Check className="w-4 h-4" />
-                  )}
-                  {editingId ? "Update" : "Save"} Address
-                </button>
-                <button
-                  onClick={resetForm}
-                  className="px-4 py-2.5 bg-[var(--input)] text-[var(--text)] text-sm font-medium rounded-xl hover:bg-[var(--input)]/80 transition"
-                >
-                  Cancel
-                </button>
-              </div>
+              {(manualEntry || editingId) && (
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent/90 transition disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    {editingId ? "Update" : "Save"} Address
+                  </button>
+                  <button
+                    onClick={resetForm}
+                    className="px-4 py-2.5 bg-[var(--input)] text-[var(--text)] text-sm font-medium rounded-xl hover:bg-[var(--input)]/80 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

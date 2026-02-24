@@ -195,7 +195,7 @@ export default function PostcodeLookup({
         <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm bg-green-500/5 border border-green-500/20 rounded-xl px-3 py-2">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>
-            {lookupData?.postcode} verified — {lookupData?.city || "UK"}. Please enter your address below.
+            <strong>{lookupData?.postcode}</strong> — {lookupData?.city || "UK"}. Now enter your street address.
           </span>
         </div>
       )}

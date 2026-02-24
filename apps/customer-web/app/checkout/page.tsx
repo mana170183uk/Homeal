@@ -67,11 +67,22 @@ export default function CheckoutPage() {
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
 
+  // Payment method
+  const [paymentMethod, setPaymentMethod] = useState<"COD" | "CARD">("COD");
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+
   // Order state
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [placing, setPlacing] = useState(false);
   const [orderError, setOrderError] = useState("");
   const [isGuest, setIsGuest] = useState(false);
+
+  // Check if Stripe is enabled
+  useEffect(() => {
+    api<{ stripeEnabled: boolean }>("/config").then((res) => {
+      if (res.success && res.data?.stripeEnabled) setStripeEnabled(true);
+    }).catch(() => {});
+  }, []);
 
   // Auth check — show login prompt instead of redirect
   useEffect(() => {
@@ -200,10 +211,10 @@ export default function CheckoutPage() {
           quantity: item.quantity,
         })),
         specialInstructions: specialInstructions.trim() || undefined,
-        paymentMethod: "COD",
+        paymentMethod,
       };
 
-      const res = await api<{ id: string }>("/orders", {
+      const res = await api<{ id: string; checkoutUrl?: string }>("/orders", {
         method: "POST",
         token,
         body: JSON.stringify(orderPayload),
@@ -212,7 +223,12 @@ export default function CheckoutPage() {
       if (res.success && res.data) {
         localStorage.removeItem("homeal_cart");
         window.dispatchEvent(new Event("cart-updated"));
-        router.push(`/orders/${res.data.id}`);
+        // If Stripe checkout URL is returned, redirect to Stripe
+        if (res.data.checkoutUrl) {
+          window.location.href = res.data.checkoutUrl;
+        } else {
+          router.push(`/orders/${res.data.id}`);
+        }
       } else {
         setOrderError(res.error || "Failed to place order. Please try again.");
       }
@@ -626,19 +642,65 @@ export default function CheckoutPage() {
                 Payment Method
               </h2>
             </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--input)] border border-[var(--border)]">
-              <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <Banknote className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  {deliveryMethod === "pickup" ? "Cash on Pickup" : "Cash on Delivery"}
-                </p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {deliveryMethod === "pickup" ? "Pay when you collect your order" : "Pay when your order arrives"}
-                </p>
-              </div>
-              <ShieldCheck className="w-5 h-5 text-green-500 ml-auto" />
+            <div className="space-y-2">
+              {/* COD option */}
+              <label
+                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                  paymentMethod === "COD"
+                    ? "border-primary bg-primary/5"
+                    : "border-[var(--border)] bg-[var(--input)] hover:border-primary/30"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment"
+                  checked={paymentMethod === "COD"}
+                  onChange={() => setPaymentMethod("COD")}
+                  className="accent-[var(--primary)]"
+                />
+                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                  <Banknote className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[var(--text)]">
+                    {deliveryMethod === "pickup" ? "Cash on Pickup" : "Cash on Delivery"}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {deliveryMethod === "pickup" ? "Pay when you collect your order" : "Pay when your order arrives"}
+                  </p>
+                </div>
+              </label>
+
+              {/* Card option (only if Stripe enabled) */}
+              {stripeEnabled && (
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                    paymentMethod === "CARD"
+                      ? "border-primary bg-primary/5"
+                      : "border-[var(--border)] bg-[var(--input)] hover:border-primary/30"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={paymentMethod === "CARD"}
+                    onChange={() => setPaymentMethod("CARD")}
+                    className="accent-[var(--primary)]"
+                  />
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      Pay by Card
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Secure payment via Stripe
+                    </p>
+                  </div>
+                  <ShieldCheck className="w-5 h-5 text-blue-500" />
+                </label>
+              )}
             </div>
           </div>
 
@@ -663,7 +725,7 @@ export default function CheckoutPage() {
               </>
             ) : (
               <>
-                Place Order - &pound;{total.toFixed(2)}
+                {paymentMethod === "CARD" ? "Pay" : "Place Order"} - &pound;{total.toFixed(2)}
               </>
             )}
           </button>

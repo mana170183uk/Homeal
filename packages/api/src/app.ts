@@ -75,6 +75,17 @@ app.get("/health", async (_req, res) => {
   });
 });
 
+// Public config (non-sensitive settings for frontends)
+app.get(`${API_PREFIX}/config`, (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      stripeEnabled: !!process.env.STRIPE_SECRET_KEY,
+      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    },
+  });
+});
+
 // API Routes
 app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);

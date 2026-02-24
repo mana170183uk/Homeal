@@ -4960,6 +4960,17 @@ export default function DashboardPage() {
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-2">{getOrderItemsSummary(order.items)}</p>
+                        {order.address && (
+                          <div className="flex items-start gap-1.5 mb-2 text-[11px] text-[var(--text-muted)]">
+                            <MapPin size={12} className="shrink-0 mt-0.5" />
+                            <span className="line-clamp-2">{[order.address.line1, order.address.city, order.address.zipCode].filter(Boolean).join(", ")}</span>
+                          </div>
+                        )}
+                        {order.deliveryMethod === "PICKUP" && (
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">Pickup</span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-bold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</span>
                           <span className="text-[11px] text-[var(--text-muted)]">{formatRelativeTime(order.createdAt)}</span>

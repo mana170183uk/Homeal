@@ -112,9 +112,19 @@ export interface ProductDetail extends Product {
   }[];
 }
 
+export interface ChefLocation {
+  address: string | null;
+  postcode: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  contactPhone: string | null;
+}
+
 export interface Order {
   id: string;
   status: string;
+  deliveryMethod: string | null;
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -124,5 +134,7 @@ export interface Order {
   items: OrderItem[];
   chef: { id: string; kitchenName: string; user: { name: string } };
   address: Address | null;
+  chefLocation: ChefLocation | null;
   user: { name: string; email: string };
+  payment?: { status: string; method: string } | null;
 }

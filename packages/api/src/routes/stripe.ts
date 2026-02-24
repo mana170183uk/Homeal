@@ -31,6 +31,31 @@ router.post(
         case "checkout.session.completed": {
           const session = event.data.object;
           const metadata = session.metadata || {};
+
+          // Handle one-time order payment
+          if (metadata.orderId) {
+            const { orderId } = metadata;
+            const payment = await prisma.payment.findFirst({
+              where: { stripePaymentId: session.id },
+            });
+            if (payment) {
+              await prisma.payment.update({
+                where: { id: payment.id },
+                data: { status: "COMPLETED" },
+              });
+              console.log(`[Stripe Webhook] Order payment completed: ${orderId}`);
+            } else {
+              // Fallback: find by orderId
+              await prisma.payment.updateMany({
+                where: { orderId, status: "PENDING" },
+                data: { status: "COMPLETED" },
+              });
+              console.log(`[Stripe Webhook] Order payment completed (fallback): ${orderId}`);
+            }
+            break;
+          }
+
+          // Handle subscription checkout
           const { userId, planId, chefId } = metadata;
 
           if (!userId || !planId || !chefId) {

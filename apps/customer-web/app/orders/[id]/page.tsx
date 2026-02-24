@@ -16,6 +16,8 @@ import {
   Package,
   Truck,
   CircleCheckBig,
+  Navigation,
+  Phone,
 } from "lucide-react";
 import Header from "../../components/Header";
 import { api } from "../../lib/api";
@@ -354,6 +356,48 @@ export default function OrderDetailPage({
                   {order.address.state ? `, ${order.address.state}` : ""}{" "}
                   {order.address.zipCode}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Kitchen Pickup Location - shown after payment for pickup orders */}
+          {order.chefLocation && order.deliveryMethod === "PICKUP" && (
+            <div className="glass-card rounded-2xl p-5 border border-green-200 dark:border-green-500/20">
+              <div className="flex items-center gap-2 mb-3">
+                <Navigation className="w-5 h-5 text-green-600" />
+                <h2 className="font-display font-semibold text-[var(--text)]">
+                  Pickup Location
+                </h2>
+              </div>
+              <div className="text-sm text-[var(--text-soft)] space-y-2">
+                <p className="font-medium text-[var(--text)]">
+                  {order.chef.kitchenName}
+                </p>
+                {order.chefLocation.address && <p>{order.chefLocation.address}</p>}
+                <p>
+                  {order.chefLocation.city && `${order.chefLocation.city}, `}
+                  {order.chefLocation.postcode}
+                </p>
+                {order.chefLocation.contactPhone && (
+                  <a
+                    href={`tel:${order.chefLocation.contactPhone}`}
+                    className="inline-flex items-center gap-1.5 text-primary font-medium hover:underline"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    {order.chefLocation.contactPhone}
+                  </a>
+                )}
+                {order.chefLocation.latitude && order.chefLocation.longitude && (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${order.chefLocation.latitude},${order.chefLocation.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 mt-2 px-4 py-2.5 badge-gradient text-white text-sm font-semibold rounded-xl shadow hover:shadow-lg transition"
+                  >
+                    <Navigation className="w-4 h-4" />
+                    Get Directions
+                  </a>
+                )}
               </div>
             </div>
           )}

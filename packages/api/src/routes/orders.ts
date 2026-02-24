@@ -3,6 +3,7 @@ import prisma from "@homeal/db";
 import { authenticate, authorize } from "../middleware/auth";
 import { notifyChefNewOrder, notifyOrderUpdate } from "../services/socket";
 import { ORDER_AUTO_REJECT_MINUTES } from "@homeal/shared";
+import Stripe from "stripe";
 
 const router = Router();
 
@@ -161,6 +162,52 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         });
       }
     }, ORDER_AUTO_REJECT_MINUTES * 60 * 1000);
+
+    // If CARD payment, create Stripe checkout session
+    if (paymentMethod === "CARD" && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+        const lineItems = order.items.map((oi: any) => ({
+          price_data: {
+            currency: "gbp",
+            product_data: { name: oi.menuItem?.name || oi.menuItemId },
+            unit_amount: Math.round(oi.price * 100),
+          },
+          quantity: oi.quantity,
+        }));
+        // Add delivery fee as a line item if applicable
+        if (order.deliveryFee > 0) {
+          lineItems.push({
+            price_data: {
+              currency: "gbp",
+              product_data: { name: "Delivery Fee" },
+              unit_amount: Math.round(order.deliveryFee * 100),
+            },
+            quantity: 1,
+          });
+        }
+        const session = await stripe.checkout.sessions.create({
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: lineItems,
+          metadata: { orderId: order.id, chefId },
+          success_url: `${req.headers.origin || "https://homeal.uk"}/orders/${order.id}?payment=success`,
+          cancel_url: `${req.headers.origin || "https://homeal.uk"}/orders/${order.id}?payment=cancelled`,
+        });
+        // Store Stripe session ID on payment record
+        if (order.payment) {
+          await prisma.payment.update({
+            where: { id: order.payment.id },
+            data: { stripePaymentId: session.id },
+          });
+        }
+        res.status(201).json({ success: true, data: { ...order, checkoutUrl: session.url } });
+        return;
+      } catch (stripeErr) {
+        console.error("[Orders] Stripe checkout creation failed:", stripeErr);
+        // Fall through to return order without checkout URL (COD fallback)
+      }
+    }
 
     res.status(201).json({ success: true, data: order });
   } catch (error: unknown) {
@@ -368,7 +415,19 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
       where: { id: req.params.id as string },
       include: {
         items: { include: { menuItem: true } },
-        chef: { include: { user: { select: { name: true, avatar: true } } } },
+        chef: {
+          select: {
+            id: true,
+            kitchenName: true,
+            address: true,
+            postcode: true,
+            city: true,
+            latitude: true,
+            longitude: true,
+            contactPhone: true,
+            user: { select: { name: true, avatar: true } },
+          },
+        },
         user: { select: { name: true, email: true } },
         address: true,
         payment: true,
@@ -392,7 +451,23 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
       return;
     }
 
-    res.json({ success: true, data: order });
+    // After payment is completed, include location data:
+    // - For customers (pickup): include chef's address/postcode/location
+    // - For chefs (delivery): customer address is already included via order.address
+    const isPaid = order.payment?.status === "COMPLETED" || order.payment?.method === "COD";
+    const orderData: any = { ...order };
+    if (isPaid || isChef || isAdmin) {
+      orderData.chefLocation = {
+        address: order.chef.address || null,
+        postcode: order.chef.postcode || null,
+        city: order.chef.city || null,
+        latitude: order.chef.latitude || null,
+        longitude: order.chef.longitude || null,
+        contactPhone: order.chef.contactPhone || null,
+      };
+    }
+
+    res.json({ success: true, data: orderData });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch order";
     res.status(500).json({ success: false, error: message });

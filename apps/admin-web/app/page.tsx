@@ -376,6 +376,10 @@ export default function DashboardPage() {
           setChefEmail(data.data.email || "");
           setApprovalStatus(data.data.approvalStatus || "approved");
           setTrialEndsAt(data.data.trialEndsAt || null);
+          // Pre-populate chefProfile from /users/me response so kitchen name is available immediately
+          if (data.data.chef && !chefProfile) {
+            setChefProfile(data.data.chef);
+          }
         } else {
           // Token invalid, redirect to login
           localStorage.removeItem("homeal_token");

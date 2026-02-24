@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
-import { sendChefApprovalEmail, sendChefRejectionEmail, sendAdminAccessApprovedEmail, sendAdminAccessRejectedEmail } from "../services/email";
+import { sendChefApprovalEmail, sendChefRejectionEmail, sendAdminAccessApprovedEmail, sendAdminAccessRejectedEmail, sendVerificationEmail } from "../services/email";
 import { firebaseAdminAuth, setFirebaseCustomClaims } from "../lib/firebaseAdmin";
 
 const router = Router();
@@ -93,6 +93,16 @@ router.get("/", async (req: Request, res: Response) => {
           kitchenName: chef.kitchenName,
           trialEndsAt,
         }).catch((err) => console.error("[ApproveAction] Failed to send approval email:", err));
+
+        // Send verification email if chef hasn't verified yet
+        if (!chef.user.emailVerifiedAt) {
+          sendVerificationEmail({
+            email: chef.user.email,
+            userName: chef.user.name || "there",
+          }).then((sent) => {
+            if (sent) console.log(`[ApproveAction] Verification email sent to approved chef: ${chef.user.email}`);
+          }).catch((err) => console.error("[ApproveAction] Failed to send verification email:", err));
+        }
       }
 
       res.send(renderPage(

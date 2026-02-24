@@ -52,8 +52,8 @@ function LoginContent() {
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 
-      // Block unverified email/password users (exception for test account)
-      if (!credential.user.emailVerified && credential.user.email !== "manisha@gmail.com") {
+      // Block unverified email/password users
+      if (!credential.user.emailVerified) {
         // Send branded verification email via API
         api("/auth/send-verification", {
           method: "POST",

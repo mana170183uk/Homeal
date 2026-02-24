@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Mail, Lock, Shield, User, Clock, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
-import { signInWithEmailAndPassword, signInWithPopup, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { getFirebaseAuth, googleProvider } from "../lib/firebase";
 import { api } from "../lib/api";
 
@@ -31,13 +31,24 @@ export default function LoginPage() {
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 
+      // Block unverified email/password users
+      if (!credential.user.emailVerified) {
+        api("/auth/send-verification", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        }).catch(() => {});
+        await signOut(getFirebaseAuth());
+        setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
+        return;
+      }
+
       const res = await api<{
         user: { id: string; role: string };
         token: string;
         refreshToken: string;
       }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ firebaseUid: credential.user.uid, emailVerified: credential.user.emailVerified }),
+        body: JSON.stringify({ firebaseUid: credential.user.uid }),
       });
 
       if (!res.success || !res.data) {

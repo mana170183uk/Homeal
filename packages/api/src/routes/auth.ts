@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import prisma from "@homeal/db";
 import { authenticate } from "../middleware/auth";
 import { notifySuperAdminNewChef, notifySuperAdminAccessRequest, sendVerificationEmail, sendPasswordResetEmail } from "../services/email";
-import { setFirebaseCustomClaims } from "../lib/firebaseAdmin";
+import { setFirebaseCustomClaims, firebaseAdminAuth } from "../lib/firebaseAdmin";
 
 const router = Router();
 
@@ -194,7 +194,7 @@ router.post("/register", async (req: Request, res: Response) => {
 // POST /api/v1/auth/login
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { firebaseUid, emailVerified } = req.body;
+    const { firebaseUid } = req.body;
 
     const user = await prisma.user.findUnique({
       where: { firebaseUid },
@@ -206,13 +206,15 @@ router.post("/login", async (req: Request, res: Response) => {
       return;
     }
 
-    // Server-side email verification enforcement
-    // Skip for: already-verified users (backfilled), test account, Google users (emailVerified: true)
-    const alreadyVerified = !!user.emailVerifiedAt;
-    const isTestAccount = user.email === "manisha@gmail.com";
-    if (!emailVerified && !alreadyVerified && !isTestAccount) {
-      res.status(403).json({ success: false, error: "Please verify your email before logging in." });
-      return;
+    // SERVER-SIDE email verification — check Firebase directly (never trust client)
+    let emailVerified = false;
+    try {
+      const fbUser = await firebaseAdminAuth.getUser(firebaseUid);
+      emailVerified = fbUser.emailVerified;
+    } catch (err) {
+      console.error(`[Login] Firebase getUser failed for ${firebaseUid}:`, err);
+      // Fall back to DB record if Firebase unreachable
+      emailVerified = !!user.emailVerifiedAt;
     }
 
     // Track email verification timestamp (once)
@@ -223,12 +225,23 @@ router.post("/login", async (req: Request, res: Response) => {
       });
     }
 
+    // Enforce email verification for all roles
+    if (!emailVerified && !user.emailVerifiedAt) {
+      res.status(403).json({
+        success: false,
+        error: "Please verify your email before logging in.",
+        code: "EMAIL_NOT_VERIFIED",
+      });
+      return;
+    }
+
     // Server-side chef approval enforcement
     if (user.role === "CHEF" && user.chef) {
       if (user.chef.rejectedAt) {
         res.status(403).json({
           success: false,
           error: "Your Home Maker application has been rejected. Please contact support@homeal.uk for more information.",
+          code: "CHEF_REJECTED",
         });
         return;
       }
@@ -236,6 +249,7 @@ router.post("/login", async (req: Request, res: Response) => {
         res.status(403).json({
           success: false,
           error: "Your Home Maker application is still pending approval. You will receive an email once approved.",
+          code: "CHEF_PENDING",
         });
         return;
       }
@@ -379,14 +393,33 @@ router.post("/refresh", async (req: Request, res: Response) => {
       process.env.JWT_REFRESH_SECRET || "dev-refresh-secret"
     ) as { userId: string; role: string };
 
-    // Re-read role from DB instead of copying stale JWT role
+    // Re-read role + verification from DB
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { role: true },
+      select: { role: true, emailVerifiedAt: true, firebaseUid: true, isActive: true },
     });
     if (!user) {
       res.status(401).json({ success: false, error: "User not found" });
       return;
+    }
+    if (!user.isActive) {
+      res.status(403).json({ success: false, error: "Account deactivated" });
+      return;
+    }
+
+    // Re-check email verification on refresh
+    if (!user.emailVerifiedAt && user.firebaseUid) {
+      try {
+        const fbUser = await firebaseAdminAuth.getUser(user.firebaseUid);
+        if (!fbUser.emailVerified) {
+          res.status(403).json({ success: false, error: "Please verify your email before continuing.", code: "EMAIL_NOT_VERIFIED" });
+          return;
+        }
+        // Backfill verification timestamp
+        await prisma.user.update({ where: { id: payload.userId }, data: { emailVerifiedAt: new Date() } });
+      } catch {
+        // Firebase unavailable — allow if DB has no record either, err on side of availability
+      }
     }
 
     const token = signToken(

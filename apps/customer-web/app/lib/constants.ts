@@ -10,7 +10,7 @@ export const POPULAR_CUISINES = [
   { name: "British", emoji: "\uD83C\uDDEC\uD83C\uDDE7", gradient: "from-blue-400 to-red-400" },
 ];
 
-export const RADIUS_OPTIONS = [5, 10, 15, 20, 30] as const;
+export const RADIUS_OPTIONS = [5, 10, 15, 20] as const;
 
 export const SORT_OPTIONS = [
   { value: "nearest" as const, label: "Nearest", requiresLocation: true },

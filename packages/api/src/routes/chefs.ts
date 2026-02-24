@@ -69,7 +69,7 @@ router.get("/", async (req: Request, res: Response) => {
     const radius = parseFloat(req.query.radius as string) || SEARCH_RADIUS_MILES_DEFAULT;
 
     const chefs = await prisma.chef.findMany({
-      where: { isVerified: true, isOnline: true },
+      where: { isVerified: true },
       include: {
         user: { select: { name: true, avatar: true } },
         menus: {

@@ -18,8 +18,8 @@ export const IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const JWT_EXPIRY = "15m";
 export const JWT_REFRESH_EXPIRY = "7d";
 
-export const DELIVERY_RADIUS_KM_DEFAULT = 5;
-export const DELIVERY_RADIUS_KM_MAX = 15;
+export const DELIVERY_RADIUS_MILES_DEFAULT = 5;
+export const DELIVERY_RADIUS_MILES_MAX = 15;
 
 export const SEARCH_RADIUS_MILES_DEFAULT = 15;
 

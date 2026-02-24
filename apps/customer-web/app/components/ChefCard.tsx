@@ -45,8 +45,7 @@ function isKitchenOpenNow(chef: Chef): boolean {
       const hours = typeof chef.operatingHours === "string"
         ? JSON.parse(chef.operatingHours)
         : chef.operatingHours;
-      const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      const today = days[new Date().getDay()];
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long" }); // "Monday", "Tuesday", etc.
       const todayHours = hours[today];
       if (todayHours && todayHours.enabled === false) return false;
     } catch { /* ignore parse errors */ }

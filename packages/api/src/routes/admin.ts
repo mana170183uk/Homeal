@@ -6,6 +6,7 @@ import {
   sendChefRejectionEmail,
   sendAdminAccessApprovedEmail,
   sendAdminAccessRejectedEmail,
+  sendVerificationEmail,
 } from "../services/email";
 import { firebaseAdminAuth, deleteFirebaseUserByEmail, setFirebaseCustomClaims } from "../lib/firebaseAdmin";
 
@@ -201,6 +202,16 @@ router.post("/chefs/:id/approve", async (req: Request, res: Response) => {
         kitchenName: chef.kitchenName,
         trialEndsAt,
       }).catch((err) => console.error("[Admin] Failed to send approval email:", err));
+
+      // Send verification email if chef hasn't verified yet
+      if (!chef.user.emailVerifiedAt) {
+        sendVerificationEmail({
+          email: chef.user.email,
+          userName: chef.user.name || "there",
+        }).then((sent) => {
+          if (sent) console.log(`[Admin] Verification email sent to approved chef: ${chef.user.email}`);
+        }).catch((err) => console.error("[Admin] Failed to send verification email:", err));
+      }
     }
 
     res.json({ success: true, data: { message: "Chef approved successfully" } });

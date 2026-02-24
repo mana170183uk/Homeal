@@ -429,10 +429,14 @@ export default function ChefProfilePage({
   }
 
   const allItems = chef.menus.flatMap((m) => m.items);
-  const isKitchenOpen = chef.isOnline !== false;
   const operatingHours = parseOperatingHours(chef.operatingHours);
   const todayName = getTodayName();
   const todayHours = operatingHours?.[todayName] ?? null;
+
+  // Kitchen is only "open" if: isOnline=true AND today's hours are enabled AND not on vacation AND not date-closed
+  const isToggledOn = chef.isOnline !== false;
+  const isTodayEnabled = todayHours ? todayHours.enabled !== false : true;
+  const isKitchenOpen = isToggledOn && isTodayEnabled && !isOnVacation && !dateMenuClosed;
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">
@@ -480,7 +484,7 @@ export default function ChefProfilePage({
                 ) : (
                   <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-semibold px-3 py-1.5 rounded-full w-fit">
                     <span className="w-2 h-2 bg-red-500 rounded-full" />
-                    Kitchen Closed
+                    {isOnVacation ? "On Holiday" : dateMenuClosed ? "Closed Today" : !isTodayEnabled ? "Closed Today" : "Kitchen Closed"}
                   </span>
                 )}
               </div>
@@ -544,7 +548,7 @@ export default function ChefProfilePage({
                 )}
                 <div className="flex items-center gap-1.5 bg-[var(--input)] px-3 py-1.5 rounded-full text-[var(--text-muted)]">
                   <MapPin className="w-4 h-4" />
-                  Up to {chef.deliveryRadius} km
+                  Up to {chef.deliveryRadius} miles
                 </div>
                 {allItems.length > 0 && (
                   <div className="flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-full text-primary">

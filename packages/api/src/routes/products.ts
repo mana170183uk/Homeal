@@ -62,7 +62,7 @@ router.get("/", async (req: Request, res: Response) => {
       isAvailable: true,
       menu: {
         isActive: true,
-        chef: { isVerified: true, isOnline: true },
+        chef: { isVerified: true },
       },
     };
 
@@ -135,6 +135,7 @@ router.get("/", async (req: Request, res: Response) => {
             bannerImage: chef.bannerImage,
             avgRating: chef.avgRating,
             totalReviews: chef.totalReviews,
+            isOnline: chef.isOnline,
             distance,
             user: chef.user,
           },

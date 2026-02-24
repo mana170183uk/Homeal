@@ -91,6 +91,7 @@ export interface Product {
     bannerImage: string | null;
     avgRating: number;
     totalReviews: number;
+    isOnline?: boolean;
     distance: number | null;
     user: { name: string; avatar: string | null };
   };

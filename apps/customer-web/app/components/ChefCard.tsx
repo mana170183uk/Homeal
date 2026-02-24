@@ -38,14 +38,16 @@ function hasOffers(chef: Chef): boolean {
 }
 
 function isKitchenOpenNow(chef: Chef): boolean {
+  // Use server-computed isOpen (checks isOnline + vacation + operatingHours + dateMenuClosed)
+  if (chef.isOpen !== undefined) return chef.isOpen;
+  // Fallback for detail page or if isOpen not provided
   if (chef.isOnline === false) return false;
-  // Check today's operating hours
   if (chef.operatingHours) {
     try {
       const hours = typeof chef.operatingHours === "string"
         ? JSON.parse(chef.operatingHours)
         : chef.operatingHours;
-      const today = new Date().toLocaleDateString("en-US", { weekday: "long" }); // "Monday", "Tuesday", etc.
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
       const todayHours = hours[today];
       if (todayHours && todayHours.enabled === false) return false;
     } catch { /* ignore parse errors */ }

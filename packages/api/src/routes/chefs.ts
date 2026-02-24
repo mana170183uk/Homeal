@@ -68,6 +68,12 @@ router.get("/", async (req: Request, res: Response) => {
     const lng = parseFloat(req.query.lng as string);
     const radius = parseFloat(req.query.radius as string) || SEARCH_RADIUS_MILES_DEFAULT;
 
+    // Today's date for menu closure + vacation checks
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 86400000);
+    const todayDayName = now.toLocaleDateString("en-US", { weekday: "long" }); // "Monday", etc.
+
     const chefs = await prisma.chef.findMany({
       where: { isVerified: true },
       include: {
@@ -90,10 +96,48 @@ router.get("/", async (req: Request, res: Response) => {
       take: 50,
     });
 
+    // Fetch today's menu closure status for all chefs in one query
+    const todayMenus = await prisma.menu.findMany({
+      where: {
+        chefId: { in: chefs.map((c) => c.id) },
+        date: { gte: todayStart, lt: todayEnd },
+      },
+      select: { chefId: true, isClosed: true },
+    });
+    const closedMenuMap = new Map(todayMenus.map((m) => [m.chefId, m.isClosed]));
+
+    // Compute isOpen for each chef considering all signals
+    function computeIsOpen(chef: (typeof chefs)[number]): boolean {
+      // 1. Global toggle
+      if (chef.isOnline === false) return false;
+      // 2. Vacation
+      if (chef.vacationStart && chef.vacationEnd) {
+        if (todayStart >= chef.vacationStart && todayStart <= chef.vacationEnd) return false;
+      }
+      // 3. Today's operating hours
+      if (chef.operatingHours) {
+        try {
+          const hours = typeof chef.operatingHours === "string"
+            ? JSON.parse(chef.operatingHours)
+            : chef.operatingHours;
+          const todayHours = hours[todayDayName];
+          if (todayHours && todayHours.enabled === false) return false;
+        } catch { /* ignore parse errors */ }
+      }
+      // 4. Date-specific menu closure
+      if (closedMenuMap.get(chef.id) === true) return false;
+      return true;
+    }
+
+    const chefsWithStatus = chefs.map((chef) => ({
+      ...chef,
+      isOpen: computeIsOpen(chef),
+    }));
+
     // If lat/lng provided, filter by distance and sort
     if (!isNaN(lat) && !isNaN(lng)) {
-      type ChefRow = (typeof chefs)[number];
-      const chefsWithDistance = chefs
+      type ChefRow = (typeof chefsWithStatus)[number];
+      const chefsWithDistance = chefsWithStatus
         .filter((chef: ChefRow) => chef.latitude != null && chef.longitude != null)
         .map((chef: ChefRow) => ({
           ...chef,
@@ -108,7 +152,7 @@ router.get("/", async (req: Request, res: Response) => {
       return;
     }
 
-    res.json({ success: true, data: chefs });
+    res.json({ success: true, data: chefsWithStatus });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch chefs";
     res.status(500).json({ success: false, error: message });

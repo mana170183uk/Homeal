@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import imageCompression from "browser-image-compression";
 import { authFetch } from "./lib/api";
+import PostcodeLookup from "./components/PostcodeLookup";
 import {
   LayoutDashboard, ClipboardList, Package, Bell, UtensilsCrossed,
   PlusCircle, PoundSterling, Star, BarChart3, Sun, Moon, Settings,
@@ -3228,6 +3229,30 @@ export default function DashboardPage() {
                       }}
                       placeholder="Legal business name (optional)"
                       className="w-full px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] bg-[var(--input)] text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--primary)] transition"
+                    />
+                  </div>
+                  {/* Postcode Lookup — validates postcode, auto-fills city + geo */}
+                  <div className="sm:col-span-2">
+                    <PostcodeLookup
+                      initialPostcode={chefProfile?.postcode || ""}
+                      placeholder="e.g. WD17 4BX"
+                      onAddressSelected={async (addr) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token) return;
+                        try {
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ address: [addr.line1, addr.line2].filter(Boolean).join(", "), postcode: addr.postcode, city: addr.city, county: addr.county }) });
+                          showToast("Address updated from lookup");
+                        } catch { showToast("Failed to update address", "error"); }
+                      }}
+                      onPostcodeResolved={async (data) => {
+                        const token = localStorage.getItem("homeal_token");
+                        if (!token) return;
+                        try {
+                          await authFetch(`${ADMIN_API_URL}/api/v1/chefs/me`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ postcode: data.postcode, city: data.city }) });
+                          showToast("Postcode validated — city updated");
+                        } catch { showToast("Failed to update postcode", "error"); }
+                      }}
+                      onManualEntry={() => {}}
                     />
                   </div>
                   <div className="sm:col-span-2">

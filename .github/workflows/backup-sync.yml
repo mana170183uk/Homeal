@@ -1,18 +1,14 @@
 name: Backup Sync (Daily)
 
+# CRITICAL: This workflow is the disaster recovery lifeline.
+# If production goes down, we switch to backup apps + backup DB.
+# Design principle: ALWAYS prefer syncing over skipping.
+# If change detection fails → sync anyway. If in doubt → sync.
+
 on:
   schedule:
     # Once daily at midnight UTC
     - cron: "0 0 * * *"
-  # Also trigger after any production deploy succeeds
-  workflow_run:
-    workflows:
-      - "Deploy Homeal API to Azure"
-      - "Deploy Homeal Admin Panel to Azure"
-      - "Deploy Homeal Super Admin to Azure"
-      - "Deploy Homeal Customer Web to Azure"
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       sync_db:
@@ -39,18 +35,19 @@ jobs:
   sync-database:
     name: Sync Production DB → Backup DB
     runs-on: ubuntu-latest
-    # Run on schedule, manual trigger, or after a successful deploy
     if: >-
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_db == 'true') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_db == 'true')
 
     steps:
       - name: Install MySQL client
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq mysql-client > /dev/null 2>&1
-          echo "MySQL client installed: $(mysql --version)"
+          for i in 1 2 3; do
+            sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client > /dev/null 2>&1 && break
+            echo "apt-get attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          mysql --version || { echo "::error::Failed to install MySQL client"; exit 1; }
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -59,20 +56,24 @@ jobs:
 
       - name: Add GitHub runner IP to MySQL firewall
         run: |
-          RUNNER_IP=$(curl -s https://api.ipify.org)
+          RUNNER_IP=$(curl -s --retry 3 https://api.ipify.org)
           echo "Runner IP: $RUNNER_IP"
-          az mysql flexible-server firewall-rule create \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name restrovision-mysql \
-            --rule-name github-actions-runner \
-            --start-ip-address $RUNNER_IP \
-            --end-ip-address $RUNNER_IP 2>/dev/null || \
-          az mysql flexible-server firewall-rule update \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name restrovision-mysql \
-            --rule-name github-actions-runner \
-            --start-ip-address $RUNNER_IP \
-            --end-ip-address $RUNNER_IP 2>/dev/null || true
+          for i in 1 2 3; do
+            az mysql flexible-server firewall-rule create \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --name restrovision-mysql \
+              --rule-name github-actions-runner \
+              --start-ip-address $RUNNER_IP \
+              --end-ip-address $RUNNER_IP 2>/dev/null && break
+            az mysql flexible-server firewall-rule update \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --name restrovision-mysql \
+              --rule-name github-actions-runner \
+              --start-ip-address $RUNNER_IP \
+              --end-ip-address $RUNNER_IP 2>/dev/null && break
+            echo "Firewall rule attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
           echo "Waiting 15s for firewall rule to propagate..."
           sleep 15
 
@@ -80,21 +81,21 @@ jobs:
         env:
           MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
-          for i in 1 2 3; do
-            echo "Connection attempt $i/3..."
+          for i in 1 2 3 4 5; do
+            echo "Connection attempt $i/5..."
             if mysql \
               --host=${{ env.MYSQL_HOST }} \
               --user=${{ env.MYSQL_USER }} \
               --ssl-mode=REQUIRED \
-              --connect-timeout=10 \
+              --connect-timeout=15 \
               -e "SELECT 'Connection OK' AS status;" 2>&1; then
               echo "Connected successfully"
               exit 0
             fi
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
           done
-          echo "::error::All 3 MySQL connection attempts failed"
+          echo "::error::All 5 MySQL connection attempts failed"
           exit 1
 
       - name: Check for changes between production and backup
@@ -109,17 +110,11 @@ jobs:
             exit 0
           fi
 
-          # If triggered by a deploy workflow, always sync
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "Triggered by deployment (${{ github.event.workflow_run.name }}), syncing"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
+          # FAIL-SAFE: If comparison fails for any reason, default to syncing
+          set +e
           echo "Comparing production and backup databases..."
-          MYSQL_OPTS="--host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N"
+          MYSQL_OPTS="--host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N --connect-timeout=10"
 
-          # Compare total row counts across all tables
           PROD_ROWS=$(mysql $MYSQL_OPTS -e "
             SELECT COALESCE(SUM(TABLE_ROWS), 0)
             FROM information_schema.tables
@@ -132,7 +127,6 @@ jobs:
             WHERE table_schema='${{ env.BACKUP_DB }}' AND table_type='BASE TABLE'
           " 2>/dev/null | tr -d '[:space:]')
 
-          # Compare table counts
           PROD_TABLES=$(mysql $MYSQL_OPTS -e "
             SELECT COUNT(*)
             FROM information_schema.tables
@@ -144,6 +138,14 @@ jobs:
             FROM information_schema.tables
             WHERE table_schema='${{ env.BACKUP_DB }}' AND table_type='BASE TABLE'
           " 2>/dev/null | tr -d '[:space:]')
+          set -e
+
+          # If any query returned empty → comparison unreliable → sync to be safe
+          if [ -z "$PROD_ROWS" ] || [ -z "$BACKUP_ROWS" ] || [ -z "$PROD_TABLES" ] || [ -z "$BACKUP_TABLES" ]; then
+            echo "::warning::Change detection query returned empty — syncing to be safe"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           echo "Production: $PROD_TABLES tables, ~$PROD_ROWS rows"
           echo "Backup:     $BACKUP_TABLES tables, ~$BACKUP_ROWS rows"
@@ -162,17 +164,35 @@ jobs:
           MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
           echo "Starting mysqldump of ${{ env.PROD_DB }}..."
-          mysqldump \
-            --host=${{ env.MYSQL_HOST }} \
-            --user=${{ env.MYSQL_USER }} \
-            --ssl-mode=REQUIRED \
-            --single-transaction \
-            --routines \
-            --triggers \
-            --set-gtid-purged=OFF \
-            ${{ env.PROD_DB }} > prod_dump.sql
-          echo "Dump size: $(du -h prod_dump.sql | cut -f1)"
-          echo "Dump completed at $(date -u)"
+          for i in 1 2 3; do
+            echo "Dump attempt $i/3..."
+            if mysqldump \
+              --host=${{ env.MYSQL_HOST }} \
+              --user=${{ env.MYSQL_USER }} \
+              --ssl-mode=REQUIRED \
+              --single-transaction \
+              --routines \
+              --triggers \
+              --set-gtid-purged=OFF \
+              --connect-timeout=30 \
+              ${{ env.PROD_DB }} > prod_dump.sql 2>/tmp/dump_err.log; then
+              DUMP_SIZE=$(du -h prod_dump.sql | cut -f1)
+              DUMP_LINES=$(wc -l < prod_dump.sql)
+              echo "Dump size: $DUMP_SIZE ($DUMP_LINES lines)"
+              if [ "$DUMP_LINES" -lt 10 ]; then
+                echo "::error::Dump looks suspiciously small ($DUMP_LINES lines) — aborting"
+                cat /tmp/dump_err.log
+                exit 1
+              fi
+              echo "Dump completed at $(date -u)"
+              exit 0
+            fi
+            echo "Dump attempt $i failed:"
+            cat /tmp/dump_err.log
+            sleep 15
+          done
+          echo "::error::All 3 mysqldump attempts failed"
+          exit 1
 
       - name: Restore to backup database
         if: steps.check_changes.outputs.has_changes == 'true'
@@ -180,12 +200,23 @@ jobs:
           MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
           echo "Restoring to ${{ env.BACKUP_DB }}..."
-          mysql \
-            --host=${{ env.MYSQL_HOST }} \
-            --user=${{ env.MYSQL_USER }} \
-            --ssl-mode=REQUIRED \
-            ${{ env.BACKUP_DB }} < prod_dump.sql
-          echo "Database sync completed at $(date -u)"
+          for i in 1 2 3; do
+            echo "Restore attempt $i/3..."
+            if mysql \
+              --host=${{ env.MYSQL_HOST }} \
+              --user=${{ env.MYSQL_USER }} \
+              --ssl-mode=REQUIRED \
+              --connect-timeout=30 \
+              ${{ env.BACKUP_DB }} < prod_dump.sql 2>/tmp/restore_err.log; then
+              echo "Restore completed at $(date -u)"
+              exit 0
+            fi
+            echo "Restore attempt $i failed:"
+            cat /tmp/restore_err.log
+            sleep 15
+          done
+          echo "::error::All 3 restore attempts failed"
+          exit 1
 
       - name: Verify backup
         if: steps.check_changes.outputs.has_changes == 'true'
@@ -193,15 +224,15 @@ jobs:
           MYSQL_PWD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
           MYSQL_OPTS="--host=${{ env.MYSQL_HOST }} --user=${{ env.MYSQL_USER }} --ssl-mode=REQUIRED -N"
-          PROD_TABLES=$(mysql $MYSQL_OPTS -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}'")
-          BACKUP_TABLES=$(mysql $MYSQL_OPTS -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}'")
+          PROD_TABLES=$(mysql $MYSQL_OPTS -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.PROD_DB }}' AND table_type='BASE TABLE'" 2>/dev/null | tr -d '[:space:]')
+          BACKUP_TABLES=$(mysql $MYSQL_OPTS -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${{ env.BACKUP_DB }}' AND table_type='BASE TABLE'" 2>/dev/null | tr -d '[:space:]')
           echo "Production tables: $PROD_TABLES"
-          echo "Backup tables: $BACKUP_TABLES"
+          echo "Backup tables:     $BACKUP_TABLES"
           if [ "$PROD_TABLES" != "$BACKUP_TABLES" ]; then
-            echo "::error::Table count mismatch after restore!"
+            echo "::error::Table count mismatch after restore! (prod=$PROD_TABLES, backup=$BACKUP_TABLES)"
             exit 1
           fi
-          echo "Backup verified successfully"
+          echo "Backup verified successfully at $(date -u)"
 
       - name: Remove GitHub runner IP from MySQL firewall
         if: always()
@@ -215,27 +246,104 @@ jobs:
   sync-apps:
     name: Sync App Deployments to Backup
     runs-on: ubuntu-latest
-    # Only sync apps after a deploy or manual trigger — not on daily schedule
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_apps == 'true') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_apps == 'true')
 
     steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check if primary apps changed since last backup
+        id: check_app_changes
+        run: |
+          FORCE="${{ github.event.inputs.force || 'false' }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "Force sync requested"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # FAIL-SAFE: If any Azure CLI call fails, default to syncing
+          set +e
+          HAS_CHANGES=false
+          CHECK_FAILED=false
+
+          PAIRS="homeal-api:homeal-api-backup homeal-admin:homeal-admin-backup homeal-superadmin:homeal-superadmin-backup"
+          for PAIR in $PAIRS; do
+            PRIMARY="${PAIR%%:*}"
+            BACKUP="${PAIR##*:}"
+
+            PRIMARY_TIME=$(az webapp deployment list --name "$PRIMARY" \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --query "[0].lastSuccessEndTime" -o tsv 2>/dev/null)
+            P_EXIT=$?
+
+            BACKUP_TIME=$(az webapp deployment list --name "$BACKUP" \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --query "[0].lastSuccessEndTime" -o tsv 2>/dev/null)
+            B_EXIT=$?
+
+            # If either Azure CLI call failed → can't compare → sync to be safe
+            if [ $P_EXIT -ne 0 ] || [ $B_EXIT -ne 0 ]; then
+              echo "::warning::Failed to query deployment times for $PRIMARY/$BACKUP — will sync to be safe"
+              CHECK_FAILED=true
+              continue
+            fi
+
+            echo "$PRIMARY last deploy: ${PRIMARY_TIME:-never}"
+            echo "$BACKUP  last deploy: ${BACKUP_TIME:-never}"
+
+            if [ -z "$BACKUP_TIME" ] && [ -n "$PRIMARY_TIME" ]; then
+              echo "  → $BACKUP has no deployments — needs sync"
+              HAS_CHANGES=true
+            elif [ -n "$PRIMARY_TIME" ] && [ "$PRIMARY_TIME" != "$BACKUP_TIME" ]; then
+              if [[ "$PRIMARY_TIME" > "$BACKUP_TIME" ]]; then
+                echo "  → $PRIMARY is newer than $BACKUP — needs sync"
+                HAS_CHANGES=true
+              else
+                echo "  → $PRIMARY unchanged"
+              fi
+            else
+              echo "  → $PRIMARY unchanged"
+            fi
+          done
+          set -e
+
+          # If any check failed, force sync to be safe
+          if [ "$CHECK_FAILED" = "true" ]; then
+            echo "::warning::One or more deployment checks failed — syncing to be safe"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          elif [ "$HAS_CHANGES" = "true" ]; then
+            echo "Changes detected — will sync"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "No app changes detected — skipping sync"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.check_app_changes.outputs.has_changes == 'true'
 
       - name: Setup Node.js
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: npm ci
 
       - name: Generate Prisma Client
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: npx prisma generate --schema=packages/db/prisma/schema.prisma
 
       - name: Build all apps
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           echo "::group::Build API"
           npm run build:api
@@ -256,23 +364,19 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
 
       - name: Prepare API deployment
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           mkdir -p deploy-api/packages-db/prisma deploy-api/packages-shared
 
-          # API build output
           cp -r packages/api/dist deploy-api/
-
-          # Workspace packages (built + metadata)
           cp -r packages/db/dist deploy-api/packages-db/
           cp packages/db/package.json deploy-api/packages-db/
           cp packages/db/prisma/schema.prisma deploy-api/packages-db/prisma/
           cp -r packages/shared/dist deploy-api/packages-shared/
           cp packages/shared/package.json deploy-api/packages-shared/
 
-          # Entry point
           printf "require('./dist/server.js');\n" > deploy-api/server.js
 
-          # package.json with production deps + workspace file refs
           cat > deploy-api/package.json << 'PKG'
           {
             "name": "homeal-api-deploy",
@@ -307,7 +411,6 @@ jobs:
           }
           PKG
 
-          # Install production deps (Linux CI = Linux Azure)
           cd deploy-api
           npm install --production
           echo "API deploy size: $(du -sh . | cut -f1)"
@@ -315,6 +418,7 @@ jobs:
           cd ..
 
       - name: Prepare Admin deployment
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           mkdir -p deploy-admin
           cp -r apps/admin-web/.next/standalone/node_modules deploy-admin/
@@ -326,6 +430,7 @@ jobs:
           echo "Admin deploy size: $(du -sh deploy-admin | cut -f1)"
 
       - name: Prepare Super Admin deployment
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           mkdir -p deploy-super-admin
           cp -r apps/super-admin/.next/standalone/node_modules deploy-super-admin/
@@ -336,25 +441,20 @@ jobs:
           cp -r apps/super-admin/public deploy-super-admin/public 2>/dev/null || true
           echo "Super Admin deploy size: $(du -sh deploy-super-admin | cut -f1)"
 
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: Configure backup apps
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           for APP in homeal-api-backup homeal-admin-backup homeal-superadmin-backup; do
             echo "Configuring $APP..."
             az webapp config appsettings set --name $APP \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false \
-              --output none
+              --output none 2>/dev/null || true
             az webapp config set --name $APP \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --linux-fx-version "NODE|20-lts" \
               --startup-file "node server.js" \
-              --output none
-            # Remove any stale Docker settings
+              --output none 2>/dev/null || true
             az webapp config appsettings delete --name $APP \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --setting-names DOCKER_REGISTRY_SERVER_URL DOCKER_REGISTRY_SERVER_USERNAME DOCKER_REGISTRY_SERVER_PASSWORD 2>/dev/null || true
@@ -362,13 +462,17 @@ jobs:
           done
 
       - name: Start backup apps for deployment
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           for APP in homeal-api-backup homeal-admin-backup homeal-superadmin-backup; do
             az webapp start --name $APP --resource-group ${{ env.RESOURCE_GROUP }} --output none 2>/dev/null || true
           done
+          echo "Waiting 15s for apps to start..."
+          sleep 15
           echo "Backup apps started for deployment"
 
       - name: Create deployment zips
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
           cd deploy-api && zip -qr ../api-backup.zip . && cd ..
           echo "API zip: $(du -h api-backup.zip | cut -f1)"
@@ -378,33 +482,45 @@ jobs:
           echo "Super Admin zip: $(du -h superadmin-backup.zip | cut -f1)"
 
       - name: Deploy backup apps
+        if: steps.check_app_changes.outputs.has_changes == 'true'
         run: |
-          deploy_app() {
+          # Deploy each app independently — one failure must not block others
+          FAILED=""
+
+          deploy_with_retry() {
             local APP=$1
             local ZIP=$2
             echo "=== Deploying $ZIP to $APP ==="
             echo "  Zip size: $(du -h "$ZIP" | cut -f1)"
-            START=$(date +%s)
 
-            # Use --async true because backup apps lack runtime env vars
-            # (DATABASE_URL, etc.) so they won't start — we stop them after deploy anyway
-            az webapp deploy --name "$APP" \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --src-path "$ZIP" \
-              --type zip \
-              --async true
-
-            END=$(date +%s)
-            echo "  $APP: code deployed in $((END-START))s"
+            for i in 1 2 3; do
+              echo "  Attempt $i/3..."
+              if az webapp deploy --name "$APP" \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --src-path "$ZIP" \
+                --type zip \
+                --async true 2>/dev/null; then
+                echo "  ✓ $APP deployed successfully"
+                return 0
+              fi
+              echo "  Attempt $i failed, retrying in 15s..."
+              sleep 15
+            done
+            echo "  ::error::All 3 deploy attempts failed for $APP"
+            return 1
           }
 
-          deploy_app "homeal-api-backup" "api-backup.zip"
-          deploy_app "homeal-admin-backup" "admin-backup.zip"
-          deploy_app "homeal-superadmin-backup" "superadmin-backup.zip"
+          deploy_with_retry "homeal-api-backup" "api-backup.zip" || FAILED="$FAILED api"
+          deploy_with_retry "homeal-admin-backup" "admin-backup.zip" || FAILED="$FAILED admin"
+          deploy_with_retry "homeal-superadmin-backup" "superadmin-backup.zip" || FAILED="$FAILED superadmin"
 
-          # Wait a bit for deploys to process
           echo "Waiting 30s for deployments to finalize..."
           sleep 30
+
+          if [ -n "$FAILED" ]; then
+            echo "::error::Some backup deploys failed:$FAILED"
+            exit 1
+          fi
           echo "All backup apps synced at $(date -u)"
 
       - name: Ensure backup apps are stopped

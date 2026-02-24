@@ -3528,14 +3528,14 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h5 className="text-sm font-bold text-[var(--text)]">Amma&apos;s Kitchen</h5>
+                          <h5 className="text-sm font-bold text-[var(--text)]">{chefProfile?.kitchenName || "Your Kitchen"}</h5>
                           <span className="text-xs text-[var(--text-muted)]">0.8 miles away</span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                          {[1,2,3,4,5].map(s => <Star key={s} size={10} style={{ color: "#F59E0B" }} fill="#F59E0B" />)}
-                          <span className="text-[10px] text-[var(--text-muted)] ml-1">5.0 (0 reviews)</span>
+                          {[1,2,3,4,5].map(s => <Star key={s} size={10} style={{ color: "#F59E0B" }} fill={s <= Math.round(chefProfile?.avgRating || 0) ? "#F59E0B" : "none"} />)}
+                          <span className="text-[10px] text-[var(--text-muted)] ml-1">{(chefProfile?.avgRating || 0).toFixed(1)} ({chefProfile?.totalReviews || 0} reviews)</span>
                         </div>
-                        <p className="text-[11px] text-[var(--text-muted)] mt-1">South Indian, Home-style, Tiffin Service</p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1">{chefProfile?.cuisineTypes || "Your cuisine types"}</p>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {deliveryEnabled && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1" style={{ color: "#3B82F6", background: "rgba(59,130,246,0.1)" }}>

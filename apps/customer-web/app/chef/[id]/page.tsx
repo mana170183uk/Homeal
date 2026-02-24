@@ -71,6 +71,7 @@ interface ChefDetail {
   totalReviews: number;
   deliveryRadius: number;
   isOnline?: boolean;
+  isOpen?: boolean;
   operatingHours: string | null;
   orderCutoffTime?: string | null;
   vacationStart?: string | null;
@@ -339,8 +340,8 @@ export default function ChefProfilePage({
   function addToCart(item: MenuItem) {
     if (!chef) return;
 
-    // Block adding if kitchen is closed
-    if (chef.isOnline === false) return;
+    // Block adding if kitchen is closed (use server-computed isOpen)
+    if (chef.isOpen === false || chef.isOnline === false) return;
 
     // Block adding if sold out
     if (item.stockCount !== null && item.stockCount <= 0) return;
@@ -433,10 +434,13 @@ export default function ChefProfilePage({
   const todayName = getTodayName();
   const todayHours = operatingHours?.[todayName] ?? null;
 
-  // Kitchen is only "open" if: isOnline=true AND today's hours are enabled AND not on vacation AND not date-closed
+  // Use server-computed isOpen for today's status (checks all signals including guest-hidden operatingHours)
+  // For selected-date closures, also check dateMenuClosed state
   const isToggledOn = chef.isOnline !== false;
   const isTodayEnabled = todayHours ? todayHours.enabled !== false : true;
-  const isKitchenOpen = isToggledOn && isTodayEnabled && !isOnVacation && !dateMenuClosed;
+  const isKitchenOpen = chef.isOpen !== undefined
+    ? (chef.isOpen && !dateMenuClosed)
+    : (isToggledOn && isTodayEnabled && !isOnVacation && !dateMenuClosed);
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">

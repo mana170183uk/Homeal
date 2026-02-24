@@ -190,6 +190,33 @@ router.get("/:id", async (req: Request, res: Response) => {
       return;
     }
 
+    // Compute isOpen server-side (same logic as listing endpoint)
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 86400000);
+    const todayDayName = now.toLocaleDateString("en-US", { weekday: "long" });
+
+    let isOpen = chef.isOnline !== false;
+    if (isOpen && chef.vacationStart && chef.vacationEnd) {
+      if (todayStart >= chef.vacationStart && todayStart <= chef.vacationEnd) isOpen = false;
+    }
+    if (isOpen && chef.operatingHours) {
+      try {
+        const hours = typeof chef.operatingHours === "string"
+          ? JSON.parse(chef.operatingHours)
+          : chef.operatingHours;
+        const todayHours = hours[todayDayName];
+        if (todayHours && todayHours.enabled === false) isOpen = false;
+      } catch { /* ignore */ }
+    }
+    if (isOpen) {
+      const todayMenu = await prisma.menu.findFirst({
+        where: { chefId: chef.id, date: { gte: todayStart, lt: todayEnd } },
+        select: { isClosed: true },
+      });
+      if (todayMenu?.isClosed) isOpen = false;
+    }
+
     // Check if request is authenticated (optional — no middleware required)
     const authHeader = req.headers.authorization;
     const isAuthenticated = !!(authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 10);
@@ -204,15 +231,15 @@ router.get("/:id", async (req: Request, res: Response) => {
           avatar: null,
         },
       }));
-      // Omit operating hours for guests
+      // Omit operating hours for guests but include isOpen
       res.json({
         success: true,
-        data: { ...chef, reviews: maskedReviews, operatingHours: null },
+        data: { ...chef, isOpen, reviews: maskedReviews, operatingHours: null },
       });
       return;
     }
 
-    res.json({ success: true, data: chef });
+    res.json({ success: true, data: { ...chef, isOpen } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch chef";
     res.status(500).json({ success: false, error: message });

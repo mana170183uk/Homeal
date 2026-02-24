@@ -193,35 +193,34 @@ export async function notifySuperAdminAccessRequest(params: {
     superAdminPanelUrl,
   });
 
-  // Only the platform owner can approve admin access requests
-  const ownerEmail = process.env.PLATFORM_OWNER_EMAIL || "homealforuk@gmail.com";
-  const result = await sendEmail({
-    to: ownerEmail,
-    subject: `Super Admin Access Request: ${params.requesterName}`,
-    html,
-  });
+  // Send to ALL super admins
+  const emails = await getAllSuperAdminEmails();
+  const results = await Promise.allSettled(
+    emails.map(email => sendEmail({
+      to: email,
+      subject: `Super Admin Access Request: ${params.requesterName}`,
+      html,
+    }))
+  );
 
-  // Create in-app notification only for the platform owner
+  // Create in-app notifications for all super admins
   try {
-    const owner = await prisma.user.findFirst({
-      where: { email: ownerEmail, role: "SUPER_ADMIN", isActive: true },
-      select: { id: true },
-    });
-    if (owner) {
-      await prisma.notification.create({
-        data: {
-          userId: owner.id,
+    const adminIds = await getAllSuperAdminIds();
+    if (adminIds.length > 0) {
+      await prisma.notification.createMany({
+        data: adminIds.map(userId => ({
+          userId,
           type: "SYSTEM",
           title: "Super Admin Access Request",
           body: `${params.requesterName} (${params.requesterEmail}) has requested Super Admin access.`,
-        },
+        })),
       });
     }
   } catch (err) {
-    console.error("[Email] Failed to create in-app notification:", err);
+    console.error("[Email] Failed to create in-app notifications:", err);
   }
 
-  return result;
+  return results.some(r => r.status === "fulfilled" && r.value === true);
 }
 
 export async function sendAdminAccessApprovedEmail(params: {

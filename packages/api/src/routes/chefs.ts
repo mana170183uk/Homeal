@@ -249,7 +249,7 @@ router.get("/:id", async (req: Request, res: Response) => {
 // PATCH /api/v1/chefs/me - update chef profile (whitelisted fields)
 const ALLOWED_CHEF_FIELDS = [
   "kitchenName", "description", "cuisineTypes", "bannerImage", "latitude", "longitude",
-  "deliveryRadius", "isOnline", "operatingHours", "bankDetails", "sellerType", "businessName",
+  "deliveryRadius", "offersDelivery", "isOnline", "operatingHours", "bankDetails", "sellerType", "businessName",
   "cakeEnabled", "bakeryEnabled", "dailyOrderCap", "orderCutoffTime", "vacationStart", "vacationEnd",
   "address", "city", "county", "postcode", "contactPhone", "contactPerson",
 ];

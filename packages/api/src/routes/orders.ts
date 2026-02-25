@@ -29,12 +29,37 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       return;
     }
 
+    // Check if kitchen is online
+    if (chef.isOnline === false) {
+      res.status(400).json({ success: false, error: "This kitchen is currently closed and not accepting orders" });
+      return;
+    }
+
     // Check vacation
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     const today = new Date(todayStr + "T00:00:00.000Z");
     if (chef.vacationStart && chef.vacationEnd && today >= chef.vacationStart && today <= chef.vacationEnd) {
       res.status(400).json({ success: false, error: "This kitchen is currently on holiday" });
+      return;
+    }
+
+    // Check operating hours
+    if (chef.operatingHours) {
+      try {
+        const hours = typeof chef.operatingHours === "string" ? JSON.parse(chef.operatingHours) : chef.operatingHours;
+        const todayDayName = now.toLocaleDateString("en-US", { weekday: "long" });
+        const todayHours = hours[todayDayName];
+        if (todayHours && todayHours.enabled === false) {
+          res.status(400).json({ success: false, error: "This kitchen is closed today" });
+          return;
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Check if delivery is offered when delivery method is chosen
+    if (!isPickup && chef.offersDelivery === false) {
+      res.status(400).json({ success: false, error: "This kitchen only offers pickup. Delivery is not available." });
       return;
     }
 
@@ -251,12 +276,34 @@ router.post("/batch", authenticate, async (req: Request, res: Response) => {
           throw new Error(`Chef not found: ${chefId}`);
         }
 
+        // Check if kitchen is online
+        if (chef.isOnline === false) {
+          throw new Error(`${chef.kitchenName} is currently closed and not accepting orders`);
+        }
+
         // Check vacation
         const now = new Date();
         const todayStr = now.toISOString().slice(0, 10);
         const today = new Date(todayStr + "T00:00:00.000Z");
         if (chef.vacationStart && chef.vacationEnd && today >= chef.vacationStart && today <= chef.vacationEnd) {
           throw new Error(`${chef.kitchenName} is currently on holiday`);
+        }
+
+        // Check operating hours
+        if (chef.operatingHours) {
+          try {
+            const hours = typeof chef.operatingHours === "string" ? JSON.parse(chef.operatingHours) : chef.operatingHours;
+            const todayDayName = now.toLocaleDateString("en-US", { weekday: "long" });
+            const todayHours = hours[todayDayName];
+            if (todayHours && todayHours.enabled === false) {
+              throw new Error(`${chef.kitchenName} is closed today`);
+            }
+          } catch (e) { if (e instanceof Error && e.message.includes("closed")) throw e; }
+        }
+
+        // Check if delivery is offered
+        if (!isPickup && chef.offersDelivery === false) {
+          throw new Error(`${chef.kitchenName} only offers pickup. Delivery is not available.`);
         }
 
         // Check order cutoff time

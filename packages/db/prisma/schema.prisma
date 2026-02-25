@@ -120,6 +120,7 @@ model Chef {
   latitude        Float?
   longitude       Float?
   deliveryRadius  Float    @default(5.0)
+  offersDelivery  Boolean  @default(true)
   avgRating       Float    @default(0)
   totalReviews    Int      @default(0)
   isVerified      Boolean  @default(false)

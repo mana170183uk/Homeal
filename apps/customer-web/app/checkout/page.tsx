@@ -66,6 +66,8 @@ export default function CheckoutPage() {
 
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
+  const [chefOffersDelivery, setChefOffersDelivery] = useState(true);
+  const [chefIsOpen, setChefIsOpen] = useState(true);
 
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<"COD" | "CARD">("COD");
@@ -83,6 +85,26 @@ export default function CheckoutPage() {
       if (res.success && res.data?.stripeEnabled) setStripeEnabled(true);
     }).catch(() => {});
   }, []);
+
+  // Fetch chef delivery/open status
+  useEffect(() => {
+    const c = getCart();
+    if (c.length === 0) return;
+    const chefId = c[0].chefId;
+    if (!chefId) return;
+    api<{ offersDelivery?: boolean; isOpen?: boolean }>(`/chefs/${chefId}`).then((res) => {
+      if (res.success && res.data) {
+        const d = res.data as any;
+        if (d.offersDelivery === false) {
+          setChefOffersDelivery(false);
+          setDeliveryMethod("pickup");
+        }
+        if (d.isOpen === false) {
+          setChefIsOpen(false);
+        }
+      }
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auth check — show login prompt instead of redirect
   useEffect(() => {
@@ -319,6 +341,19 @@ export default function CheckoutPage() {
         </h1>
 
         <div className="space-y-6">
+          {/* Kitchen Closed Warning */}
+          {!chefIsOpen && (
+            <div className="glass-card rounded-2xl p-5 border-2 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-6 h-6 text-red-500 shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-red-600 dark:text-red-400 text-sm">Kitchen is Currently Closed</h3>
+                  <p className="text-xs text-red-500/80 mt-0.5">This kitchen is not accepting orders right now. Please try again later.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Delivery Method Toggle */}
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -327,6 +362,7 @@ export default function CheckoutPage() {
                 Delivery Method
               </h2>
             </div>
+            {chefOffersDelivery ? (
             <div className="flex rounded-xl p-1" style={{ background: "var(--input)" }}>
               <button
                 onClick={() => setDeliveryMethod("delivery")}
@@ -351,7 +387,16 @@ export default function CheckoutPage() {
                 Pick up
               </button>
             </div>
-            {deliveryMethod === "pickup" && (
+            ) : (
+            <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--input)" }}>
+              <Package className="w-5 h-5 text-primary" />
+              <div>
+                <p className="text-sm font-semibold text-[var(--text)]">Pickup Only</p>
+                <p className="text-xs text-[var(--text-muted)]">This kitchen only offers pickup. No delivery available.</p>
+              </div>
+            </div>
+            )}
+            {deliveryMethod === "pickup" && chefOffersDelivery && (
               <div className="mt-3 text-center">
                 <p className="text-xs text-[var(--text-muted)]">
                   You&apos;ll collect your order directly from the seller. No delivery fee applies.
@@ -715,7 +760,7 @@ export default function CheckoutPage() {
           {/* Place Order Button */}
           <button
             onClick={handlePlaceOrder}
-            disabled={placing || (deliveryMethod === "delivery" && !selectedAddressId)}
+            disabled={placing || !chefIsOpen || (deliveryMethod === "delivery" && !selectedAddressId)}
             className="btn-premium w-full font-semibold py-4 rounded-xl text-white flex items-center justify-center gap-2 text-lg disabled:opacity-50 disabled:transform-none"
           >
             {placing ? (

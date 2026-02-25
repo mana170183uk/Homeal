@@ -723,6 +723,7 @@ export default function DashboardPage() {
           const chef = chefData.data;
           setChefProfile(chef);
           setKitchenOnline(chef.isOnline ?? true);
+          setDeliveryEnabled(chef.offersDelivery !== false);
           if (chef.operatingHours) {
             try {
               const parsed = typeof chef.operatingHours === 'string' ? JSON.parse(chef.operatingHours) : chef.operatingHours;
@@ -3396,7 +3397,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => setDeliveryEnabled(!deliveryEnabled)}
+                        onClick={() => { const newVal = !deliveryEnabled; setDeliveryEnabled(newVal); updateChefProfile({ offersDelivery: newVal }); }}
                         className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
                         style={{ background: deliveryEnabled ? "#3B82F6" : "var(--border)" }}
                       >

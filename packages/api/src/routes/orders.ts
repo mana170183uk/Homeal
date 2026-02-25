@@ -151,6 +151,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         address: true,
         payment: true,
         chef: { include: { user: { select: { name: true } } } },
+        user: { select: { name: true } },
       },
     });
 
@@ -169,8 +170,19 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       }
     }
 
-    // Notify chef via Socket.IO
-    notifyChefNewOrder(chefId, { orderId: order.id, order });
+    // Create notification for chef + emit via Socket.IO
+    const itemCount = order.items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+    const customerName = order.user?.name || "A customer";
+    const notif = await prisma.notification.create({
+      data: {
+        userId: chef.userId,
+        type: "ORDER_UPDATE",
+        title: "New Order Received!",
+        body: `${customerName} ordered ${itemCount} item${itemCount !== 1 ? "s" : ""} — £${Number(order.total).toFixed(2)}`,
+        data: JSON.stringify({ orderId: order.id }),
+      },
+    });
+    notifyChefNewOrder(chefId, { orderId: order.id, order, notification: notif });
 
     // Auto-reject timer
     setTimeout(async () => {
@@ -398,9 +410,22 @@ router.post("/batch", authenticate, async (req: Request, res: Response) => {
 
         createdOrders.push({ id: order.id });
 
-        // Notify chef via Socket.IO (outside transaction, fire and forget)
-        setTimeout(() => {
-          notifyChefNewOrder(chefId, { orderId: order.id, order });
+        // Create notification + emit via Socket.IO (outside transaction)
+        setTimeout(async () => {
+          try {
+            const batchItemCount = order.items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+            const orderUser = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true } });
+            const notif = await prisma.notification.create({
+              data: {
+                userId: chef.userId,
+                type: "ORDER_UPDATE",
+                title: "New Order Received!",
+                body: `${orderUser?.name || "A customer"} ordered ${batchItemCount} item${batchItemCount !== 1 ? "s" : ""} — £${Number(order.total).toFixed(2)}`,
+                data: JSON.stringify({ orderId: order.id }),
+              },
+            });
+            notifyChefNewOrder(chefId, { orderId: order.id, order, notification: notif });
+          } catch (e) { console.error("[Orders] batch notification error:", e); }
         }, 0);
 
         // Auto-reject timer

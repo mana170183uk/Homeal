@@ -353,6 +353,13 @@ export default function DashboardPage() {
   const [schedulerBulkType, setSchedulerBulkType] = useState<"percentage" | "fixed">("percentage");
   const [schedulerBulkValue, setSchedulerBulkValue] = useState("");
 
+  // Notifications
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifFilter, setNotifFilter] = useState("All");
+  const bellAudioRef = useRef<HTMLAudioElement | null>(null);
+  const socketRef = useRef<any>(null);
+
   // Check auth + approval status on load
   useEffect(() => {
     const token = localStorage.getItem("homeal_token");
@@ -426,14 +433,42 @@ export default function DashboardPage() {
   function playNotificationBeep() {
     try {
       const ctx = new AudioContext();
+      const now = ctx.currentTime;
+
+      // Original beep
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = 800;
       gain.gain.value = 0.3;
-      osc.start();
-      osc.stop(ctx.currentTime + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
+
+      // Bell ring chime after the beep (ding-dong)
+      const bell1 = ctx.createOscillator();
+      const bellGain1 = ctx.createGain();
+      bell1.connect(bellGain1);
+      bellGain1.connect(ctx.destination);
+      bell1.frequency.value = 830;
+      bell1.type = "sine";
+      bellGain1.gain.setValueAtTime(0, now + 0.25);
+      bellGain1.gain.setValueAtTime(0.35, now + 0.25);
+      bellGain1.gain.exponentialRampToValueAtTime(0.01, now + 0.85);
+      bell1.start(now + 0.25);
+      bell1.stop(now + 0.85);
+
+      const bell2 = ctx.createOscillator();
+      const bellGain2 = ctx.createGain();
+      bell2.connect(bellGain2);
+      bellGain2.connect(ctx.destination);
+      bell2.frequency.value = 1050;
+      bell2.type = "sine";
+      bellGain2.gain.setValueAtTime(0, now + 0.45);
+      bellGain2.gain.setValueAtTime(0.3, now + 0.45);
+      bellGain2.gain.exponentialRampToValueAtTime(0.01, now + 1.1);
+      bell2.start(now + 0.45);
+      bell2.stop(now + 1.1);
     } catch {}
   }
 
@@ -509,6 +544,91 @@ export default function DashboardPage() {
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type });
   }
+
+  // --- Notifications ---
+  async function fetchNotifications() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setNotifications(data.data.notifications || []);
+        setUnreadCount(data.data.unreadCount || 0);
+      }
+    } catch (e) {
+      console.error("Failed to fetch notifications:", e);
+    }
+  }
+
+  async function markNotificationRead(notifId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await authFetch(`${ADMIN_API_URL}/api/v1/notifications/${notifId}/read`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, isRead: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch {}
+  }
+
+  async function markAllNotificationsRead() {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      await authFetch(`${ADMIN_API_URL}/api/v1/notifications/read-all`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch {}
+  }
+
+  // Setup Socket.IO for real-time order notifications
+  useEffect(() => {
+    if (approvalStatus !== "approved" || !chefProfile?.id) return;
+
+    fetchNotifications();
+
+    // Dynamic import to avoid SSR issues
+    import("socket.io-client").then(({ io }) => {
+      const socket = io(ADMIN_API_URL, { transports: ["websocket", "polling"] });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        socket.emit("join:chef", chefProfile.id);
+      });
+
+      socket.on("order:new", (data: any) => {
+        // Play bell ring sound
+        playNotificationBeep();
+        // Add notification to list
+        if (data.notification) {
+          setNotifications(prev => [data.notification, ...prev]);
+          setUnreadCount(prev => prev + 1);
+        }
+        // Show toast
+        const itemCount = data.order?.items?.reduce((s: number, i: any) => s + i.quantity, 0) || 0;
+        showToast(`New order received! ${itemCount} item${itemCount !== 1 ? "s" : ""} — £${Number(data.order?.total || 0).toFixed(2)}`);
+        // Refresh orders
+        fetchOrders();
+      });
+
+      return () => { socket.disconnect(); };
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [approvalStatus, chefProfile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Menu / Category / Earnings / Reviews fetch functions ---
   async function fetchMenuItems() {
@@ -1799,7 +1919,12 @@ export default function DashboardPage() {
                     >
                       <Icon size={18} strokeWidth={isActive ? 2 : 1.8} style={{ color: isActive ? "#FFFFFF" : "inherit" }} />
                     </div>
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.id === "notifications" && unreadCount > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1853,8 +1978,13 @@ export default function DashboardPage() {
           </button>
           <h1 className="text-lg gradient-text font-bold flex-1 min-w-0 truncate">{PAGE_TITLES[activePage] || "Dashboard"}</h1>
           <div className="flex items-center gap-1.5 sm:gap-2 ml-3">
-            <button onClick={() => setActivePage("notifications")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
-              <Bell size={18} className="text-[var(--text-muted)]" />
+            <button onClick={() => { setActivePage("notifications"); fetchNotifications(); }} className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
+              <Bell size={18} className={unreadCount > 0 ? "text-primary animate-bounce" : "text-[var(--text-muted)]"} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg animate-pulse">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </button>
             <button onClick={() => setActivePage("settings")} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--input)] transition">
               <Settings size={18} className="text-[var(--text-muted)]" />
@@ -5214,11 +5344,22 @@ export default function DashboardPage() {
           })()}
 
           {/* Notifications Page */}
-          {activePage === "notifications" && (
+          {activePage === "notifications" && (() => {
+            const readCount = notifications.filter(n => n.isRead).length;
+            const NOTIF_FILTERS = [
+              { label: "All", icon: Bell },
+              { label: "Orders", icon: ClipboardList },
+              { label: "System", icon: Settings },
+            ];
+            const filteredNotifs = notifFilter === "All"
+              ? notifications
+              : notifFilter === "Orders"
+              ? notifications.filter((n: any) => n.type === "ORDER_UPDATE")
+              : notifications.filter((n: any) => n.type !== "ORDER_UPDATE");
+
+            return (
             <>
-              <div
-                className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up"
-              >
+              <div className="rounded-2xl glass-card px-4 sm:px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in-up">
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                   <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 badge-gradient">
                     <Bell size={24} color="white" strokeWidth={2} />
@@ -5226,33 +5367,37 @@ export default function DashboardPage() {
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--text)]">Notifications</h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />0 Unread</span>
-                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />0 Read</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-emerald-500" />{unreadCount} Unread</span>
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><span className="w-2 h-2 rounded-full bg-gray-400" />{readCount} Read</span>
                     </div>
                   </div>
                 </div>
-                <button className="px-4 py-2 rounded-xl text-xs font-medium transition hover:opacity-80" style={{ background: "var(--input)", color: "var(--text-muted)" }}>
-                  Mark All Read
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => fetchNotifications()} className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:opacity-80" style={{ background: "var(--input)" }}>
+                    <RefreshCw size={16} className="text-[var(--text-muted)]" />
+                  </button>
+                  {unreadCount > 0 && (
+                    <button onClick={() => markAllNotificationsRead()} className="px-4 py-2 rounded-xl text-xs font-medium transition hover:opacity-80 btn-premium text-white">
+                      Mark All Read
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Notification Filters */}
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 sm:flex-wrap sm:overflow-x-visible mb-6">
-                {[
-                  { label: "All", icon: Bell },
-                  { label: "Orders", icon: ClipboardList },
-                  { label: "Reviews", icon: Star },
-                  { label: "System", icon: Settings },
-                ].map((tab, i) => {
+                {NOTIF_FILTERS.map((tab) => {
                   const TI = tab.icon;
+                  const isActive = notifFilter === tab.label;
                   return (
                     <button
-                      key={i}
+                      key={tab.label}
+                      onClick={() => setNotifFilter(tab.label)}
                       className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
                       style={{
-                        background: i === 0 ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
-                        color: i === 0 ? "#FFFFFF" : "var(--text-muted)",
-                        border: i === 0 ? "none" : "1px solid var(--border)",
+                        background: isActive ? "linear-gradient(135deg, var(--badge-from), var(--badge-to))" : "var(--header-bg)",
+                        color: isActive ? "#FFFFFF" : "var(--text-muted)",
+                        border: isActive ? "none" : "1px solid var(--border)",
                       }}
                     >
                       <TI size={13} /> {tab.label}
@@ -5261,33 +5406,50 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              {/* Notification Preferences */}
-              <div className="rounded-2xl border px-5 py-4 mb-6" style={{ background: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.2)" }}>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(59,130,246,0.15)" }}>
-                    <Bell size={16} style={{ color: "#3B82F6" }} />
+              {/* Notification List */}
+              <div className="rounded-2xl glass-card overflow-hidden">
+                {filteredNotifs.length === 0 ? (
+                  <div className="text-center py-16 animate-fade-in-up">
+                    <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
+                      <Bell size={36} className="text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-[var(--text)] mb-1">No notifications yet</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">You&apos;ll be notified about new orders, reviews and system updates</p>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--text)]">Notification Preferences</p>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                      {currentPlan === "Unlimited" ? "Real-time push notifications enabled" : currentPlan === "Growth" ? "Priority notifications enabled" : "Email notifications enabled"} &middot; {currentPlan} Plan
-                    </p>
+                ) : (
+                  <div className="divide-y divide-[var(--border)]">
+                    {filteredNotifs.map((notif: any) => {
+                      const isOrder = notif.type === "ORDER_UPDATE";
+                      const notifData = notif.data ? (typeof notif.data === "string" ? JSON.parse(notif.data) : notif.data) : {};
+                      return (
+                        <div
+                          key={notif.id}
+                          onClick={() => {
+                            if (!notif.isRead) markNotificationRead(notif.id);
+                            if (isOrder && notifData.orderId) setActivePage("active-orders");
+                          }}
+                          className={`px-5 py-4 flex items-start gap-3 cursor-pointer hover:bg-[var(--input)] transition ${!notif.isRead ? "bg-primary/5" : ""}`}
+                        >
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: isOrder ? "rgba(59,130,246,0.12)" : "rgba(139,92,246,0.12)" }}>
+                            {isOrder ? <ClipboardList size={18} style={{ color: "#3B82F6" }} /> : <Bell size={18} style={{ color: "#8B5CF6" }} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className={`text-sm ${!notif.isRead ? "font-bold" : "font-medium"} text-[var(--text)]`}>{notif.title}</p>
+                              {!notif.isRead && <span className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
+                            </div>
+                            <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{notif.body}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{formatRelativeTime(notif.createdAt)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              </div>
-
-              {/* Empty Notification List */}
-              <div className="rounded-2xl glass-card p-8">
-                <div className="text-center py-16 animate-fade-in-up">
-                  <div className="w-20 h-20 rounded-2xl badge-gradient mx-auto mb-4 flex items-center justify-center animate-float">
-                    <Bell size={36} className="text-white" />
-                  </div>
-                  <h3 className="text-base font-bold text-[var(--text)] mb-1">No notifications yet</h3>
-                  <p className="text-sm text-[var(--text-muted)] max-w-xs mx-auto">You&apos;ll be notified about new orders, reviews and system updates</p>
-                </div>
+                )}
               </div>
             </>
-          )}
+            );
+          })()}
 
           {/* Tiffin Subscriptions Page */}
           {activePage === "subscriptions" && (

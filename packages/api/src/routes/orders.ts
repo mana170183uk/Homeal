@@ -394,7 +394,7 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
       include: {
         items: { include: { menuItem: true } },
         chef: { include: { user: { select: { name: true } } } },
-        user: { select: { name: true, email: true } },
+        user: { select: { name: true, email: true, phone: true } },
         address: true,
         payment: true,
       },
@@ -428,7 +428,7 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
             user: { select: { name: true, avatar: true } },
           },
         },
-        user: { select: { name: true, email: true } },
+        user: { select: { name: true, email: true, phone: true } },
         address: true,
         payment: true,
       },

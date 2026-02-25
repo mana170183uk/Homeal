@@ -23,7 +23,7 @@ import Header from "../../components/Header";
 import { api } from "../../lib/api";
 import type { Order } from "../../lib/types";
 
-const ORDER_STEPS = [
+const DELIVERY_STEPS = [
   { key: "PLACED", label: "Placed", icon: Clock },
   { key: "ACCEPTED", label: "Accepted", icon: Check },
   { key: "PREPARING", label: "Preparing", icon: UtensilsCrossed },
@@ -32,10 +32,17 @@ const ORDER_STEPS = [
   { key: "DELIVERED", label: "Delivered", icon: CircleCheckBig },
 ];
 
-const STEP_INDEX: Record<string, number> = {};
-ORDER_STEPS.forEach((s, i) => {
-  STEP_INDEX[s.key] = i;
-});
+const PICKUP_STEPS = [
+  { key: "PLACED", label: "Placed", icon: Clock },
+  { key: "ACCEPTED", label: "Accepted", icon: Check },
+  { key: "PREPARING", label: "Preparing", icon: UtensilsCrossed },
+  { key: "READY", label: "Ready for Pickup", icon: Package },
+  { key: "DELIVERED", label: "Picked Up", icon: CircleCheckBig },
+];
+
+function getStepIndex(steps: typeof DELIVERY_STEPS, status: string): number {
+  return steps.findIndex((s) => s.key === status);
+}
 
 const TERMINAL_STATUSES = ["DELIVERED", "CANCELLED", "REJECTED"];
 
@@ -179,7 +186,9 @@ export default function OrderDetailPage({
   }
 
   const isCancelled = order.status === "CANCELLED" || order.status === "REJECTED";
-  const currentStepIdx = STEP_INDEX[order.status] ?? -1;
+  const isPickup = order.deliveryMethod === "PICKUP";
+  const ORDER_STEPS = isPickup ? PICKUP_STEPS : DELIVERY_STEPS;
+  const currentStepIdx = getStepIndex(ORDER_STEPS, order.status);
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden">

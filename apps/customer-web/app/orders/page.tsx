@@ -21,6 +21,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   OUT_FOR_DELIVERY: { label: "Out for Delivery", color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-500/20" },
   DELIVERED: { label: "Delivered", color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-500/20" },
   CANCELLED: { label: "Cancelled", color: "text-red-600", bg: "bg-red-100 dark:bg-red-500/20" },
+  CANCEL_REQUESTED: { label: "Cancel Pending", color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-500/20" },
   REJECTED: { label: "Rejected", color: "text-red-600", bg: "bg-red-100 dark:bg-red-500/20" },
 };
 

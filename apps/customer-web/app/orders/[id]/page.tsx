@@ -44,7 +44,7 @@ function getStepIndex(steps: typeof DELIVERY_STEPS, status: string): number {
   return steps.findIndex((s) => s.key === status);
 }
 
-const TERMINAL_STATUSES = ["DELIVERED", "CANCELLED", "REJECTED"];
+const TERMINAL_STATUSES = ["DELIVERED", "CANCELLED", "REJECTED", "CANCEL_REQUESTED"];
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-GB", {
@@ -120,9 +120,12 @@ export default function OrderDetailPage({
   }
 
   async function handleCancel() {
-    const confirmed = window.confirm(
-      "Are you sure you want to cancel this order?"
-    );
+    const isPreAcceptance = order?.status === "PLACED";
+    const confirmMsg = isPreAcceptance
+      ? "Are you sure you want to cancel this order? You will receive a full refund."
+      : `A 20% cancellation fee (£${((order?.total || 0) * 0.2).toFixed(2)}) will be deducted. Your cancellation request will be sent to the chef for approval.\n\nProceed?`;
+
+    const confirmed = window.confirm(confirmMsg);
     if (!confirmed) return;
 
     setCancelling(true);
@@ -138,7 +141,11 @@ export default function OrderDetailPage({
       if (res.success && res.data) {
         setOrder(res.data);
         prevStatusRef.current = res.data.status;
-        showToast("Order cancelled successfully");
+        if (res.data.status === "CANCEL_REQUESTED") {
+          showToast("Cancellation request sent to chef");
+        } else {
+          showToast("Order cancelled successfully");
+        }
       } else {
         setCancelError(res.error || "Failed to cancel order.");
       }
@@ -186,6 +193,7 @@ export default function OrderDetailPage({
   }
 
   const isCancelled = order.status === "CANCELLED" || order.status === "REJECTED";
+  const isCancelRequested = order.status === "CANCEL_REQUESTED";
   const isPickup = order.deliveryMethod === "PICKUP";
   const ORDER_STEPS = isPickup ? PICKUP_STEPS : DELIVERY_STEPS;
   const currentStepIdx = getStepIndex(ORDER_STEPS, order.status);
@@ -210,20 +218,32 @@ export default function OrderDetailPage({
         <div className="space-y-6">
           {/* Status Progress Bar */}
           <div className="glass-card rounded-2xl p-5">
-            {isCancelled ? (
+            {isCancelled || isCancelRequested ? (
               <div className="flex items-center justify-center gap-3 py-4">
-                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center">
-                  <X className="w-6 h-6 text-red-600" />
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isCancelRequested ? "bg-amber-100 dark:bg-amber-500/20" : "bg-red-100 dark:bg-red-500/20"}`}>
+                  {isCancelRequested ? <Clock className="w-6 h-6 text-amber-600" /> : <X className="w-6 h-6 text-red-600" />}
                 </div>
                 <div>
-                  <p className="font-semibold text-red-600 text-lg">
-                    Order {order.status === "CANCELLED" ? "Cancelled" : "Rejected"}
+                  <p className={`font-semibold text-lg ${isCancelRequested ? "text-amber-600" : "text-red-600"}`}>
+                    {isCancelRequested ? "Cancellation Pending" : order.status === "CANCELLED" ? "Order Cancelled" : "Order Rejected"}
                   </p>
                   <p className="text-sm text-[var(--text-muted)]">
-                    {order.status === "CANCELLED"
+                    {isCancelRequested
+                      ? "Your cancellation request has been sent to the chef for approval."
+                      : order.status === "CANCELLED"
                       ? "This order has been cancelled."
                       : "This order was rejected by the chef."}
                   </p>
+                  {order.status === "CANCELLED" && order.cancellationFee > 0 && (
+                    <div className="mt-2 text-xs text-[var(--text-muted)]">
+                      <span>Cancellation fee: <strong className="text-red-500">&pound;{order.cancellationFee.toFixed(2)}</strong></span>
+                      <span className="mx-2">|</span>
+                      <span>Refund: <strong className="text-emerald-600">&pound;{order.refundAmount.toFixed(2)}</strong></span>
+                    </div>
+                  )}
+                  {isCancelRequested && (
+                    <p className="text-xs text-amber-600 mt-1">A 20% cancellation fee will apply if approved.</p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -498,8 +518,14 @@ export default function OrderDetailPage({
           )}
 
           {/* Cancel button */}
-          {order.status === "PLACED" && (
+          {["PLACED", "ACCEPTED", "PREPARING", "READY"].includes(order.status) && (
             <div className="space-y-2">
+              {order.status !== "PLACED" && (
+                <div className="flex items-center gap-2 text-amber-600 text-sm bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-4 py-3">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  A 20% cancellation fee will apply as the order has been accepted.
+                </div>
+              )}
               {cancelError && (
                 <div className="flex items-center gap-2 text-alert text-sm bg-alert/5 border border-alert/20 rounded-xl px-4 py-3 animate-fade-in-up">
                   <AlertCircle className="w-4 h-4 shrink-0" />

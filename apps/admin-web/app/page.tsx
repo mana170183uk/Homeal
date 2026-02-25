@@ -427,6 +427,7 @@ export default function DashboardPage() {
     OUT_FOR_DELIVERY: { label: "Out for Delivery", color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
     DELIVERED: { label: "Delivered", color: "#059669", bg: "rgba(5,150,105,0.12)" },
     CANCELLED: { label: "Cancelled", color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+    CANCEL_REQUESTED: { label: "Cancel Requested", color: "#D97706", bg: "rgba(217,119,6,0.12)" },
     REJECTED: { label: "Rejected", color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
   };
 
@@ -513,6 +514,40 @@ export default function DashboardPage() {
       }
     } catch (e) {
       console.error("Failed to update order:", e);
+    }
+  }
+
+  async function approveCancelOrder(orderId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/orders/${orderId}/approve-cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrders();
+      }
+    } catch (e) {
+      console.error("Failed to approve cancel:", e);
+    }
+  }
+
+  async function rejectCancelOrder(orderId: string) {
+    const token = localStorage.getItem("homeal_token");
+    if (!token) return;
+    try {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/orders/${orderId}/reject-cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrders();
+      }
+    } catch (e) {
+      console.error("Failed to reject cancel:", e);
     }
   }
 
@@ -4932,6 +4967,7 @@ export default function DashboardPage() {
             const readyCount = activeOrders.filter(o => o.status === "READY").length;
             const outCount = activeOrders.filter(o => o.status === "OUT_FOR_DELIVERY").length;
             const acceptedCount = activeOrders.filter(o => o.status === "ACCEPTED").length;
+            const cancelReqCount = activeOrders.filter(o => o.status === "CANCEL_REQUESTED").length;
 
             const hasDeliveryOrders = activeOrders.some((o: any) => o.deliveryMethod !== "PICKUP");
             const filterTabs = [
@@ -4941,6 +4977,7 @@ export default function DashboardPage() {
               { label: "Preparing", count: preparingCount, color: "#F59E0B", statusFilter: "PREPARING" },
               { label: "Ready", count: readyCount, color: "#10B981", statusFilter: "READY" },
               ...(hasDeliveryOrders || outCount > 0 ? [{ label: "Out for Delivery", count: outCount, color: "#8B5CF6", statusFilter: "OUT_FOR_DELIVERY" }] : []),
+              ...(cancelReqCount > 0 ? [{ label: "Cancel Requests", count: cancelReqCount, color: "#D97706", statusFilter: "CANCEL_REQUESTED" }] : []),
             ];
 
             const filteredOrders = activeOrderFilter === "All Orders"
@@ -4971,6 +5008,13 @@ export default function DashboardPage() {
                     : <button className={btnBase} style={{ background: "#3B82F6" }} onClick={() => updateOrderStatus(order.id, "OUT_FOR_DELIVERY")}>Out for Delivery</button>;
                 case "OUT_FOR_DELIVERY":
                   return <button className={btnBase} style={{ background: "#059669" }} onClick={() => updateOrderStatus(order.id, "DELIVERED")}>Delivered</button>;
+                case "CANCEL_REQUESTED":
+                  return (
+                    <div className="flex gap-1.5">
+                      <button className={btnBase} style={{ background: "#10B981" }} onClick={() => approveCancelOrder(order.id)}>Approve Cancel</button>
+                      <button className={btnBase} style={{ background: "#EF4444" }} onClick={() => rejectCancelOrder(order.id)}>Reject Cancel</button>
+                    </div>
+                  );
                 default:
                   return null;
               }

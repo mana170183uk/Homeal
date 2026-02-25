@@ -24,6 +24,7 @@ enum OrderStatus {
   OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED
+  CANCEL_REQUESTED
   REJECTED
 }
 
@@ -246,6 +247,8 @@ model Order {
   specialInstructions String? @db.Text
   estimatedDelivery   DateTime? @db.DateTime(3)
   actualDelivery      DateTime? @db.DateTime(3)
+  cancellationFee Float       @default(0)
+  refundAmount    Float       @default(0)
   promoCodeId     String?     @db.VarChar(36)
   createdAt       DateTime    @default(now()) @db.DateTime(3)
   updatedAt       DateTime    @updatedAt @db.DateTime(3)

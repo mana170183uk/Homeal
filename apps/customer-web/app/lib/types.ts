@@ -131,6 +131,8 @@ export interface Order {
   specialInstructions: string | null;
   createdAt: string;
   actualDelivery: string | null;
+  cancellationFee: number;
+  refundAmount: number;
   items: OrderItem[];
   chef: { id: string; kitchenName: string; user: { name: string } };
   address: Address | null;

@@ -80,8 +80,7 @@ router.get("/", async (req: Request, res: Response) => {
         user: { select: { name: true, avatar: true } },
         menus: {
           where: { isActive: true },
-          include: { items: { where: { isAvailable: true }, take: 5 } },
-          take: 1,
+          include: { items: true },
         },
         badges: {
           where: {

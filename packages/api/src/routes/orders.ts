@@ -549,7 +549,10 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
 // POST /api/v1/orders/:id/cancel - customer cancellation
 router.post("/:id/cancel", authenticate, async (req: Request, res: Response) => {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id as string } });
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id as string },
+      include: { items: true },
+    });
 
     if (!order) {
       res.status(404).json({ success: false, error: "Order not found" });
@@ -561,28 +564,174 @@ router.post("/:id/cancel", authenticate, async (req: Request, res: Response) => 
       return;
     }
 
-    if (order.status !== "PLACED") {
-      res.status(400).json({ success: false, error: "Can only cancel orders that have not been accepted yet" });
+    // Cannot cancel orders already delivered, cancelled, or rejected
+    if (["DELIVERED", "CANCELLED", "REJECTED", "CANCEL_REQUESTED"].includes(order.status)) {
+      res.status(400).json({ success: false, error: "This order cannot be cancelled" });
       return;
     }
 
-    const updated = await prisma.order.update({
+    // PLACED: free cancellation, full refund, immediate cancel
+    if (order.status === "PLACED") {
+      const refundAmount = Number(order.total);
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "CANCELLED", cancellationFee: 0, refundAmount },
+      });
+
+      // Restore stock for cancelled items
+      for (const item of order.items) {
+        await prisma.menuItem.update({
+          where: { id: item.menuItemId },
+          data: { stockCount: { increment: item.quantity }, isAvailable: true },
+        });
+      }
+
+      notifyChefNewOrder(order.chefId, {
+        orderId: order.id,
+        status: "CANCELLED",
+        reason: "Cancelled by customer (before acceptance)",
+      });
+
+      // Return full order with includes
+      const fullOrder = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: {
+          items: { include: { menuItem: true } },
+          chef: { select: { id: true, kitchenName: true, address: true, postcode: true, city: true, latitude: true, longitude: true, contactPhone: true, user: { select: { name: true, avatar: true } } } },
+          user: { select: { name: true, email: true, phone: true } },
+          address: true,
+          payment: true,
+        },
+      });
+
+      res.json({ success: true, data: fullOrder });
+      return;
+    }
+
+    // ACCEPTED / PREPARING / READY: send cancellation request to chef (20% fee applies)
+    const cancellationFee = Math.round(Number(order.total) * 0.20 * 100) / 100;
+    const refundAmount = Math.round((Number(order.total) - cancellationFee) * 100) / 100;
+
+    await prisma.order.update({
       where: { id: order.id },
-      data: { status: "CANCELLED" },
+      data: { status: "CANCEL_REQUESTED", cancellationFee, refundAmount },
     });
 
+    // Notify chef about cancellation request
+    const chef = await prisma.chef.findUnique({ where: { id: order.chefId }, select: { userId: true } });
+    if (chef) {
+      await prisma.notification.create({
+        data: {
+          userId: chef.userId,
+          type: "ORDER_UPDATE",
+          title: "Cancellation Request",
+          body: `Customer requested to cancel order #${order.id.slice(0, 8).toUpperCase()} — £${Number(order.total).toFixed(2)}. Please review.`,
+          data: JSON.stringify({ orderId: order.id }),
+        },
+      });
+    }
     notifyChefNewOrder(order.chefId, {
       orderId: order.id,
-      status: "CANCELLED",
-      reason: "Cancelled by customer",
+      status: "CANCEL_REQUESTED",
+      reason: "Cancellation requested by customer",
     });
 
-    res.json({ success: true, data: updated });
+    // Return full order with includes
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: { include: { menuItem: true } },
+        chef: { select: { id: true, kitchenName: true, address: true, postcode: true, city: true, latitude: true, longitude: true, contactPhone: true, user: { select: { name: true, avatar: true } } } },
+        user: { select: { name: true, email: true, phone: true } },
+        address: true,
+        payment: true,
+      },
+    });
+
+    res.json({ success: true, data: fullOrder, message: "Your cancellation request has been sent to the chef for approval. A 20% cancellation fee applies." });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to cancel order";
     res.status(500).json({ success: false, error: message });
   }
 });
+
+// POST /api/v1/orders/:id/approve-cancel - chef approves cancellation
+router.post(
+  "/:id/approve-cancel",
+  authenticate,
+  authorize("CHEF", "ADMIN"),
+  async (req: Request, res: Response) => {
+    try {
+      const order = await prisma.order.findUnique({
+        where: { id: req.params.id as string },
+        include: { items: true },
+      });
+
+      if (!order || order.status !== "CANCEL_REQUESTED") {
+        res.status(400).json({ success: false, error: "No pending cancellation request" });
+        return;
+      }
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "CANCELLED" },
+      });
+
+      // Restore stock for cancelled items
+      for (const item of order.items) {
+        await prisma.menuItem.update({
+          where: { id: item.menuItemId },
+          data: { stockCount: { increment: item.quantity }, isAvailable: true },
+        });
+      }
+
+      notifyOrderUpdate(order.userId, {
+        orderId: order.id,
+        status: "CANCELLED",
+        reason: `Cancellation approved. Refund: £${Number(order.refundAmount).toFixed(2)} (20% cancellation fee: £${Number(order.cancellationFee).toFixed(2)})`,
+      });
+
+      res.json({ success: true, data: order });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to approve cancellation";
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
+
+// POST /api/v1/orders/:id/reject-cancel - chef rejects cancellation request
+router.post(
+  "/:id/reject-cancel",
+  authenticate,
+  authorize("CHEF", "ADMIN"),
+  async (req: Request, res: Response) => {
+    try {
+      const order = await prisma.order.findUnique({ where: { id: req.params.id as string } });
+
+      if (!order || order.status !== "CANCEL_REQUESTED") {
+        res.status(400).json({ success: false, error: "No pending cancellation request" });
+        return;
+      }
+
+      // Revert to ACCEPTED status
+      const updated = await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "ACCEPTED", cancellationFee: 0, refundAmount: 0 },
+      });
+
+      notifyOrderUpdate(order.userId, {
+        orderId: order.id,
+        status: "ACCEPTED",
+        reason: "Cancellation request was declined by the chef. Your order will continue.",
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to reject cancellation";
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
 
 // GET /api/v1/orders/earnings — chef earnings breakdown
 router.get(

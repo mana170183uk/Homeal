@@ -519,14 +519,16 @@ export default function ChefProfilePage({
                 </button>
               </div>
 
-              {/* Today's hours */}
-              {operatingHours && (
+              {/* Today's hours — use isKitchenOpen as single source of truth */}
+              {(operatingHours || chef.isOpen !== undefined) && (
                 <div className="flex items-center gap-1.5 text-sm text-[var(--text-soft)] mb-3">
                   <Clock className="w-4 h-4 text-[var(--text-muted)]" />
-                  {todayHours && todayHours.enabled ? (
+                  {isKitchenOpen && todayHours?.enabled ? (
                     <span>
                       Open today: {formatTime(todayHours.open)} &ndash; {formatTime(todayHours.close)}
                     </span>
+                  ) : isKitchenOpen ? (
+                    <span>Open today</span>
                   ) : (
                     <span className="text-red-500 dark:text-red-400">Closed today</span>
                   )}

@@ -413,7 +413,7 @@ router.post("/batch", authenticate, async (req: Request, res: Response) => {
         // Create notification + emit via Socket.IO (outside transaction)
         setTimeout(async () => {
           try {
-            const batchItemCount = order.items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+            const batchItemCount = (items as Array<{ quantity: number }>).reduce((sum, i) => sum + i.quantity, 0);
             const orderUser = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true } });
             const notif = await prisma.notification.create({
               data: {

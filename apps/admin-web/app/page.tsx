@@ -4820,6 +4820,7 @@ export default function DashboardPage() {
 
             function renderActionButtons(order: any) {
               const btnBase = "px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition-all hover:opacity-90 active:scale-95";
+              const isPickup = order.deliveryMethod === "PICKUP";
               switch (order.status) {
                 case "PLACED":
                   return (
@@ -4831,9 +4832,11 @@ export default function DashboardPage() {
                 case "ACCEPTED":
                   return <button className={btnBase} style={{ background: "#F59E0B" }} onClick={() => updateOrderStatus(order.id, "PREPARING")}>Start Cooking</button>;
                 case "PREPARING":
-                  return <button className={btnBase} style={{ background: "#10B981" }} onClick={() => updateOrderStatus(order.id, "READY")}>Mark Ready</button>;
+                  return <button className={btnBase} style={{ background: "#10B981" }} onClick={() => updateOrderStatus(order.id, "READY")}>{isPickup ? "Ready for Pickup" : "Mark Ready"}</button>;
                 case "READY":
-                  return <button className={btnBase} style={{ background: "#3B82F6" }} onClick={() => updateOrderStatus(order.id, "OUT_FOR_DELIVERY")}>Out for Delivery</button>;
+                  return isPickup
+                    ? <button className={btnBase} style={{ background: "#059669" }} onClick={() => updateOrderStatus(order.id, "DELIVERED")}>Picked Up</button>
+                    : <button className={btnBase} style={{ background: "#3B82F6" }} onClick={() => updateOrderStatus(order.id, "OUT_FOR_DELIVERY")}>Out for Delivery</button>;
                 case "OUT_FOR_DELIVERY":
                   return <button className={btnBase} style={{ background: "#059669" }} onClick={() => updateOrderStatus(order.id, "DELIVERED")}>Delivered</button>;
                 default:
@@ -4916,7 +4919,9 @@ export default function DashboardPage() {
                       </td>
                     </tr>
                     ) : filteredOrders.map((order: any) => {
-                      const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      const scRaw = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      const isPickupOrder = order.deliveryMethod === "PICKUP";
+                      const statusLabel = isPickupOrder && order.status === "READY" ? "Ready for Pickup" : isPickupOrder && order.status === "DELIVERED" ? "Picked Up" : scRaw.label;
                       return (
                       <tr key={order.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
                         <td className="px-5 py-3 font-mono font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</td>
@@ -4927,7 +4932,7 @@ export default function DashboardPage() {
                         <td className="px-4 py-3 text-[var(--text-muted)] max-w-[200px] truncate">{getOrderItemsSummary(order.items)}</td>
                         <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</td>
                         <td className="px-4 py-3 text-center">
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: scRaw.bg, color: scRaw.color }}>{statusLabel}</span>
                         </td>
                         <td className="px-4 py-3 text-center text-[var(--text-muted)]">{formatRelativeTime(order.createdAt)}</td>
                         <td className="px-4 py-3 text-center">{renderActionButtons(order)}</td>
@@ -4949,7 +4954,9 @@ export default function DashboardPage() {
                   ) : (
                   <div className="space-y-3">
                     {filteredOrders.map((order: any) => {
-                      const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      const scMobile = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      const isPickupMobile = order.deliveryMethod === "PICKUP";
+                      const mobileLabel = isPickupMobile && order.status === "READY" ? "Ready for Pickup" : isPickupMobile && order.status === "DELIVERED" ? "Picked Up" : scMobile.label;
                       return (
                       <div key={order.id} className="rounded-xl border border-[var(--border)] p-4 animate-fade-in-up" style={{ background: "var(--header-bg)" }}>
                         <div className="flex items-start justify-between mb-3">
@@ -4957,7 +4964,7 @@ export default function DashboardPage() {
                             <span className="font-mono text-xs font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</span>
                             <p className="text-sm font-medium text-[var(--text)] mt-0.5">{order.user?.name || "Customer"}</p>
                           </div>
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: scMobile.bg, color: scMobile.color }}>{mobileLabel}</span>
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-2">{getOrderItemsSummary(order.items)}</p>
                         {order.deliveryMethod === "PICKUP" ? (

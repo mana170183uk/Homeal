@@ -5113,13 +5113,15 @@ export default function DashboardPage() {
                       <th className="text-left px-4 py-3 font-semibold text-[var(--text)]">Items</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Total</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Status</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Type</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Payment</th>
                       <th className="text-center px-4 py-3 font-semibold text-[var(--text)]">Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredHistory.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-16 text-center text-[var(--text-muted)]">
+                      <td colSpan={8} className="px-5 py-16 text-center text-[var(--text-muted)]">
                         <Package size={40} className="mx-auto mb-3 opacity-20" />
                         <p className="text-sm font-medium">No order history yet</p>
                         <p className="text-[11px] mt-1">Completed and cancelled orders will appear here</p>
@@ -5127,6 +5129,8 @@ export default function DashboardPage() {
                     </tr>
                     ) : filteredHistory.map((order: any) => {
                       const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      const isPickupHist = order.deliveryMethod === "PICKUP";
+                      const paymentMethod = order.payment?.method === "CARD" ? "Online" : "Cash";
                       return (
                       <tr key={order.id} className="border-t border-[var(--border)] hover:bg-[var(--input)] transition">
                         <td className="px-5 py-3 font-mono font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</td>
@@ -5137,7 +5141,19 @@ export default function DashboardPage() {
                         <td className="px-4 py-3 text-[var(--text-muted)] max-w-[200px] truncate">{getOrderItemsSummary(order.items)}</td>
                         <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</td>
                         <td className="px-4 py-3 text-center">
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>
+                            {order.status === "DELIVERED" ? (isPickupHist ? "Picked Up" : "Delivered") : sc.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: isPickupHist ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)", color: isPickupHist ? "#D97706" : "#2563EB" }}>
+                            {isPickupHist ? "Pickup" : "Delivery"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: paymentMethod === "Online" ? "rgba(16,185,129,0.12)" : "rgba(139,92,246,0.12)", color: paymentMethod === "Online" ? "#059669" : "#7C3AED" }}>
+                            {paymentMethod}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-center text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                       </tr>
@@ -5159,6 +5175,8 @@ export default function DashboardPage() {
                   <div className="space-y-3">
                     {filteredHistory.map((order: any) => {
                       const sc = ORDER_STATUS_CONFIG[order.status] || { label: order.status, color: "#6B7280", bg: "rgba(107,114,128,0.12)" };
+                      const isPickupMob = order.deliveryMethod === "PICKUP";
+                      const payMethodMob = order.payment?.method === "CARD" ? "Online" : "Cash";
                       return (
                       <div key={order.id} className="rounded-xl border border-[var(--border)] p-4 animate-fade-in-up" style={{ background: "var(--header-bg)" }}>
                         <div className="flex items-start justify-between mb-3">
@@ -5166,12 +5184,22 @@ export default function DashboardPage() {
                             <span className="font-mono text-xs font-semibold text-[var(--text)]">#{order.id.slice(0, 8)}</span>
                             <p className="text-sm font-medium text-[var(--text)] mt-0.5">{order.user?.name || "Customer"}</p>
                           </div>
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: sc.bg, color: sc.color }}>
+                            {order.status === "DELIVERED" ? (isPickupMob ? "Picked Up" : "Delivered") : sc.label}
+                          </span>
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-2">{getOrderItemsSummary(order.items)}</p>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-bold text-[var(--text)]">&pound;{Number(order.total || 0).toFixed(2)}</span>
                           <span className="text-[11px] text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: isPickupMob ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)", color: isPickupMob ? "#D97706" : "#2563EB" }}>
+                            {isPickupMob ? "Pickup" : "Delivery"}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: payMethodMob === "Online" ? "rgba(16,185,129,0.12)" : "rgba(139,92,246,0.12)", color: payMethodMob === "Online" ? "#059669" : "#7C3AED" }}>
+                            {payMethodMob}
+                          </span>
                         </div>
                       </div>
                       );

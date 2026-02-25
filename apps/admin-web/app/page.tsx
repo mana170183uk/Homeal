@@ -359,6 +359,7 @@ export default function DashboardPage() {
   const [notifFilter, setNotifFilter] = useState("All");
   const bellAudioRef = useRef<HTMLAudioElement | null>(null);
   const socketRef = useRef<any>(null);
+  const [activeOrderCount, setActiveOrderCount] = useState(0);
 
   // Check auth + approval status on load
   useEffect(() => {
@@ -490,6 +491,7 @@ export default function DashboardPage() {
           playNotificationBeep();
         }
         prevOrderCountRef.current = activeNew.length;
+        setActiveOrderCount(activeNew.length);
         setOrders(newOrders);
       }
     } catch (e) {
@@ -552,18 +554,17 @@ export default function DashboardPage() {
   }
 
   // Fetch orders when on order pages
+  // Fetch orders on page change and on initial load
   useEffect(() => {
-    if (activePage === "active-orders" || activePage === "order-history") {
-      fetchOrders();
-    }
-  }, [activePage]);
+    if (approvalStatus === "approved") fetchOrders();
+  }, [activePage, approvalStatus]);
 
-  // Poll for new orders on active-orders page
+  // Poll for new orders globally (every 15s on active-orders, every 30s on other pages)
   useEffect(() => {
-    if (activePage !== "active-orders") return;
-    const interval = setInterval(fetchOrders, 15000);
+    if (approvalStatus !== "approved") return;
+    const interval = setInterval(fetchOrders, activePage === "active-orders" ? 15000 : 30000);
     return () => clearInterval(interval);
-  }, [activePage]);
+  }, [activePage, approvalStatus]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -632,14 +633,27 @@ export default function DashboardPage() {
 
     // Dynamic import to avoid SSR issues
     import("socket.io-client").then(({ io }) => {
-      const socket = io(ADMIN_API_URL, { transports: ["websocket", "polling"] });
+      const socket = io(ADMIN_API_URL, {
+        transports: ["polling", "websocket"],
+        reconnection: true,
+        reconnectionAttempts: 9999,
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 10000,
+        timeout: 20000,
+      });
       socketRef.current = socket;
 
       socket.on("connect", () => {
+        console.log("[Socket.IO] Connected:", socket.id);
         socket.emit("join:chef", chefProfile.id);
       });
 
+      socket.on("connect_error", (err: any) => {
+        console.warn("[Socket.IO] Connection error:", err.message);
+      });
+
       socket.on("order:new", (data: any) => {
+        console.log("[Socket.IO] order:new event received", data);
         // Play bell ring sound
         playNotificationBeep();
         // Add notification to list
@@ -652,9 +666,12 @@ export default function DashboardPage() {
         showToast(`New order received! ${itemCount} item${itemCount !== 1 ? "s" : ""} — £${Number(data.order?.total || 0).toFixed(2)}`);
         // Refresh orders
         fetchOrders();
+        fetchNotifications();
       });
 
-      return () => { socket.disconnect(); };
+      socket.on("disconnect", (reason: string) => {
+        console.log("[Socket.IO] Disconnected:", reason);
+      });
     });
 
     return () => {
@@ -1958,6 +1975,11 @@ export default function DashboardPage() {
                     {item.id === "notifications" && unreadCount > 0 && (
                       <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
                         {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                    {item.id === "active-orders" && activeOrderCount > 0 && (
+                      <span className="min-w-5 h-5 px-1 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {activeOrderCount > 99 ? "99+" : activeOrderCount}
                       </span>
                     )}
                   </button>
@@ -6160,11 +6182,21 @@ export default function DashboardPage() {
               <button
                 key={item.id}
                 onClick={() => setActivePage(item.id)}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[60px] active:scale-95"
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[60px] active:scale-95 relative"
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? "badge-gradient" : ""}`}>
                   <BIcon size={18} style={{ color: isActive ? "#FFFFFF" : "var(--text-muted)" }} />
                 </div>
+                {item.id === "active-orders" && activeOrderCount > 0 && (
+                  <span className="absolute -top-0.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {activeOrderCount > 9 ? "9+" : activeOrderCount}
+                  </span>
+                )}
+                {item.id === "notifications" && unreadCount > 0 && (
+                  <span className="absolute -top-0.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
                 <span className={`text-[10px] font-medium ${isActive ? "gradient-text" : ""}`} style={!isActive ? { color: "var(--text-muted)" } : undefined}>
                   {item.label}
                 </span>

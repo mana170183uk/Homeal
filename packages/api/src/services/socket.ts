@@ -12,8 +12,11 @@ export function initSocketIO(server: HttpServer) {
         "http://localhost:3202",
       ],
       methods: ["GET", "POST"],
+      credentials: true,
     },
-    transports: ["websocket", "polling"],
+    transports: ["polling", "websocket"],
+    pingInterval: 25000,
+    pingTimeout: 20000,
   });
 
   io.on("connection", (socket: Socket) => {

@@ -114,6 +114,7 @@ export async function notifySuperAdminNewChef(params: {
 
   // Send to ALL super admins
   const emails = await getAllSuperAdminEmails();
+  console.log(`[Email] Sending new chef notification to ${emails.length} super admins: ${emails.join(", ")}`);
   const results = await Promise.allSettled(
     emails.map(email => sendEmail({
       to: email,
@@ -121,6 +122,13 @@ export async function notifySuperAdminNewChef(params: {
       html,
     }))
   );
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      console.log(`[Email] → ${emails[i]}: ${r.value ? "sent" : "FAILED (sendEmail returned false)"}`);
+    } else {
+      console.error(`[Email] → ${emails[i]}: REJECTED — ${r.reason}`);
+    }
+  });
 
   // Create in-app notifications for all super admins
   try {

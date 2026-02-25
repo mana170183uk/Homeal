@@ -4802,13 +4802,14 @@ export default function DashboardPage() {
             const outCount = activeOrders.filter(o => o.status === "OUT_FOR_DELIVERY").length;
             const acceptedCount = activeOrders.filter(o => o.status === "ACCEPTED").length;
 
+            const hasDeliveryOrders = activeOrders.some((o: any) => o.deliveryMethod !== "PICKUP");
             const filterTabs = [
               { label: "All Orders", count: activeCount, color: "#8B5CF6", statusFilter: null as string | null },
               { label: "New", count: newCount, color: "#3B82F6", statusFilter: "PLACED" },
               { label: "Accepted", count: acceptedCount, color: "#6366F1", statusFilter: "ACCEPTED" },
               { label: "Preparing", count: preparingCount, color: "#F59E0B", statusFilter: "PREPARING" },
               { label: "Ready", count: readyCount, color: "#10B981", statusFilter: "READY" },
-              { label: "Out for Delivery", count: outCount, color: "#8B5CF6", statusFilter: "OUT_FOR_DELIVERY" },
+              ...(hasDeliveryOrders || outCount > 0 ? [{ label: "Out for Delivery", count: outCount, color: "#8B5CF6", statusFilter: "OUT_FOR_DELIVERY" }] : []),
             ];
 
             const filteredOrders = activeOrderFilter === "All Orders"

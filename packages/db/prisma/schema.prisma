@@ -408,7 +408,7 @@ model Address {
   line1     String   @db.VarChar(255)
   line2     String?  @db.VarChar(255)
   city      String   @db.VarChar(100)
-  state     String   @db.VarChar(100)
+  state     String?  @db.VarChar(100)
   zipCode   String   @db.VarChar(10)
   latitude  Float?
   longitude Float?

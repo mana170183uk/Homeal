@@ -33,6 +33,7 @@ export interface Chef {
   deliveryRadius: number;
   isOnline?: boolean;
   isOpen?: boolean;
+  offersDelivery?: boolean;
   operatingHours?: string | null;
   distance?: number;
   latitude?: number | null;

@@ -137,7 +137,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
         borderImage: "linear-gradient(90deg, var(--badge-from), var(--badge-to)) 1",
       }}
     >
-      <div className={`px-4 sm:px-6 py-3 sm:py-4 ${maxWidth} mx-auto flex items-center gap-3 sm:gap-4`}>
+      <div className={`px-4 sm:px-6 py-3 sm:py-4 ${maxWidth} mx-auto flex items-center gap-2 sm:gap-4 overflow-x-auto`}>
         {showBack && (
           <a
             href="/"
@@ -314,10 +314,10 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             >
               Log in
             </a>
-            {/* Mobile: visible login button with solid background for light-mode contrast */}
+            {/* Mobile: visible login button */}
             <a
               href="/login"
-              className="sm:hidden text-xs font-semibold px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--input)] transition"
+              className="sm:hidden text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--input)] transition whitespace-nowrap"
             >
               Log in
             </a>
@@ -338,7 +338,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             <div className="relative sm:hidden" ref={signupMenuRef}>
               <button
                 onClick={() => setSignupMenuOpen(!signupMenuOpen)}
-                className="text-xs font-semibold badge-gradient text-white px-3 py-2 rounded-lg hover:opacity-90 transition flex items-center gap-1"
+                className="text-[11px] font-semibold badge-gradient text-white px-2.5 py-1.5 rounded-lg hover:opacity-90 transition flex items-center gap-1 whitespace-nowrap"
               >
                 Sign up
                 <ChevronDown className="w-3 h-3" />

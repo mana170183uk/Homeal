@@ -36,7 +36,23 @@ export async function api<T>(
     headers: { ...headers, ...(fetchOptions.headers as Record<string, string>) },
   });
 
-  const body = await res.json();
+  // Guard against non-JSON responses (HTML error pages, rate limit messages, etc.)
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    if (res.status === 401 && token) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        const retryRes = await fetch(`${API_URL}/api/v1${path}`, {
+          ...fetchOptions,
+          headers: { ...headers, Authorization: `Bearer ${newToken}` },
+        });
+        return retryRes.json().catch(() => ({ success: false, error: `Server error (${retryRes.status})` }));
+      }
+    }
+    return { success: false, error: `Server error (${res.status})` };
+  }
+
+  const body = await res.json().catch(() => ({ success: false, error: "Invalid server response" }));
 
   // Auto-refresh on 401 if we had a token (meaning it expired)
   if (res.status === 401 && token) {
@@ -46,7 +62,7 @@ export async function api<T>(
         ...fetchOptions,
         headers: { ...headers, Authorization: `Bearer ${newToken}` },
       });
-      return retryRes.json();
+      return retryRes.json().catch(() => ({ success: false, error: "Invalid server response" }));
     }
   }
 

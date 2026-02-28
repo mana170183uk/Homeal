@@ -40,7 +40,7 @@ function getCart(): CartItem[] {
   }
 }
 
-const DELIVERY_FEE = 0.3;
+const DELIVERY_FEE = 2.5;
 
 export default function CheckoutPage() {
   const router = useRouter();

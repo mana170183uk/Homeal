@@ -121,7 +121,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       return { menuItemId: item.menuItemId, quantity: item.quantity, price, notes: item.notes };
     });
 
-    const deliveryFee = isPickup ? 0 : 0.30;
+    const deliveryFee = isPickup ? 0 : 2.50;
     const total = subtotal + deliveryFee;
 
     const order = await prisma.order.create({
@@ -367,7 +367,7 @@ router.post("/batch", authenticate, async (req: Request, res: Response) => {
           return { menuItemId: item.menuItemId, quantity: item.quantity, price, notes: item.notes };
         });
 
-        const deliveryFee = isPickup ? 0 : 0.30;
+        const deliveryFee = isPickup ? 0 : 2.50;
         const orderTotal = subtotal + deliveryFee;
         const order = await tx.order.create({
           data: {

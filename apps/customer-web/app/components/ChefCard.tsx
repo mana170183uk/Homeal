@@ -1,4 +1,4 @@
-import { MapPin, Star, UtensilsCrossed, Tag, Award } from "lucide-react";
+import { MapPin, Star, UtensilsCrossed, Tag, Award, Truck, Package } from "lucide-react";
 import { Chef } from "../lib/types";
 import { parseCuisineTypes } from "../lib/utils";
 
@@ -194,10 +194,22 @@ export default function ChefCard({ chef, showDistance }: ChefCardProps) {
           </div>
         )}
 
-        {/* Item count */}
-        <p className="text-xs text-[var(--text-muted)]">
-          {totalDishes} {totalDishes === 1 ? "item" : "items"} available
-        </p>
+        {/* Delivery mode + Item count */}
+        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+          {chef.offersDelivery === false ? (
+            <span className="flex items-center gap-1">
+              <Package className="w-3 h-3" />
+              Pickup Only
+            </span>
+          ) : (
+            <span className="flex items-center gap-1">
+              <Truck className="w-3 h-3" />
+              Delivery
+            </span>
+          )}
+          <span>&middot;</span>
+          <span>{totalDishes} {totalDishes === 1 ? "item" : "items"}</span>
+        </div>
       </div>
     </a>
   );

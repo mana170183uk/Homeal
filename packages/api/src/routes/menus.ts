@@ -7,7 +7,11 @@ const router = Router();
 
 // Helper: parse YYYY-MM-DD to Date at midnight UTC
 function parseDate(str: string): Date {
+  if (!str || !/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    throw new Error(`Invalid date format: "${str}" (expected YYYY-MM-DD)`);
+  }
   const d = new Date(str + "T00:00:00.000Z");
+  if (isNaN(d.getTime())) throw new Error(`Invalid date: "${str}"`);
   return d;
 }
 
@@ -69,8 +73,10 @@ router.get(
         orderCount: number;
       }> = [];
 
-      const current = new Date(from);
-      while (current <= to) {
+      let currentTime = from.getTime();
+      const toTime = to.getTime();
+      while (currentTime <= toTime) {
+        const current = new Date(currentTime);
         const dateKey = formatDate(current);
         const menu = menus.find((m) => formatDate(m.date) === dateKey) || null;
         schedule.push({
@@ -78,7 +84,7 @@ router.get(
           menu,
           orderCount: orderCountMap[dateKey] || 0,
         });
-        current.setDate(current.getDate() + 1);
+        currentTime += 86400000;
       }
 
       // Fetch templates
@@ -251,11 +257,9 @@ router.post(
       const skipped: string[] = [];
 
       for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-        const sourceDate = new Date(sourceStart);
-        sourceDate.setDate(sourceDate.getDate() + dayOffset);
+        const sourceDate = new Date(sourceStart.getTime() + dayOffset * 86400000);
 
-        const targetDate = new Date(sourceDate);
-        targetDate.setDate(targetDate.getDate() + 7);
+        const targetDate = new Date(sourceDate.getTime() + 7 * 86400000);
 
         const sourceMenu = await prisma.menu.findUnique({
           where: { chefId_date: { chefId: chef.id, date: sourceDate } },

@@ -935,12 +935,17 @@ export default function DashboardPage() {
     const token = localStorage.getItem("homeal_token");
     if (!token) return;
     try {
-      await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
+      const res = await authFetch(`${ADMIN_API_URL}/api/v1/menus/${menuId}/items/${itemId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      showToast("Item deleted successfully");
-      fetchMenuItems();
+      const data = await res.json();
+      if (data.success) {
+        showToast("Item deleted successfully");
+        fetchMenuItems();
+      } else {
+        showToast(data.error || "Failed to delete item", "error");
+      }
     } catch (e) {
       console.error("Failed to delete item:", e);
       showToast("Failed to delete item", "error");
@@ -1284,11 +1289,16 @@ export default function DashboardPage() {
 
   // --- Scheduler functions ---
   function getScheduleRange() {
-    const today = new Date();
+    const now = new Date();
+    // Use UTC date components to avoid timezone shift
+    const y = now.getUTCFullYear(), m = now.getUTCMonth(), d = now.getUTCDate();
+    const today = new Date(Date.UTC(y, m, d));
+    const dayOfWeek = today.getUTCDay(); // 0=Sun, 1=Mon
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const from = new Date(today);
-    from.setDate(from.getDate() - from.getDay() + 1); // Monday this week
+    from.setUTCDate(from.getUTCDate() + mondayOffset); // Monday this week
     const to = new Date(from);
-    to.setDate(to.getDate() + 13); // 2 weeks
+    to.setUTCDate(to.getUTCDate() + 13); // 2 weeks
     return {
       from: from.toISOString().split("T")[0],
       to: to.toISOString().split("T")[0],
@@ -4117,17 +4127,17 @@ export default function DashboardPage() {
           {/* Menu Scheduler Page */}
           {activePage === "scheduler" && (() => {
             const { from } = getScheduleRange();
-            const weekStart = new Date(from + "T00:00:00");
+            const weekStart = new Date(from + "T00:00:00.000Z");
+            const todayStr = new Date().toISOString().split("T")[0];
             const days: { date: string; label: string; dayName: string; isToday: boolean }[] = [];
             for (let i = 0; i < 14; i++) {
-              const d = new Date(weekStart);
-              d.setDate(d.getDate() + i);
+              const d = new Date(weekStart.getTime() + i * 86400000);
               const ds = d.toISOString().split("T")[0];
               days.push({
                 date: ds,
-                label: d.getDate().toString(),
-                dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()],
-                isToday: ds === new Date().toISOString().split("T")[0],
+                label: d.getUTCDate().toString(),
+                dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()],
+                isToday: ds === todayStr,
               });
             }
             const selectedDayData = scheduleData.find((d: any) => d.date === selectedDate);

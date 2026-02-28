@@ -37,7 +37,7 @@ function saveCart(items: CartItem[]) {
   window.dispatchEvent(new Event("cart-updated"));
 }
 
-const DELIVERY_FEE = 0.3;
+const DELIVERY_FEE = 2.5;
 
 export default function CartPage() {
   const router = useRouter();
@@ -75,8 +75,7 @@ export default function CartPage() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const totalDeliveryFee = cart.length > 0 ? DELIVERY_FEE : 0;
-  const total = cart.length > 0 ? subtotal + totalDeliveryFee : 0;
+  const total = subtotal;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const kitchenName = cart.length > 0 ? cart[0].chefName : "";
 
@@ -220,7 +219,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between text-[var(--text-soft)]">
                   <span>Delivery fee</span>
-                  <span>&pound;{totalDeliveryFee.toFixed(2)}</span>
+                  <span className="text-xs italic">Calculated at checkout</span>
                 </div>
                 <div className="border-t border-[var(--border)] pt-2 flex justify-between font-bold text-[var(--text)]">
                   <span>Total</span>

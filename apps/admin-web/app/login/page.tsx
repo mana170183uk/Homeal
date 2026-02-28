@@ -21,19 +21,17 @@ function LoginContent() {
   useEffect(() => {
     const token = searchParams.get("token");
     if (token) {
-      localStorage.setItem("homeal_token", token);
-      // Validate token via /auth/me
+      // Validate token BEFORE storing — prevents cross-user session issues
       api<{ user: { id: string; role: string }; hasChefProfile: boolean }>("/auth/me", { token })
         .then((res) => {
           if (res.success && res.data?.hasChefProfile) {
+            localStorage.setItem("homeal_token", token);
             window.location.href = "/";
           } else {
-            localStorage.removeItem("homeal_token");
             setError("Unable to verify your Home Maker access. Please log in.");
           }
         })
         .catch(() => {
-          localStorage.removeItem("homeal_token");
           setError("Token expired. Please log in again.");
         });
     }

@@ -98,14 +98,14 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
     }
   }, [loading, user]);
 
-  async function handleLogout() {
-    try { await signOut(getFirebaseAuth()); } catch {}
+  function handleLogout() {
     localStorage.removeItem("homeal_token");
     localStorage.removeItem("homeal_refresh_token");
     localStorage.removeItem("homeal_cart");
     localStorage.removeItem("homeal_user_name");
     localStorage.removeItem("homeal_user_role");
     localStorage.removeItem("homeal_has_chef_profile");
+    signOut(getFirebaseAuth()).catch(() => {});
     window.location.href = "/";
   }
 
@@ -258,8 +258,8 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
 
             {menuOpen && typeof document !== "undefined" && createPortal(
               <>
-              <div className="fixed inset-0 z-[9998]" onClick={() => setMenuOpen(false)} />
-              <div className="fixed right-3 top-14 sm:top-16 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-[9999]">
+              <div className="fixed inset-0 z-[9998]" onClick={() => setMenuOpen(false)} onTouchEnd={() => setMenuOpen(false)} />
+              <div className="fixed right-3 top-14 sm:top-16 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-[9999]" onClick={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
                 {/* User info */}
                 <div className="px-4 py-3 border-b border-[var(--border)]">
                   <p className="text-sm font-medium text-[var(--text)] truncate">{displayName}</p>

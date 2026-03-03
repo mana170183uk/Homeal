@@ -99,7 +99,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
   }, [loading, user]);
 
   async function handleLogout() {
-    await signOut(getFirebaseAuth());
+    try { await signOut(getFirebaseAuth()); } catch {}
     localStorage.removeItem("homeal_token");
     localStorage.removeItem("homeal_refresh_token");
     localStorage.removeItem("homeal_cart");

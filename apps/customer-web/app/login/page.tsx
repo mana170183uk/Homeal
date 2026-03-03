@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, UtensilsCrossed, Flame, Cherry } from "lucide-react";
 import { signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
@@ -17,6 +17,33 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [verifyResendCooldown, setVerifyResendCooldown] = useState(0);
+  const [needsVerification, setNeedsVerification] = useState(false);
+
+  // Cooldown timer for verification resend
+  useEffect(() => {
+    if (verifyResendCooldown <= 0) return;
+    const timer = setTimeout(() => setVerifyResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [verifyResendCooldown]);
+
+  async function handleResendVerification() {
+    if (verifyResendCooldown > 0 || !email) return;
+    setVerifyResendCooldown(60);
+    try {
+      const res = await api("/auth/send-verification", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      if (res.success) {
+        setError("Verification email resent! Check your inbox (and spam folder).");
+      } else {
+        setError(res.error || "Failed to resend. Please try again.");
+      }
+    } catch {
+      setError("Failed to resend verification email.");
+    }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -31,18 +58,7 @@ export default function LoginPage() {
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 
-      // Block unverified email/password users
-      if (!credential.user.emailVerified) {
-        // Send branded verification email via API
-        api("/auth/send-verification", {
-          method: "POST",
-          body: JSON.stringify({ email }),
-        }).catch(() => {});
-        await signOut(getFirebaseAuth());
-        setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
-        return;
-      }
-
+      // Let the server decide on verification (supports bypass for demo accounts)
       const res = await api<{
         user: { id: string; role: string; name: string };
         token: string;
@@ -54,6 +70,19 @@ export default function LoginPage() {
       });
 
       if (!res.success || !res.data) {
+        // Server says email not verified — show resend UI
+        if (res.error?.includes("verify your email") || (res as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
+          api("/auth/send-verification", {
+            method: "POST",
+            body: JSON.stringify({ email }),
+          }).catch(() => {});
+          await signOut(getFirebaseAuth());
+          setNeedsVerification(true);
+          setVerifyResendCooldown(60);
+          setError(res.error || "Please verify your email before logging in.");
+          return;
+        }
+        await signOut(getFirebaseAuth());
         setError(res.error || "Login failed. Please try again.");
         return;
       }
@@ -284,6 +313,18 @@ export default function LoginPage() {
                   <p className="text-alert text-sm bg-alert/5 border border-alert/20 rounded-xl px-4 py-2.5">
                     {error}
                   </p>
+                  {needsVerification && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={verifyResendCooldown > 0}
+                      className="mt-2 text-xs font-semibold gradient-text hover:opacity-80 transition disabled:opacity-50"
+                    >
+                      {verifyResendCooldown > 0
+                        ? `Resend verification email (${verifyResendCooldown}s)`
+                        : "Resend verification email"}
+                    </button>
+                  )}
                 </div>
               )}
 

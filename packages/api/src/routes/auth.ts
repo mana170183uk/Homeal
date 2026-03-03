@@ -206,15 +206,21 @@ router.post("/login", async (req: Request, res: Response) => {
       return;
     }
 
+    // Demo/test accounts that bypass email verification
+    const VERIFICATION_BYPASS_EMAILS = (process.env.VERIFICATION_BYPASS_EMAILS || "manisha@gmail.com").split(",").map(e => e.trim().toLowerCase());
+    const bypassVerification = VERIFICATION_BYPASS_EMAILS.includes((user.email || "").toLowerCase());
+
     // SERVER-SIDE email verification — check Firebase directly (never trust client)
-    let emailVerified = false;
-    try {
-      const fbUser = await firebaseAdminAuth.getUser(firebaseUid);
-      emailVerified = fbUser.emailVerified;
-    } catch (err) {
-      console.error(`[Login] Firebase getUser failed for ${firebaseUid}:`, err);
-      // Fall back to DB record if Firebase unreachable
-      emailVerified = !!user.emailVerifiedAt;
+    let emailVerified = bypassVerification;
+    if (!bypassVerification) {
+      try {
+        const fbUser = await firebaseAdminAuth.getUser(firebaseUid);
+        emailVerified = fbUser.emailVerified;
+      } catch (err) {
+        console.error(`[Login] Firebase getUser failed for ${firebaseUid}:`, err);
+        // Fall back to DB record if Firebase unreachable
+        emailVerified = !!user.emailVerifiedAt;
+      }
     }
 
     // Track email verification timestamp (once)
@@ -458,11 +464,23 @@ router.get("/me", authenticate, async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/send-verification
+// Rate-limited: 1 email per 60 seconds per address
+const verificationCooldowns = new Map<string, number>();
+
 router.post("/send-verification", async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) {
       res.status(400).json({ success: false, error: "Email is required" });
+      return;
+    }
+
+    // Cooldown check — prevent spam
+    const lastSent = verificationCooldowns.get(email);
+    const now = Date.now();
+    if (lastSent && now - lastSent < 60_000) {
+      const waitSec = Math.ceil((60_000 - (now - lastSent)) / 1000);
+      res.status(429).json({ success: false, error: `Please wait ${waitSec} seconds before requesting another verification email.` });
       return;
     }
 
@@ -472,18 +490,23 @@ router.post("/send-verification", async (req: Request, res: Response) => {
       select: { name: true },
     });
 
+    console.log(`[Auth] Verification email requested for ${email} (user: ${user?.name || "unknown"})`);
+
     const sent = await sendVerificationEmail({
       email,
       userName: user?.name || "there",
     });
 
     if (sent) {
+      verificationCooldowns.set(email, now);
       res.json({ success: true, data: { message: "Verification email sent" } });
     } else {
-      res.status(500).json({ success: false, error: "Failed to send verification email" });
+      console.error(`[Auth] Verification email FAILED for ${email}`);
+      res.status(500).json({ success: false, error: "Failed to send verification email. Please try again in a minute." });
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to send verification email";
+    console.error(`[Auth] Verification email exception for ${req.body?.email}:`, message);
     res.status(500).json({ success: false, error: message });
   }
 });

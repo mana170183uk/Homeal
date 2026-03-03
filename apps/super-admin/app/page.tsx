@@ -952,7 +952,7 @@ export default function SuperAdminPage() {
             <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
           </button>
           <button
-            onClick={() => { localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }}
+            onClick={() => { import("firebase/auth").then(({ signOut }) => { import("./lib/firebase").then(({ getFirebaseAuth }) => { signOut(getFirebaseAuth()).catch(() => {}); }); }); localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all"
             style={{ color: "#EF4444" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--sidebar-hover)"; }}
@@ -1078,7 +1078,7 @@ export default function SuperAdminPage() {
               {profileOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                  <div className="absolute right-0 top-10 z-50 w-64 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg py-2">
+                  <div className="fixed right-4 top-14 z-50 w-64 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg py-2">
                     <div className="px-4 py-3 border-b border-[var(--border)]">
                       <p className="text-sm font-semibold text-[var(--text)] truncate">{adminName || "Super Admin"}</p>
                       <p className="text-xs text-[var(--text-muted)] truncate">{adminEmail}</p>
@@ -1088,7 +1088,7 @@ export default function SuperAdminPage() {
                       Settings
                     </button>
                     <div className="border-t border-[var(--border)] mt-1 pt-1">
-                      <button onClick={() => { localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-[var(--input)] transition">
+                      <button onClick={() => { import("firebase/auth").then(({ signOut }) => { import("../lib/firebase").then(({ getFirebaseAuth }) => { signOut(getFirebaseAuth()).catch(() => {}); }); }); localStorage.removeItem("homeal_token"); localStorage.removeItem("homeal_refresh_token"); window.location.href = "/login"; }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-[var(--input)] transition">
                         <LogOut size={16} />
                         Sign Out
                       </button>

@@ -49,38 +49,65 @@ interface SendEmailParams {
   html: string;
 }
 
+/**
+ * Send an email via Resend API with retry logic and detailed logging.
+ *
+ * IMPORTANT: Set EMAIL_FROM to a verified custom domain (e.g. "Homeal <noreply@homeal.uk>")
+ * in production. The default "onboarding@resend.dev" is Resend's sandbox domain and will be
+ * blocked by Hotmail/Outlook and other strict providers.
+ */
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || "Homeal <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM || "Homeal <noreply@homeal.uk>";
 
   if (!apiKey) {
     console.warn("[Email] RESEND_API_KEY not set — skipping email");
     return false;
   }
 
-  try {
-    const res = await fetch(RESEND_API, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from, to: [to], subject, html }),
-    });
+  // Warn if still using sandbox domain (poor deliverability for Hotmail/Outlook)
+  if (from.includes("resend.dev")) {
+    console.warn(`[Email] WARNING: Sending from sandbox domain (${from}). Emails to Hotmail/Outlook will likely be blocked. Set EMAIL_FROM to a verified custom domain.`);
+  }
 
-    const body = await res.json().catch(() => null) as { id?: string; message?: string } | null;
+  const MAX_ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      console.log(`[Email] Attempt ${attempt}/${MAX_ATTEMPTS}: Sending "${subject}" to ${to} from ${from}`);
 
-    if (!res.ok) {
-      console.error(`[Email] Resend API error ${res.status}:`, JSON.stringify(body));
+      const res = await fetch(RESEND_API, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ from, to: [to], subject, html }),
+      });
+
+      const body = await res.json().catch(() => null) as { id?: string; message?: string; statusCode?: number } | null;
+
+      if (!res.ok) {
+        console.error(`[Email] Resend API error ${res.status} (attempt ${attempt}):`, JSON.stringify(body));
+        // Rate limit or server error — retry after delay
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_ATTEMPTS) {
+          await new Promise(r => setTimeout(r, 1500 * attempt));
+          continue;
+        }
+        return false;
+      }
+
+      console.log(`[Email] SUCCESS: "${subject}" to ${to} (messageId: ${body?.id || "unknown"}, attempt: ${attempt})`);
+      return true;
+    } catch (err) {
+      console.error(`[Email] Network error (attempt ${attempt}):`, err);
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
+      }
       return false;
     }
-
-    console.log(`[Email] Sent "${subject}" to ${to} (messageId: ${body?.id || "unknown"})`);
-    return true;
-  } catch (err) {
-    console.error("[Email] Failed to send:", err);
-    return false;
   }
+  return false;
 }
 
 function generateActionToken(chefId: string, action: string): string {
@@ -280,11 +307,13 @@ export async function sendVerificationEmail(params: {
   userName: string;
 }): Promise<boolean> {
   try {
+    console.log(`[Email] Generating verification link for ${params.email}`);
     const actionUrl = `${process.env.CUSTOMER_WEB_URL || "https://homeal.uk"}/auth/action`;
     const verifyUrl = await firebaseAdminAuth.generateEmailVerificationLink(
       params.email,
       { url: actionUrl }
     );
+    console.log(`[Email] Firebase verification link generated for ${params.email}`);
 
     // Replace Firebase's default action URL with our custom branded page
     const url = new URL(verifyUrl);
@@ -292,7 +321,7 @@ export async function sendVerificationEmail(params: {
     const apiKey = url.searchParams.get("apiKey");
     const brandedUrl = `${actionUrl}?mode=verifyEmail&oobCode=${oobCode}&apiKey=${apiKey}&lang=en`;
 
-    return sendEmail({
+    const sent = await sendEmail({
       to: params.email,
       subject: "Verify your email for Homeal",
       html: emailVerificationHtml({
@@ -300,8 +329,13 @@ export async function sendVerificationEmail(params: {
         verifyUrl: brandedUrl,
       }),
     });
+
+    if (!sent) {
+      console.error(`[Email] Verification email delivery FAILED for ${params.email} — check Resend dashboard`);
+    }
+    return sent;
   } catch (err) {
-    console.error("[Email] Failed to send verification email:", err);
+    console.error(`[Email] Failed to send verification email to ${params.email}:`, err);
     return false;
   }
 }

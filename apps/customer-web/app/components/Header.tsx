@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeft,
@@ -131,13 +132,13 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
 
   return (
     <header
-      className="bg-[var(--header-bg,var(--card))] sticky top-0 z-10"
+      className="bg-[var(--header-bg,var(--card))] sticky top-0 z-40"
       style={{
         borderBottom: "2px solid transparent",
         borderImage: "linear-gradient(90deg, var(--badge-from), var(--badge-to)) 1",
       }}
     >
-      <div className={`px-4 sm:px-6 py-3 sm:py-4 ${maxWidth} mx-auto flex items-center gap-2 sm:gap-4 overflow-x-auto`}>
+      <div className={`px-4 sm:px-6 py-3 sm:py-4 ${maxWidth} mx-auto flex items-center gap-2 sm:gap-4`}>
         {showBack && (
           <a
             href="/"
@@ -255,8 +256,10 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
               <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)] hidden sm:block" />
             </button>
 
-            {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-20">
+            {menuOpen && typeof document !== "undefined" && createPortal(
+              <>
+              <div className="fixed inset-0 z-[9998]" onClick={() => setMenuOpen(false)} />
+              <div className="fixed right-3 top-14 sm:top-16 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-[9999]">
                 {/* User info */}
                 <div className="px-4 py-3 border-b border-[var(--border)]">
                   <p className="text-sm font-medium text-[var(--text)] truncate">{displayName}</p>
@@ -270,6 +273,20 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                 >
                   <ClipboardList className="w-4 h-4 text-[var(--text-soft)]" />
                   My Orders
+                </a>
+
+                {/* Notifications (mobile) */}
+                <a
+                  href="/notifications"
+                  className="flex items-center gap-3 px-4 py-3 text-sm text-[var(--text)] hover:bg-[var(--input)] transition md:hidden"
+                >
+                  <Bell className="w-4 h-4 text-[var(--text-soft)]" />
+                  Notifications
+                  {notifCount > 0 && (
+                    <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                      {notifCount > 99 ? "99+" : notifCount}
+                    </span>
+                  )}
                 </a>
 
                 {/* My Addresses */}
@@ -304,6 +321,8 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                   Log out
                 </button>
               </div>
+              </>,
+              document.body
             )}
           </div>
         ) : (

@@ -50,18 +50,7 @@ function LoginContent() {
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 
-      // Block unverified email/password users
-      if (!credential.user.emailVerified) {
-        // Send branded verification email via API
-        api("/auth/send-verification", {
-          method: "POST",
-          body: JSON.stringify({ email }),
-        }).catch(() => {});
-        await signOut(getFirebaseAuth());
-        setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
-        return;
-      }
-
+      // Let server decide on verification (supports bypass for demo accounts)
       const res = await api<{
         user: { id: string; role: string };
         token: string;
@@ -74,6 +63,13 @@ function LoginContent() {
       });
 
       if (!res.success || !res.data) {
+        if (res.error?.includes("verify your email")) {
+          api("/auth/send-verification", { method: "POST", body: JSON.stringify({ email }) }).catch(() => {});
+          await signOut(getFirebaseAuth());
+          setError("Please verify your email before logging in. We've sent a new verification link to your inbox.");
+          return;
+        }
+        await signOut(getFirebaseAuth());
         setError(res.error || "Login failed. Please try again.");
         return;
       }

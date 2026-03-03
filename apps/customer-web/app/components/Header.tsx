@@ -37,14 +37,16 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
   const [userRole, setUserRole] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const signupMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target) && (!dropdownRef.current || !dropdownRef.current.contains(target))) {
         setMenuOpen(false);
       }
-      if (signupMenuRef.current && !signupMenuRef.current.contains(e.target as Node)) {
+      if (signupMenuRef.current && !signupMenuRef.current.contains(target)) {
         setSignupMenuOpen(false);
       }
     }
@@ -257,9 +259,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
             </button>
 
             {menuOpen && typeof document !== "undefined" && createPortal(
-              <>
-              <div className="fixed inset-0 z-[9998]" onClick={() => setMenuOpen(false)} onTouchEnd={() => setMenuOpen(false)} />
-              <div className="fixed right-3 top-14 sm:top-16 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-[9999]" onClick={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+              <div ref={dropdownRef} className="fixed right-3 top-14 sm:top-16 w-56 bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden z-[9999]">
                 {/* User info */}
                 <div className="px-4 py-3 border-b border-[var(--border)]">
                   <p className="text-sm font-medium text-[var(--text)] truncate">{displayName}</p>
@@ -320,8 +320,7 @@ export default function Header({ showBack, maxWidth = "max-w-7xl" }: HeaderProps
                   <LogOut className="w-4 h-4" />
                   Log out
                 </button>
-              </div>
-              </>,
+              </div>,
               document.body
             )}
           </div>

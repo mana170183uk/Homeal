@@ -25,8 +25,8 @@ export function useAuth() {
           setLoading(false);
           setError(null);
         },
-        (err) => {
-          console.error("[useAuth] Auth state error:", err.code, err.message);
+        (err: Error) => {
+          console.error("[useAuth] Auth state error:", err.message);
           setError(err.message);
           setLoading(false);
         }
